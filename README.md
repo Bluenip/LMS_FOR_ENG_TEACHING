@@ -83,7 +83,13 @@ Tên hiển thị sản phẩm đổi được qua biến môi trường `NEXT_P
 - Nút **Lưu lên Drive**, **Sao lưu tất cả lên Drive**, **Nhập từ Drive** (Google Picker) ở `/teacher/worksheets`; tuỳ chọn tự động sao lưu hằng ngày lúc 02:00 (giữ 14 bản).
 - Cấu hình Google Cloud (OAuth client, redirect URI, biến môi trường): xem [`docs/GOOGLE_DRIVE.md`](docs/GOOGLE_DRIVE.md).
 
-### 7. Bài tập tạo từ Word không cần PDF
+### 7. Cấp tài khoản (không cho tự đăng ký)
+- Trang `/register` và API `POST /api/auth/register` đã **tắt** (trả 403, trang tự chuyển về `/login`).
+- **Admin** tạo tài khoản mọi vai trò ở `/admin` (mục "Tạo tài khoản").
+- **Giáo viên** tạo tài khoản **Học sinh** (tự vào lớp) và **Phụ huynh** (tự liên kết với học sinh được chọn) ở tab **Học sinh** của lớp, hoặc nhập học sinh hàng loạt từ Excel.
+- Bỏ trống mật khẩu → hệ thống sinh mật khẩu tạm và **chỉ hiện một lần** cho người tạo.
+
+### 8. Bài tập tạo từ Word không cần PDF
 - Bài tạo từ Word chỉ dùng **Phiếu trả lời**: mỗi thẻ câu hiện **nội dung câu hỏi** (sửa trực tiếp trên thẻ) và **đáp án**; câu có nhiều chỗ trống được tách `3a`, `3b` và chỗ trống đang hỏi được tô nổi bật.
 - Khi bài không có PDF, học sinh làm trên phiếu trả lời rộng giữa màn hình (không bị dồn vào cột phải).
 
@@ -190,7 +196,8 @@ pnpm drive:prune             # Dọn file Google Drive mồ côi (cũng tự ch�
 
 pnpm db:migrate              # Chạy Prisma migration (dev)
 pnpm db:push                 # Đồng bộ schema trực tiếp
-pnpm db:seed                 # XOÁ dữ liệu hiện có và nạp lại dữ liệu mẫu
+pnpm db:seed                 # XOÁ dữ liệu hiện có và nạp lại dữ liệu mẫu (chỉ dùng khi dev)
+pnpm admin:create            # Tạo/đặt lại tài khoản admin (ADMIN_EMAIL=… [--reset])
 
 pnpm proctor:purge-snapshots # Xoá ảnh camera cũ hơn PROCTOR_SNAPSHOT_RETENTION_DAYS ngày (nên chạy cron hằng ngày)
 
@@ -214,9 +221,10 @@ cp .env.production.example .env.production   # điền NEXT_PUBLIC_APP_URL, APP_
 docker compose -f compose.production.yml --env-file .env.production up -d --build
 ```
 
-- Container tự chạy `prisma migrate deploy` mỗi lần khởi động. Nạp dữ liệu mẫu **một lần** (lệnh này xoá dữ liệu cũ):
-  `docker compose -f compose.production.yml --env-file .env.production exec app node_modules/.bin/tsx prisma/seed.ts`
+- Container tự chạy `prisma migrate deploy` mỗi lần khởi động. **Không seed dữ liệu mẫu trên production**; chỉ tạo tài khoản admin đầu tiên (mật khẩu ngẫu nhiên in ra một lần):
+  `docker compose -f compose.production.yml --env-file .env.production exec -e ADMIN_EMAIL=admin@example.com app node_modules/.bin/tsx scripts/create-admin.ts`
+  (thêm `--reset` để đặt lại mật khẩu admin). Sau đó admin tạo tài khoản giáo viên; giáo viên tạo học sinh / phụ huynh.
 - File upload nằm trong volume `uploads`, database trong volume `postgres_data`. Sao lưu DB: `docker compose -f compose.production.yml exec postgres pg_dump -U engclass engclass > backup.sql`.
 - Cập nhật phiên bản: `git pull && docker compose -f compose.production.yml --env-file .env.production up -d --build`.
 - Cloudflare Tunnel: trong Zero Trust → Networks → Tunnels, thêm *Public hostname* (ví dụ `lms.<tên-miền>`) trỏ tới `http://localhost:${APP_PORT}`.
-- **Bảo mật:** `NEXT_PUBLIC_SHOW_DEMO_ACCOUNTS=false` trên bản public. Tài khoản mẫu dùng mật khẩu `password123` — đổi mật khẩu hoặc khoá các tài khoản mẫu trước khi cho người thật dùng.
+- **Bảo mật:** để `NEXT_PUBLIC_SHOW_DEMO_ACCOUNTS=false` và không chạy `pnpm db:seed` trên bản public (tài khoản mẫu dùng mật khẩu `password123`).

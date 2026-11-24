@@ -1,26 +1,15 @@
 import { NextResponse } from "next/server";
-import { handleApiError, AppError } from "@/lib/permissions";
-import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-import { registerSchema } from "@/lib/validators";
-import { registerUser } from "@/server/authService";
 
-export async function POST(req: Request) {
-  try {
-    const ip = getClientIp(req.headers);
-    const limit = checkRateLimit(`register:${ip}`, 20, 15 * 60 * 1000);
-    if (!limit.allowed) {
-      throw new AppError(
-        `Bạn đã đăng ký quá nhiều lần. Vui lòng thử lại sau ${limit.retryAfterSec} giây.`,
-        429,
-        "RATE_LIMITED"
-      );
-    }
-
-    const body = await req.json();
-    const data = registerSchema.parse(body);
-    const user = await registerUser(data);
-    return NextResponse.json({ user }, { status: 201 });
-  } catch (error) {
-    return handleApiError(error);
-  }
+/**
+ * Public self-registration is disabled: accounts are created by an admin (any role)
+ * or by a teacher (students and parents of their classes).
+ */
+export async function POST() {
+  return NextResponse.json(
+    {
+      error: "Đăng ký tự do đã tắt. Vui lòng liên hệ giáo viên hoặc quản trị viên để được cấp tài khoản.",
+      code: "REGISTRATION_DISABLED",
+    },
+    { status: 403 }
+  );
 }

@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { CreateAccountForm } from "@/components/accounts/CreateAccountForm";
 
 interface AdminOverview {
   stats: {
@@ -206,6 +207,22 @@ export default function AdminPortalPage() {
       <Suspense fallback={null}>
         <DriveAdminCard />
       </Suspense>
+
+      {/* Account provisioning (public registration is disabled) */}
+      <section className="stitch-card p-6">
+        <CreateAccountForm
+          endpoint="/api/admin/users"
+          roles={["TEACHER", "STUDENT", "PARENT", "ADMIN"]}
+          students={data.users
+            .filter((u) => u.role === "STUDENT")
+            .map((u) => ({ id: u.id, name: u.name, email: u.email }))}
+          onCreated={() => queryClient.invalidateQueries({ queryKey: ["admin-overview"] })}
+          description={tr(
+            "Hệ thống không cho tự đăng ký: quản trị viên tạo tài khoản cho mọi vai trò. Bỏ trống mật khẩu để hệ thống tự sinh và hiện một lần.",
+            "Self-registration is disabled: the administrator creates accounts for every role. Leave the password empty to generate one (shown once)."
+          )}
+        />
+      </section>
 
       {/* User Management Table */}
       <section className="stitch-card overflow-hidden">

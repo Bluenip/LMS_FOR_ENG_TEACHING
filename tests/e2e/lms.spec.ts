@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 async function loginAs(page: Page, email: string, password = "password123") {
   await page.goto("/login");
@@ -711,15 +712,20 @@ test.describe("Phase 8: Anti-Cheat Proctoring (Rules, SSE Live, LOCK, RESTART, A
       const staleCtx = await browser.newContext();
       const stalePage = await staleCtx.newPage();
 
+      // Public registration is disabled: the API must refuse it…
       const regRes = await stalePage.request.post("/api/auth/register", {
+        data: { name: "Temp Stale Teacher", email: tempEmail, password: "password123", role: "TEACHER" },
+      });
+      expect(regRes.status()).toBe(403);
+      // …so the temporary teacher is created directly in the database
+      await prisma.user.create({
         data: {
           name: "Temp Stale Teacher",
           email: tempEmail,
-          password: "password123",
           role: "TEACHER",
+          passwordHash: await bcrypt.hash("password123", 10),
         },
       });
-      expect(regRes.ok()).toBe(true);
 
       await loginAs(stalePage, tempEmail, "password123");
       await stalePage.goto("/teacher/worksheets");

@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { BookOpen, CheckCircle2, Eye, EyeOff, Lock, Mail } from "lucide-react";
@@ -41,7 +40,12 @@ function LoginPageContent() {
       ? vi.auth.sessionExpired
       : reason === "locked"
         ? vi.auth.accountLocked
-        : null;
+        : reason === "no-register"
+          ? tr(
+              "Hệ thống không cho tự đăng ký. Tài khoản do quản trị viên hoặc giáo viên cấp.",
+              "Self-registration is disabled. Accounts are created by an administrator or a teacher."
+            )
+          : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -238,11 +242,11 @@ function LoginPageContent() {
               </Button>
             </form>
 
-            <p className="mt-5 text-center text-sm text-[#464555]">
-              {vi.auth.noAccount}{" "}
-              <Link href="/register" className="font-semibold text-[#4F46E5] hover:underline">
-                {vi.auth.registerLink}
-              </Link>
+            <p className="mt-5 text-center text-xs text-[#464555]">
+              {tr(
+                "Chưa có tài khoản? Liên hệ giáo viên hoặc quản trị viên để được cấp.",
+                "No account yet? Ask your teacher or the administrator to create one."
+              )}
             </p>
 
             {/* Quick demo account pills: never shown on a public deployment unless explicitly enabled */}

@@ -25,6 +25,25 @@ export const registerSchema = z.object({
   role: z.enum(["TEACHER", "STUDENT", "PARENT"]).default("STUDENT"),
 });
 
+// ===== Account provisioning (self-registration disabled) =====
+const optionalTrimmed = z
+  .string()
+  .trim()
+  .optional()
+  .transform((v) => (v && v.length > 0 ? v : undefined));
+
+export const createAccountSchema = z.object({
+  name: z.string().trim().min(2, "Họ tên tối thiểu 2 ký tự").max(100),
+  email: z.string().trim().toLowerCase().email("Email không hợp lệ"),
+  role: z.enum(["ADMIN", "TEACHER", "STUDENT", "PARENT"]),
+  // empty = the system generates a temporary password and returns it once
+  password: optionalTrimmed.pipe(z.string().min(6, "Mật khẩu tối thiểu 6 ký tự").max(100).optional()),
+  phone: optionalTrimmed,
+  classId: optionalTrimmed,
+  studentId: optionalTrimmed,
+  relation: optionalTrimmed,
+});
+
 // ===== Class =====
 export const createClassSchema = z.object({
   name: z.string().trim().min(2, "Tên lớp tối thiểu 2 ký tự").max(120),

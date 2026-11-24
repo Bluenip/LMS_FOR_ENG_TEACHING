@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/dialog";
 import { PdfCanvasPage, usePdfDocument } from "@/components/worksheet/PdfCanvasPage";
 import type { LessonItemType, ProctorMode, ViolationAction } from "@prisma/client";
+import { CreateAccountForm } from "@/components/accounts/CreateAccountForm";
 
 export interface ClassDetailData {
   id: string;
@@ -917,6 +918,25 @@ export function ClassDetailView({
 
         {/* TAB 4: STUDENTS ROSTER */}
         <TabsContent value="students" className="space-y-4">
+          {isTeacher && (
+            <div className="stitch-card p-5">
+              <CreateAccountForm
+                endpoint={`/api/classes/${cls.id}/accounts`}
+                roles={["STUDENT", "PARENT"]}
+                students={activeStudents.map((e) => ({
+                  id: e.student.id,
+                  name: e.student.name,
+                  email: e.student.email ?? "",
+                }))}
+                onCreated={() => void refreshClass()}
+                title={tr("Tạo tài khoản Học sinh / Phụ huynh", "Create student / parent account")}
+                description={tr(
+                  "Học sinh mới được thêm thẳng vào lớp này. Phụ huynh được liên kết với học sinh bạn chọn (nếu email phụ huynh đã có thì chỉ liên kết thêm).",
+                  "New students are enrolled in this class. Parents are linked to the chosen student (an existing parent email is just linked)."
+                )}
+              />
+            </div>
+          )}
           {isTeacher && (
             <div className="stitch-card flex flex-wrap items-center justify-between gap-4 p-5">
               <div>

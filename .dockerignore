@@ -13,3 +13,7 @@ file word test
 design
 public/mediapipe
 public/pdf.worker.min.mjs
+.env.production
+.env.*
+!.env.example
+!.env.production.example
