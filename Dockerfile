@@ -30,7 +30,9 @@ FROM base AS runner
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 LOCAL_UPLOAD_DIR=/app/uploads
 # Keep the full node_modules (incl. prisma CLI and tsx) so migrations and `pnpm db:seed` can run in the container
 COPY --from=build /app /app
-RUN mkdir -p /app/uploads && chown -R node:node /app/uploads /app/.next
+# source copied from the host may be owner-only (strict umask); the runtime user must read it
+RUN chmod -R a+rX /app/prisma /app/public /app/scripts /app/package.json \
+  && mkdir -p /app/uploads && chown -R node:node /app/uploads /app/.next
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \

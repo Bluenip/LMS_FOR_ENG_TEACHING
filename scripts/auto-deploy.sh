@@ -74,7 +74,9 @@ if [[ "$mode" != --force && -f "$state_dir/failed" ]]; then
   fi
 fi
 git -C "$repo_dir" merge-base --is-ancestor HEAD "$target" || die 'Local and remote histories diverged; no reset performed.'
-git -C "$repo_dir" merge --ff-only --no-edit "$target"
+# checked-out source must stay world-readable (the container runs as a non-root user);
+# the strict umask above is only meant for backups and logs
+(umask 022 && git -C "$repo_dir" merge --ff-only --no-edit "$target")
 image="${ENGCLASS_IMAGE_PREFIX:-engclass-app}:${target:0:12}"
 rollout_started=false
 
