@@ -92,6 +92,8 @@ export function BulkImportUsersCard({ onImported }: { onImported: () => void }) 
         return tr("Chỉ tài khoản Học sinh mới gán được lớp.", "Only Student accounts can be assigned to a class.");
       case "CLASS_NOT_FOUND":
         return tr(err.message, `Active class not found.`);
+      case "CLASS_AMBIGUOUS":
+        return tr(err.message, "Several active classes share this name. Use the class code instead.");
       default:
         return err.message;
     }

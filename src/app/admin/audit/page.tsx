@@ -20,6 +20,7 @@ interface AuditLogItem {
   targetType: string;
   targetId: string | null;
   summary: string;
+  summaryEn: string | null;
   meta: Record<string, unknown>;
   createdAt: string;
 }
@@ -278,7 +279,7 @@ export default function AdminAuditPage() {
                         </span>
                       </div>
                       <p className="text-sm font-semibold text-[#0B1C30] break-words">
-                        {item.summary}
+                        {tr(item.summary, item.summaryEn ?? item.summary)}
                       </p>
                       <p className="text-xs text-[#464555]">
                         {tr("Người thực hiện:", "Actor:")}{" "}

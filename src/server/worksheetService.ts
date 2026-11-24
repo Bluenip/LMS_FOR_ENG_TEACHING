@@ -127,6 +127,7 @@ export async function deleteWorksheet(worksheetId: string, actorId?: string) {
     targetType: "WORKSHEET",
     targetId: worksheetId,
     summary: `Xoá worksheet: ${ws.title}`,
+    summaryEn: `Deleted worksheet: ${ws.title}`,
     meta: { title: ws.title, ownerId: ws.ownerId },
   });
 

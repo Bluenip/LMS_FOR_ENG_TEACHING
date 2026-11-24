@@ -96,6 +96,38 @@ async function forwardToSentryIfConfigured(input: {
   }
 }
 
+/** ErrorLog keeps at most this many days / rows (the client endpoint is public, so the table must stay bounded). */
+export const ERROR_LOG_RETENTION_DAYS = 30;
+export const ERROR_LOG_MAX_ROWS = 5000;
+const PRUNE_INTERVAL_MS = 10 * 60 * 1000;
+let lastPruneAt = 0;
+
+/** Deletes rows older than the retention window, then trims the table to the newest ERROR_LOG_MAX_ROWS. */
+export async function pruneErrorLogs(now = new Date()) {
+  const cutoff = new Date(now.getTime() - ERROR_LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const old = await prisma.errorLog.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  let overflow = 0;
+  const boundary = await prisma.errorLog.findFirst({
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    skip: ERROR_LOG_MAX_ROWS,
+    select: { createdAt: true },
+  });
+  if (boundary) {
+    const res = await prisma.errorLog.deleteMany({ where: { createdAt: { lte: boundary.createdAt } } });
+    overflow = res.count;
+  }
+  return { expired: old.count, overflow };
+}
+
+function maybePruneErrorLogs() {
+  const nowMs = Date.now();
+  if (nowMs - lastPruneAt < PRUNE_INTERVAL_MS) return;
+  lastPruneAt = nowMs;
+  void pruneErrorLogs().catch((err) => {
+    console.error("[ErrorLog] prune failed:", err instanceof Error ? err.message : "unknown");
+  });
+}
+
 export async function recordError(input: RecordErrorInput) {
   const message = truncate(input.message, 1000) ?? "Unknown error";
   const stack = truncate(input.stack, 8000);
@@ -125,6 +157,7 @@ export async function recordError(input: RecordErrorInput) {
   } catch (err) {
     console.error("[ErrorLog] Failed to persist error:", err instanceof Error ? err.message : "unknown");
   }
+  maybePruneErrorLogs();
 
   void forwardToSentryIfConfigured({
     source: input.source,

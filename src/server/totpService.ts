@@ -134,6 +134,7 @@ export async function confirmEnableAdminTotp(userId: string, code: string) {
     targetType: "USER",
     targetId: user.id,
     summary: `Bật xác thực 2 bước (2FA) cho tài khoản ${user.email}`,
+    summaryEn: `Enabled two-factor authentication (2FA) for ${user.email}`,
     meta: { email: user.email },
   });
 
@@ -179,11 +180,16 @@ export async function verifyAdminTotpOrBackupCode(
     lastAcceptedStep: user.totpLastStep,
   });
   if (totpCheck.valid && totpCheck.step !== undefined) {
-    await prisma.user.update({
-      where: { id: user.id },
+    // conditional update: two concurrent requests with the same code cannot both advance the step
+    const claimed = await prisma.user.updateMany({
+      where: {
+        id: user.id,
+        OR: [{ totpLastStep: null }, { totpLastStep: { lt: totpCheck.step } }],
+      },
       data: { totpLastStep: totpCheck.step },
     });
-    return { valid: true, usedBackupCode: false };
+    if (claimed.count === 1) return { valid: true, usedBackupCode: false };
+    return { valid: false };
   }
 
   const storedCodes = parseStoredBackupCodes(user.totpBackupCodes);
@@ -192,11 +198,16 @@ export async function verifyAdminTotpOrBackupCode(
     const updated = storedCodes.map((entry, i) =>
       i === idx ? { ...entry, usedAt: new Date().toISOString() } : entry
     );
-    await prisma.user.update({
-      where: { id: user.id },
+    // compare-and-swap on the stored JSON so the same backup code cannot be spent twice concurrently
+    const claimed = await prisma.user.updateMany({
+      where: {
+        id: user.id,
+        totpBackupCodes: { equals: user.totpBackupCodes as Prisma.InputJsonValue },
+      },
       data: { totpBackupCodes: updated as unknown as Prisma.InputJsonValue },
     });
-    return { valid: true, usedBackupCode: true };
+    if (claimed.count === 1) return { valid: true, usedBackupCode: true };
+    return { valid: false };
   }
 
   return { valid: false };
@@ -236,6 +247,7 @@ export async function disableAdminTotp(userId: string, password: string, code: s
     targetType: "USER",
     targetId: user.id,
     summary: `Tắt xác thực 2 bước (2FA) cho tài khoản ${user.email}`,
+    summaryEn: `Disabled two-factor authentication (2FA) for ${user.email}`,
     meta: { email: user.email },
   });
 

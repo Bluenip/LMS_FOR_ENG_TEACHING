@@ -55,25 +55,51 @@ export interface LogAuditInput {
   action: AuditAction;
   targetType: "USER" | "CLASS" | "WORKSHEET" | "ASSIGNMENT" | "SYSTEM";
   targetId?: string | null;
+  /** Vietnamese summary (stored in the `summary` column). */
   summary: string;
+  /** English summary, kept in `meta.summaryEn` so /admin/audit can show it in EN. */
+  summaryEn?: string;
   meta?: Record<string, unknown>;
 }
 
+/**
+ * Writes one AuditLog row.
+ * - With the default client the action it describes has already been saved, so a logging failure
+ *   is reported to ErrorLog/console instead of turning a successful request into a 500.
+ * - Inside a transaction (`db` = tx) it throws, so the change and its log stay atomic.
+ */
 export async function logAudit(
   input: LogAuditInput,
   db: Prisma.TransactionClient | typeof prisma = prisma
 ) {
-  const safeMeta = input.meta ? sanitizeAuditMeta(input.meta) : {};
-  return db.auditLog.create({
-    data: {
-      actorId: input.actorId ?? null,
-      action: input.action,
-      targetType: input.targetType,
-      targetId: input.targetId ?? null,
-      summary: input.summary.slice(0, 500),
-      meta: safeMeta,
-    },
-  });
+  const meta = {
+    ...(input.meta ?? {}),
+    ...(input.summaryEn ? { summaryEn: input.summaryEn } : {}),
+  };
+  const data = {
+    actorId: input.actorId ?? null,
+    action: input.action,
+    targetType: input.targetType,
+    targetId: input.targetId ?? null,
+    summary: input.summary.slice(0, 500),
+    meta: sanitizeAuditMeta(meta),
+  };
+  if (db !== prisma) {
+    return db.auditLog.create({ data });
+  }
+  try {
+    return await prisma.auditLog.create({ data });
+  } catch (error) {
+    console.error("[AuditLog] failed to record", input.action, error);
+    const { recordError } = await import("@/server/errorLogService");
+    void recordError({
+      source: "SERVER",
+      level: "WARN",
+      message: `AuditLog write failed for ${input.action}: ${error instanceof Error ? error.message : String(error)}`,
+      meta: { handler: "logAudit", action: input.action, targetId: input.targetId ?? null },
+    });
+    return null;
+  }
 }
 
 export interface ListAuditLogsQuery {
@@ -94,6 +120,23 @@ function parseDateBoundary(input: string | undefined, endOfDay: boolean): Date |
   }
   const dt = new Date(trimmed);
   return Number.isNaN(dt.getTime()) ? undefined : dt;
+}
+
+function readSummaryEn(meta: Prisma.JsonValue): string | null {
+  if (meta && typeof meta === "object" && !Array.isArray(meta)) {
+    const v = (meta as Record<string, unknown>).summaryEn;
+    if (typeof v === "string" && v.length > 0) return v;
+  }
+  return null;
+}
+
+function stripSummaryEn(meta: Prisma.JsonValue): Prisma.JsonValue {
+  if (meta && typeof meta === "object" && !Array.isArray(meta) && "summaryEn" in meta) {
+    const { summaryEn: _omit, ...rest } = meta as Record<string, Prisma.JsonValue>;
+    void _omit;
+    return rest;
+  }
+  return meta;
 }
 
 export async function listAuditLogs(query: ListAuditLogsQuery = {}) {
@@ -119,6 +162,7 @@ export async function listAuditLogs(query: ListAuditLogsQuery = {}) {
       ? {
           OR: [
             { summary: { contains: trimmedQ, mode: "insensitive" } },
+            { meta: { path: ["summaryEn"], string_contains: trimmedQ } },
             { targetId: { contains: trimmedQ, mode: "insensitive" } },
             { actor: { name: { contains: trimmedQ, mode: "insensitive" } } },
             { actor: { email: { contains: trimmedQ, mode: "insensitive" } } },
@@ -165,7 +209,8 @@ export async function listAuditLogs(query: ListAuditLogsQuery = {}) {
       targetType: item.targetType,
       targetId: item.targetId,
       summary: item.summary,
-      meta: item.meta,
+      summaryEn: readSummaryEn(item.meta),
+      meta: stripSummaryEn(item.meta),
       createdAt: item.createdAt.toISOString(),
     })),
     total,

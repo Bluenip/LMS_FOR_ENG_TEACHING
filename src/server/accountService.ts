@@ -169,6 +169,7 @@ export async function createAccount(
     targetType: "USER",
     targetId: user.id,
     summary: `Tạo tài khoản ${user.role}: ${user.name} (${user.email})`,
+    summaryEn: `Created ${user.role} account: ${user.name} (${user.email})`,
     meta: {
       email: user.email,
       role: user.role,
@@ -226,6 +227,7 @@ export async function resetPasswordFor(actor: { id: string; role: Role }, target
     targetType: "USER",
     targetId: target.id,
     summary: `Đặt lại mật khẩu cho ${target.name} (${target.email})`,
+    summaryEn: `Reset password for ${target.name} (${target.email})`,
     meta: { targetEmail: target.email, targetRole: target.role },
   });
   return { user: target, temporaryPassword };
@@ -302,6 +304,7 @@ export async function deleteAccount(actor: { id: string; role: Role }, targetId:
     targetType: "USER",
     targetId: target.id,
     summary: `Chuyển tài khoản vào thùng rác: ${target.email}`,
+    summaryEn: `Moved account to trash: ${target.email}`,
     meta: { targetEmail: target.email, targetRole: target.role },
   });
   return { ok: true, trashed: true };
@@ -323,10 +326,26 @@ export async function restoreAccount(actor: { id: string; role: Role }, targetId
       targetType: "USER",
       targetId: target.id,
       summary: `Khôi phục tài khoản từ thùng rác: ${target.name} (${target.email})`,
+      summaryEn: `Restored account from trash: ${target.name} (${target.email})`,
       meta: { targetEmail: target.email, targetRole: target.role },
     });
   }
   return { ok: true };
+}
+
+/**
+ * Files stored on this user's personal Drive connection that now belong to someone else
+ * (e.g. classes/worksheets transferred to another teacher). Deleting the user would cascade-delete
+ * the connection and every DriveFile row on it, breaking the new owner's PDFs/audio.
+ */
+async function countForeignDriveFiles(userId: string) {
+  return prisma.driveFile.count({
+    where: {
+      connection: { ownerId: userId },
+      trashedAt: null,
+      ownerId: { not: userId },
+    },
+  });
 }
 
 async function hardDeleteUser(id: string, avatarUrl: string | null) {
@@ -340,6 +359,15 @@ export async function purgeAccount(actor: { id: string; role: Role }, targetId: 
   if (!target.deletedAt) {
     throw new AppError("Chỉ xoá vĩnh viễn được tài khoản đã nằm trong thùng rác.", 400, "NOT_IN_TRASH");
   }
+  const foreignFiles = await countForeignDriveFiles(target.id);
+  if (foreignFiles > 0) {
+    throw new AppError(
+      `Không thể xoá vĩnh viễn: Google Drive riêng của tài khoản này đang chứa ${foreignFiles} file thuộc lớp/worksheet đã chuyển cho người khác. Xoá vĩnh viễn sẽ làm hỏng các file đó.`,
+      400,
+      "DRIVE_FILES_IN_USE",
+      { files: foreignFiles }
+    );
+  }
   await hardDeleteUser(target.id, target.avatarUrl);
   await logAudit({
     actorId: actor.id,
@@ -347,6 +375,7 @@ export async function purgeAccount(actor: { id: string; role: Role }, targetId: 
     targetType: "USER",
     targetId: target.id,
     summary: `Xoá vĩnh viễn tài khoản: ${target.email}`,
+    summaryEn: `Permanently deleted account: ${target.email}`,
     meta: { targetEmail: target.email, targetRole: target.role },
   });
   return { ok: true };
@@ -357,12 +386,29 @@ export async function purgeExpiredTrash(now = new Date()) {
   const cutoff = new Date(now.getTime() - TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000);
   const expired = await prisma.user.findMany({
     where: { deletedAt: { lt: cutoff } },
-    select: { id: true, avatarUrl: true },
+    select: { id: true, email: true, role: true, avatarUrl: true },
   });
+  let purged = 0;
   for (const u of expired) {
-    await hardDeleteUser(u.id, u.avatarUrl).catch(() => undefined);
+    // keep accounts whose personal Drive still serves files owned by someone else
+    if ((await countForeignDriveFiles(u.id)) > 0) continue;
+    const ok = await hardDeleteUser(u.id, u.avatarUrl).then(
+      () => true,
+      () => false
+    );
+    if (!ok) continue;
+    purged++;
+    await logAudit({
+      actorId: null,
+      action: "USER_PURGED",
+      targetType: "USER",
+      targetId: u.id,
+      summary: `Tự động xoá vĩnh viễn tài khoản sau ${TRASH_RETENTION_DAYS} ngày trong thùng rác: ${u.email}`,
+      summaryEn: `Automatically purged account after ${TRASH_RETENTION_DAYS} days in the trash: ${u.email}`,
+      meta: { targetEmail: u.email, targetRole: u.role, automatic: true },
+    });
   }
-  return expired.length;
+  return purged;
 }
 
 export async function listTrash() {

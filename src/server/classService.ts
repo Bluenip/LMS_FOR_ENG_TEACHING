@@ -119,6 +119,9 @@ export async function updateClass(
       summary: updated.archived
         ? `Lưu trữ (đóng) lớp học: ${updated.name}`
         : `Mở lại lớp học: ${updated.name}`,
+      summaryEn: updated.archived
+        ? `Archived (closed) class: ${updated.name}`
+        : `Reopened class: ${updated.name}`,
       meta: { className: updated.name, archived: updated.archived },
     });
   }
@@ -157,6 +160,7 @@ export async function deleteClass(classId: string, actorId?: string) {
       targetType: "CLASS",
       targetId: cls.id,
       summary: `Xoá lớp học: ${cls.name}`,
+      summaryEn: `Deleted class: ${cls.name}`,
       meta: { className: cls.name, teacherId: cls.teacherId },
     });
   }

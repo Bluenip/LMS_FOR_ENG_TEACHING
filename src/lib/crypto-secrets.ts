@@ -8,6 +8,14 @@ function resolveKeySource(): { tag: "totp" | "auth"; rawSecret: string } {
   if (totpKey.length >= 32) {
     return { tag: "totp", rawSecret: totpKey };
   }
+  if (totpKey.length > 0) {
+    // a key was configured but is too weak: fail loudly instead of silently using AUTH_SECRET
+    throw new AppError(
+      "TOTP_ENCRYPTION_KEY phải dài ít nhất 32 ký tự.",
+      503,
+      "SECRET_KEY_TOO_SHORT"
+    );
+  }
   const authSecret = process.env.AUTH_SECRET?.trim() ?? "";
   if (authSecret.length >= 16) {
     return { tag: "auth", rawSecret: authSecret };

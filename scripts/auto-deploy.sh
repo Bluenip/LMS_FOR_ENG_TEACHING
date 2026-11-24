@@ -142,6 +142,12 @@ SQL
 failed() {
   status=$?
   trap - ERR
+  # alert admins only on the first failure of this commit (cron retries every few minutes)
+  already_alerted=false
+  if [[ -f "$state_dir/failed" ]]; then
+    read -r prev_failed_commit _ < "$state_dir/failed" || true
+    [[ "${prev_failed_commit:-}" == "$target" ]] && already_alerted=true
+  fi
   printf '%s %s\n' "$target" "$(date +%s)" > "$state_dir/failed"
   log "Deployment failed for ${target:0:12}; see cron.log or docker logs."
   if [[ "$rollout_started" == true && -n "$previous_image" ]]; then
@@ -152,7 +158,11 @@ failed() {
       log 'Application rollback failed. Database backup is retained for recovery.'
     fi
   fi
-  notify_admins_deploy_failure || true
+  if [[ "$already_alerted" == true ]]; then
+    log 'Admins were already notified about this commit; no new notification.'
+  else
+    notify_admins_deploy_failure || true
+  fi
   exit "$status"
 }
 trap failed ERR

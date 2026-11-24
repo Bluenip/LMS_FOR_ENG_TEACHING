@@ -14,6 +14,7 @@ const EXPORT_TTL_MS = 30 * 60 * 1000;
 export interface BulkImportRowError {
   code:
     | "INVALID_NAME"
+    | "CLASS_AMBIGUOUS"
     | "INVALID_EMAIL"
     | "DUPLICATE_IN_FILE"
     | "EMAIL_EXISTS"
@@ -266,7 +267,12 @@ async function parseAndValidateWorkbook(buffer: Buffer): Promise<ParsedInternalR
 
   const existingByEmail = new Map(existingUsers.map((u) => [u.email.toLowerCase(), u]));
   const classByCode = new Map(allClasses.map((c) => [c.joinCode.toUpperCase(), c]));
-  const classByName = new Map(allClasses.map((c) => [c.name.trim().toLowerCase(), c]));
+  // several active classes can share a name: matching by name is only allowed when it is unique
+  const classesByName = new Map<string, typeof allClasses>();
+  for (const c of allClasses) {
+    const key = c.name.trim().toLowerCase();
+    classesByName.set(key, [...(classesByName.get(key) ?? []), c]);
+  }
 
   const seenEmails = new Set<string>();
   const validated: ParsedInternalRow[] = [];
@@ -324,9 +330,15 @@ async function parseAndValidateWorkbook(buffer: Buffer): Promise<ParsedInternalR
           message: "Chỉ tài khoản Học sinh mới có thể gán lớp khi nhập.",
         });
       } else {
+        const byName = classesByName.get(r.classRaw.trim().toLowerCase()) ?? [];
         const matched =
-          classByCode.get(r.classRaw.toUpperCase()) ?? classByName.get(r.classRaw.toLowerCase());
-        if (!matched) {
+          classByCode.get(r.classRaw.toUpperCase()) ?? (byName.length === 1 ? byName[0] : undefined);
+        if (!matched && byName.length > 1) {
+          errors.push({
+            code: "CLASS_AMBIGUOUS",
+            message: `Có ${byName.length} lớp cùng tên "${r.classRaw}". Hãy nhập mã lớp thay cho tên lớp.`,
+          });
+        } else if (!matched) {
           errors.push({
             code: "CLASS_NOT_FOUND",
             message: `Không tìm thấy lớp đang hoạt động "${r.classRaw}".`,
@@ -461,7 +473,7 @@ export async function commitBulkUserImport(
         });
       }
     }
-  });
+  }, { maxWait: 10_000, timeout: 120_000 });
 
   // Clean up expired one-time exports opportunistically
   const now = new Date();
@@ -486,6 +498,7 @@ export async function commitBulkUserImport(
     action: "USERS_BULK_IMPORTED",
     targetType: "SYSTEM",
     summary: `Nhập hàng loạt ${prepared.length} tài khoản từ Excel (${errorRows.length} dòng lỗi bị bỏ qua)`,
+    summaryEn: `Bulk-imported ${prepared.length} account(s) from Excel (${errorRows.length} invalid row(s) skipped)`,
     meta: {
       createdCount: prepared.length,
       enrolledCount,

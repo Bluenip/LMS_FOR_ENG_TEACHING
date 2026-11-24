@@ -269,6 +269,7 @@ export async function updateAssignment(
     targetType: "ASSIGNMENT",
     targetId: updated.id,
     summary: `Cập nhật bài tập đã giao: ${updated.title}`,
+    summaryEn: `Updated assignment: ${updated.title}`,
     meta: {
       classId: updated.classId,
       previousTitle: before.title,

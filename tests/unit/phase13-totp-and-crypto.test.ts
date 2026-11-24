@@ -134,6 +134,13 @@ describe("Phase 13 unit: AES-256-GCM secret encryption & key-source compatibilit
     expect(() => decryptAppSecret(envelope, "export")).toThrow();
   });
 
+  it("rejects a configured TOTP_ENCRYPTION_KEY shorter than 32 characters instead of silently falling back", () => {
+    process.env.TOTP_ENCRYPTION_KEY = "too-short";
+    expect(() => encryptAppSecret("JBSWY3DPEHPK3PXP", "totp")).toThrowError(
+      expect.objectContaining({ code: "SECRET_KEY_TOO_SHORT" })
+    );
+  });
+
   it("preserves decryption of AUTH_SECRET-encrypted records after TOTP_ENCRYPTION_KEY is later configured", () => {
     delete process.env.TOTP_ENCRYPTION_KEY;
     process.env.AUTH_SECRET = "existing-production-auth-secret-32chars";

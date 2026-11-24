@@ -24,6 +24,7 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
   "Một hoặc nhiều lớp học không hợp lệ hoặc không thuộc quyền quản lý của bạn.":
     "One or more classes are invalid or not managed by you.",
   "Dữ liệu đầu vào không hợp lệ.": "Invalid input data.",
+  "TOTP_ENCRYPTION_KEY phải dài ít nhất 32 ký tự.": "TOTP_ENCRYPTION_KEY must be at least 32 characters long.",
   "Đã có lỗi máy chủ. Vui lòng thử lại sau.": "Server error. Please try again later.",
 
   // Files & uploads
@@ -333,6 +334,11 @@ const PATTERN_EN_RULES: Array<[RegExp, (...args: string[]) => string]> = [
     /^Không thể đổi vai trò: tài khoản này đang sở hữu (\d+) lớp học và (\d+) bài tập\. Hãy xoá hoặc chuyển chúng trước\.$/,
     (_m, c, w) =>
       `Cannot change the role: this account still owns ${c} class(es) and ${w} worksheet(s). Delete or transfer them first.`,
+  ],
+  [
+    /^Không thể xoá vĩnh viễn: Google Drive riêng của tài khoản này đang chứa (\d+) file thuộc lớp\/worksheet đã chuyển cho người khác\. Xoá vĩnh viễn sẽ làm hỏng các file đó\.$/,
+    (_m, n) =>
+      `Cannot delete permanently: this account's personal Google Drive still holds ${n} file(s) used by classes/worksheets transferred to someone else. Deleting it would break those files.`,
   ],
   [
     /^Mỗi lần chỉ nhập tối đa (\d+) tài khoản\.$/,

@@ -148,6 +148,7 @@ export async function adminUpdateUser(
       targetType: "USER",
       targetId: targetUserId,
       summary: `Đổi vai trò ${target.name} (${target.email}): ${target.role} → ${updated.role}`,
+      summaryEn: `Changed role of ${target.name} (${target.email}): ${target.role} → ${updated.role}`,
       meta: { targetEmail: target.email, previousRole: target.role, nextRole: updated.role },
     });
   }
@@ -160,6 +161,9 @@ export async function adminUpdateUser(
       summary: updated.isLocked
         ? `Khoá tài khoản ${target.name} (${target.email})`
         : `Mở khoá tài khoản ${target.name} (${target.email})`,
+      summaryEn: updated.isLocked
+        ? `Locked account ${target.name} (${target.email})`
+        : `Unlocked account ${target.name} (${target.email})`,
       meta: { targetEmail: target.email, isLocked: updated.isLocked },
     });
   }
@@ -395,6 +399,7 @@ export async function transferOwnership(
         targetType: "USER",
         targetId: fromUser.id,
         summary: `Chuyển ${movedClassIds.length} lớp và ${movedWorksheetIds.length} worksheet từ ${fromUser.name} (${fromUser.email}) sang ${toUser.name} (${toUser.email})`,
+        summaryEn: `Transferred ${movedClassIds.length} class(es) and ${movedWorksheetIds.length} worksheet(s) from ${fromUser.name} (${fromUser.email}) to ${toUser.name} (${toUser.email})`,
         meta: {
           fromUserId: fromUser.id,
           fromEmail: fromUser.email,
