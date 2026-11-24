@@ -533,7 +533,25 @@ export default function StudentDoAssignmentPage() {
     submissionId: submission?.id ?? null,
     captureSnapshots: Boolean(assignment?.cameraSnapshots),
     onProctorEvent: sendProctorEvent,
+    onWarning: (type) => {
+      const msg =
+        type === "CAMERA_NO_FACE"
+          ? tr("Không thấy khuôn mặt của bạn trong camera.", "Your face is not visible on camera.")
+          : type === "CAMERA_MULTI_FACE"
+            ? tr("Camera phát hiện có nhiều người.", "More than one person detected on camera.")
+            : type === "CAMERA_LOOK_AWAY"
+              ? tr("Bạn đang quay mặt khỏi màn hình.", "You are looking away from the screen.")
+              : tr("Camera phát hiện điện thoại.", "A phone was detected on camera.");
+      toast.warning(msg, {
+        description: tr("Đã ghi lại cho giáo viên.", "This was recorded for your teacher."),
+        duration: 5000,
+      });
+    },
   });
+  const [cameraDebug, setCameraDebug] = useState(false);
+  useEffect(() => {
+    setCameraDebug(new URLSearchParams(window.location.search).has("camdebug"));
+  }, []);
 
   // Attach client lockdown listeners when exam is IN_PROGRESS and proctored
   useEffect(() => {
@@ -1152,9 +1170,9 @@ export default function StudentDoAssignmentPage() {
       {isInProgress && assignment.requireCamera && (
         <div
           data-testid="camera-proctor-preview"
-          className="fixed bottom-4 left-4 z-40 w-44 overflow-hidden rounded-2xl border-2 border-slate-200 bg-slate-950 shadow-xl"
+          className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-3 z-40 w-32 overflow-hidden rounded-2xl border-2 border-slate-200 bg-slate-950 shadow-xl sm:w-44 lg:bottom-4 lg:left-4"
         >
-          <div className="relative h-28 w-full bg-slate-900">
+          <div className="relative h-20 w-full bg-slate-900 sm:h-28">
             <video
               ref={cameraProctor.attachVideoRef}
               muted
@@ -1189,6 +1207,17 @@ export default function StudentDoAssignmentPage() {
             </span>
             <span>{cameraProctor.modelReady ? "AI ✓" : "…"}</span>
           </div>
+          {cameraProctor.modelReady && cameraProctor.reading && !cameraProctor.reading.calibrated && (
+            <div className="bg-indigo-600 px-2.5 py-1 text-[10px] font-medium text-white">
+              {tr("Nhìn thẳng màn hình để hiệu chỉnh…", "Look at the screen to calibrate…")}
+            </div>
+          )}
+          {cameraDebug && cameraProctor.reading && (
+            <div className="space-y-0.5 bg-black px-2.5 py-1 font-mono text-[10px] text-lime-300">
+              <div>yaw {cameraProctor.reading.yawDeg ?? "–"}° / pitch {cameraProctor.reading.pitchDeg ?? "–"}°</div>
+              <div>phone {cameraProctor.reading.phoneScore.toFixed(2)}</div>
+            </div>
+          )}
         </div>
       )}
 

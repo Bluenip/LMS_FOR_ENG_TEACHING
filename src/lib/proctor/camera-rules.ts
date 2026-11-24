@@ -24,18 +24,69 @@ export interface CameraRuleConfig {
   phoneScoreThreshold: number;
   phoneConsecutiveFrames: number;
   cooldownMs: number;
+  /**
+   * How long (ms of single-face frames) to learn the student's own "looking at the screen" pose.
+   * Head angles are then judged relative to that baseline, so a camera mounted above/beside the
+   * screen does not count as looking away. 0 disables calibration (absolute angles).
+   */
+  calibrationMs: number;
 }
 
 export const DEFAULT_CAMERA_RULE_CONFIG: CameraRuleConfig = {
-  noFaceDurationMs: 5_000,
-  multiFaceDurationMs: 2_000,
-  lookAwayDurationMs: 4_000,
-  maxYawDeg: 35,
-  maxPitchDeg: 25,
-  phoneScoreThreshold: 0.5,
+  noFaceDurationMs: 3_000,
+  multiFaceDurationMs: 1_500,
+  lookAwayDurationMs: 2_500,
+  maxYawDeg: 25,
+  maxPitchDeg: 20,
+  phoneScoreThreshold: 0.35,
   phoneConsecutiveFrames: 2,
-  cooldownMs: 30_000,
+  cooldownMs: 15_000,
+  calibrationMs: 3_000,
 };
+
+/** Calibration accepts poses up to this angle (webcams are often beside or above the screen). */
+const CALIBRATION_MAX_ABS_DEG = 45;
+
+export interface LandmarkPoint {
+  x: number;
+  y: number;
+  z?: number;
+}
+
+const toDeg = (rad: number) => (rad * 180) / Math.PI;
+const clamp1 = (v: number) => Math.max(-1, Math.min(1, v));
+
+/**
+ * Rough fallback when no transformation matrix is available: estimates head yaw (left/right) and
+ * pitch (up/down) in degrees from the 478 FaceLandmarker points,
+ * using where the nose tip sits between the face edges (yaw) and between forehead and chin (pitch).
+ * Independent of the transformation-matrix memory layout; ~0/0 when facing the camera.
+ */
+export function estimateHeadPoseFromLandmarks(
+  lm: ArrayLike<LandmarkPoint> | null | undefined
+): { yawDeg: number; pitchDeg: number } | null {
+  if (!lm || lm.length < 455) return null;
+  const nose = lm[1];
+  const left = lm[234];
+  const right = lm[454];
+  const top = lm[10];
+  const chin = lm[152];
+  if (!nose || !left || !right || !top || !chin) return null;
+
+  const width = right.x - left.x;
+  const height = chin.y - top.y;
+  if (Math.abs(width) < 1e-4 || Math.abs(height) < 1e-4) return null;
+
+  // 0.5 = nose centred between the face edges; 0 / 1 = full profile
+  const hr = (nose.x - left.x) / width;
+  // nose tip sits slightly below the face's vertical middle when looking straight ahead
+  const vr = (nose.y - top.y) / height;
+
+  const yawDeg = Math.round(toDeg(Math.asin(clamp1((hr - 0.5) * 2))) * 10) / 10;
+  const pitchDeg = Math.round(toDeg(Math.asin(clamp1((vr - 0.55) * 2.5))) * 10) / 10;
+  if (!Number.isFinite(yawDeg) || !Number.isFinite(pitchDeg)) return null;
+  return { yawDeg: yawDeg || 0, pitchDeg: pitchDeg || 0 };
+}
 
 export interface EmittedCameraEvent {
   type: Extract<
@@ -95,6 +146,10 @@ export class CameraRulesEngine {
   private phoneStreak = 0;
   private phoneFirstSeenAt: number | null = null;
   private lastFired = new Map<EmittedCameraEvent["type"], number>();
+  private calibYaw: number[] = [];
+  private calibPitch: number[] = [];
+  private calibStartedAt: number | null = null;
+  private baseline: { yawDeg: number; pitchDeg: number } | null = null;
 
   constructor(config?: Partial<CameraRuleConfig>) {
     this.cfg = { ...DEFAULT_CAMERA_RULE_CONFIG, ...config };
@@ -108,6 +163,52 @@ export class CameraRulesEngine {
     this.phoneFirstSeenAt = null;
   }
 
+  /** True once the student's neutral head pose has been learned (or calibration is disabled). */
+  public get calibrated(): boolean {
+    return this.cfg.calibrationMs <= 0 || this.baseline !== null;
+  }
+
+  /** Head angles relative to the calibrated neutral pose (raw angles when calibration is off). */
+  public deviation(yawDeg: number | null, pitchDeg: number | null) {
+    const b = this.baseline ?? { yawDeg: 0, pitchDeg: 0 };
+    return {
+      yawDeg: yawDeg === null ? null : Math.round((yawDeg - b.yawDeg) * 10) / 10,
+      pitchDeg: pitchDeg === null ? null : Math.round((pitchDeg - b.pitchDeg) * 10) / 10,
+    };
+  }
+
+  /** Whether this single frame already looks suspicious (for the live status badge). */
+  public isSuspicious(obs: CameraFrameObservation): boolean {
+    if (obs.faces !== 1) return true;
+    if ((obs.phoneScore ?? 0) >= this.cfg.phoneScoreThreshold) return true;
+    return this.calibrated && this.isHeadTurned(obs.yawDeg, obs.pitchDeg);
+  }
+
+  private isHeadTurned(yawDeg: number | null, pitchDeg: number | null): boolean {
+    const d = this.deviation(yawDeg, pitchDeg);
+    return (
+      (d.yawDeg !== null && Math.abs(d.yawDeg) > this.cfg.maxYawDeg) ||
+      (d.pitchDeg !== null && Math.abs(d.pitchDeg) > this.cfg.maxPitchDeg)
+    );
+  }
+
+  private calibrate(obs: CameraFrameObservation) {
+    if (this.calibrated || obs.faces !== 1 || obs.yawDeg === null || obs.pitchDeg === null) return;
+    if (Math.abs(obs.yawDeg) > CALIBRATION_MAX_ABS_DEG || Math.abs(obs.pitchDeg) > CALIBRATION_MAX_ABS_DEG) {
+      return;
+    }
+    if (this.calibStartedAt === null) this.calibStartedAt = obs.t;
+    this.calibYaw.push(obs.yawDeg);
+    this.calibPitch.push(obs.pitchDeg);
+    if (obs.t - this.calibStartedAt >= this.cfg.calibrationMs && this.calibYaw.length >= 3) {
+      const median = (xs: number[]) => {
+        const a = [...xs].sort((x, y) => x - y);
+        return a[Math.floor(a.length / 2)] ?? 0;
+      };
+      this.baseline = { yawDeg: median(this.calibYaw), pitchDeg: median(this.calibPitch) };
+    }
+  }
+
   private canFire(type: EmittedCameraEvent["type"], now: number): boolean {
     const prev = this.lastFired.get(type);
     return prev === undefined || now - prev >= this.cfg.cooldownMs;
@@ -116,6 +217,7 @@ export class CameraRulesEngine {
   public update(obs: CameraFrameObservation): EmittedCameraEvent[] {
     const events: EmittedCameraEvent[] = [];
     const { t, faces, yawDeg, pitchDeg } = obs;
+    this.calibrate(obs);
 
     // 1. No face
     if (faces === 0) {
@@ -149,11 +251,9 @@ export class CameraRulesEngine {
       this.multiFaceSince = null;
     }
 
-    // 3. Looking away / head turned or tilted down (only when exactly 1 face is present)
-    const isLookingAway =
-      faces === 1 &&
-      ((yawDeg !== null && Math.abs(yawDeg) > this.cfg.maxYawDeg) ||
-        (pitchDeg !== null && Math.abs(pitchDeg) > this.cfg.maxPitchDeg));
+    // 3. Looking away / head turned or tilted down, relative to the calibrated neutral pose
+    //    (only when exactly 1 face is present and calibration has finished)
+    const isLookingAway = faces === 1 && this.calibrated && this.isHeadTurned(yawDeg, pitchDeg);
 
     if (isLookingAway) {
       if (this.lookAwaySince === null) this.lookAwaySince = t;
@@ -163,7 +263,7 @@ export class CameraRulesEngine {
         events.push({
           type: "CAMERA_LOOK_AWAY",
           durationMs: Math.round(dur),
-          meta: { faces, yawDeg, pitchDeg },
+          meta: { faces, ...this.deviation(yawDeg, pitchDeg) },
         });
       }
     } else {

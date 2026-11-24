@@ -49,12 +49,57 @@ interface ClassOption {
   _count: { enrollments: number };
 }
 
+interface EditableAssignment {
+  id: string;
+  classId: string;
+  worksheetId: string;
+  title: string;
+  openAt: string | null;
+  dueAt: string | null;
+  timeLimitMin: number | null;
+  maxAttempts: number | null;
+  shuffle: boolean;
+  showResult: ShowResultMode;
+  showAnswerKey: boolean;
+  allowLate: boolean;
+  showLeaderboard: LeaderboardMode;
+  leaderboardAnon: boolean;
+  leaderboardScoreRule: string;
+  proctorMode: ProctorMode;
+  violationAction: ViolationAction;
+  maxViolations: number;
+  requireFullscreen: boolean;
+  blockCopyPaste: boolean;
+  sebConfigKeyHash: string | null;
+  shareProctorWithParent: boolean;
+  requireCamera: boolean;
+  cameraEnforce: boolean;
+  cameraSnapshots: boolean;
+  audioMaxPlays: number | null;
+  audioBlockPause: boolean;
+  audioBlockSeek: boolean;
+  oneQuestionPerPage: boolean;
+  class: { id: string; name: string };
+  _count: { submissions: number };
+}
+
+/** ISO date -> value for <input type="datetime-local"> in the browser's time zone. */
+function toLocalInput(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function NewAssignmentForm() {
   const { m: vi, tr } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
   const preWorksheetId = searchParams.get("worksheetId") ?? "";
   const preClassId = searchParams.get("classId") ?? "";
+  /** ?edit=<assignmentId>: change an assignment that was already given */
+  const editId = searchParams.get("edit") ?? "";
+  const isEdit = Boolean(editId);
 
   const { data: wsData } = useQuery<{
     worksheets: WorksheetOption[];
@@ -122,19 +167,62 @@ function NewAssignmentForm() {
 
   const [submitting, setSubmitting] = useState(false);
 
+  const { data: editData, isLoading: editLoading } = useQuery<{ assignment: EditableAssignment }>({
+    queryKey: ["assignment-settings", editId],
+    enabled: isEdit,
+    queryFn: () =>
+      apiFetchJson<{ assignment: EditableAssignment }>(`/api/assignments/${editId}/settings`),
+  });
+  const editing = editData?.assignment ?? null;
+  const [prefilled, setPrefilled] = useState(false);
+  useEffect(() => {
+    if (!editing || prefilled) return;
+    setPrefilled(true);
+    setWorksheetId(editing.worksheetId);
+    setSelectedClassIds([editing.classId]);
+    setTitle(editing.title);
+    setOpenAt(toLocalInput(editing.openAt));
+    setDueAt(toLocalInput(editing.dueAt));
+    setTimeLimitMin(editing.timeLimitMin ? String(editing.timeLimitMin) : "");
+    setUnlimitedAttempts(editing.maxAttempts === null);
+    setMaxAttempts(editing.maxAttempts ?? 1);
+    setShuffle(editing.shuffle);
+    setAllowLate(editing.allowLate);
+    setOneQuestionPerPage(editing.oneQuestionPerPage);
+    setLimitAudioPlays(editing.audioMaxPlays !== null);
+    setAudioMaxPlays(editing.audioMaxPlays ?? 2);
+    setAudioBlockPause(editing.audioBlockPause);
+    setAudioBlockSeek(editing.audioBlockSeek);
+    setShowResult(editing.showResult);
+    setShowAnswerKey(editing.showAnswerKey);
+    setShowLeaderboard(editing.showLeaderboard);
+    setLeaderboardAnon(editing.leaderboardAnon);
+    setLeaderboardScoreRule(editing.leaderboardScoreRule === "LAST" ? "LAST" : "BEST");
+    setProctorMode(editing.proctorMode);
+    setViolationAction(editing.violationAction);
+    setMaxViolations(editing.maxViolations);
+    setRequireFullscreen(editing.requireFullscreen);
+    setBlockCopyPaste(editing.blockCopyPaste);
+    setSebConfigKeyHash(editing.sebConfigKeyHash ?? "");
+    setShareProctorWithParent(editing.shareProctorWithParent);
+    setRequireCamera(editing.requireCamera);
+    setCameraEnforce(editing.cameraEnforce);
+    setCameraSnapshots(editing.cameraSnapshots);
+  }, [editing, prefilled]);
+
   // Auto-select default worksheet & title when loaded
   useEffect(() => {
-    if (!worksheetId && worksheets.length > 0) {
+    if (!isEdit && !worksheetId && worksheets.length > 0) {
       setWorksheetId(worksheets[0]!.id);
     }
-  }, [worksheets, worksheetId]);
+  }, [worksheets, worksheetId, isEdit]);
 
   useEffect(() => {
     const selectedWs = worksheets.find((w) => w.id === worksheetId);
-    if (selectedWs && !title) {
+    if (!isEdit && selectedWs && !title) {
       setTitle(selectedWs.title);
     }
-  }, [worksheetId, worksheets, title]);
+  }, [worksheetId, worksheets, title, isEdit]);
 
   const toggleClass = (id: string) => {
     setSelectedClassIds((prev) =>
@@ -196,12 +284,11 @@ function NewAssignmentForm() {
     }
     setSubmitting(true);
     try {
-      const res = await fetch("/api/assignments", {
-        method: "POST",
+      const res = await fetch(isEdit ? `/api/assignments/${editId}` : "/api/assignments", {
+        method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          worksheetId,
-          classIds: selectedClassIds,
+          ...(isEdit ? {} : { worksheetId, classIds: selectedClassIds }),
           title,
           openAt: openAt ? new Date(openAt).toISOString() : null,
           dueAt: dueAt ? new Date(dueAt).toISOString() : null,
@@ -232,7 +319,11 @@ function NewAssignmentForm() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? tr("Giao bài thất bại", "Assigning failed"));
-      toast.success(tr(`Đã giao bài cho ${json.assignments.length} lớp thành công!`, `Assigned to ${json.assignments.length} class(es) successfully!`));
+      toast.success(
+        isEdit
+          ? tr("Đã cập nhật bài tập đã giao.", "Assignment updated.")
+          : tr(`Đã giao bài cho ${json.assignments.length} lớp thành công!`, `Assigned to ${json.assignments.length} class(es) successfully!`)
+      );
       router.push("/teacher/assignments");
       router.refresh();
     } catch (err) {
@@ -254,8 +345,16 @@ function NewAssignmentForm() {
           {tr("Worksheet Studio › Giao bài & Cấu hình giám sát", "Worksheet Studio › Assign & proctoring settings")}
         </p>
         <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-[#0B1C30]">
-          {vi.assignments.createTitle}
+          {isEdit ? tr("Sửa bài tập đã giao", "Edit assignment") : vi.assignments.createTitle}
         </h1>
+        {isEdit && editing && (
+          <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs font-medium text-amber-800">
+            {tr(
+              `Lớp ${editing.class.name} · ${editing._count.submissions} lượt làm đã có được giữ nguyên. Tăng số lượt hoặc lùi hạn nộp sẽ báo cho học sinh.`,
+              `Class ${editing.class.name} · the ${editing._count.submissions} existing attempts are kept. Students are notified when you add attempts or extend the deadline.`
+            )}
+          </p>
+        )}
         <p className="mt-1 text-sm text-[#464555]">
           {tr("Cài đặt thời gian, lớp áp dụng, bảng xếp hạng và cơ chế chống gian lận cho ca thi.", "Set the timing, classes, leaderboard and anti-cheating rules for this exam.")}
         </p>
@@ -286,6 +385,7 @@ function NewAssignmentForm() {
                 <Label>{vi.assignments.selectWorksheet}</Label>
                 <select
                   required
+                  disabled={isEdit}
                   value={worksheetId}
                   onChange={(e) => {
                     setWorksheetId(e.target.value);
@@ -335,7 +435,8 @@ function NewAssignmentForm() {
                       <button
                         key={c.id}
                         type="button"
-                        onClick={() => toggleClass(c.id)}
+                        disabled={isEdit && !active}
+                        onClick={() => !isEdit && toggleClass(c.id)}
                         className={cn(
                           "inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition",
                           active
@@ -1061,10 +1162,16 @@ function NewAssignmentForm() {
               variant="accent"
               size="lg"
               className="w-full"
-              disabled={submitting}
+              disabled={submitting || (isEdit && (editLoading || !prefilled))}
             >
               <Rocket className="h-4 w-4" />
-              {submitting ? tr("Đang giao bài…", "Assigning…") : tr("Giao bài ngay", "Assign now")}
+              {submitting
+                ? isEdit
+                  ? tr("Đang lưu…", "Saving…")
+                  : tr("Đang giao bài…", "Assigning…")
+                : isEdit
+                  ? tr("Lưu thay đổi", "Save changes")
+                  : tr("Giao bài ngay", "Assign now")}
             </Button>
           </div>
         </aside>

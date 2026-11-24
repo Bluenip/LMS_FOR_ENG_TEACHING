@@ -9,6 +9,7 @@ import { AppError } from "@/lib/errors";
 import { createNotificationsBulk } from "./notificationService";
 import { canRevealResult } from "./submissionService";
 import { formatDateTime } from "@/lib/utils";
+import type { UpdateAssignmentInput } from "@/lib/validators";
 
 export interface CreateAssignmentInput {
   worksheetId: string;
@@ -160,6 +161,104 @@ export async function createAssignmentsForClasses(
   }
 
   return createdAssignments;
+}
+
+/** Settings of one assignment, for the edit form (teacher/admin of its class only — checked by the route). */
+export async function getAssignmentSettings(id: string) {
+  const a = await prisma.assignment.findUnique({
+    where: { id },
+    include: {
+      class: { select: { id: true, name: true, _count: { select: { enrollments: true } } } },
+      worksheet: { select: { id: true, title: true, _count: { select: { fields: true } } } },
+      _count: { select: { submissions: true } },
+    },
+  });
+  if (!a) throw new AppError("Không tìm thấy bài tập.", 404, "NOT_FOUND");
+  return a;
+}
+
+/**
+ * Edits an assignment that was already given (deadline, attempts, timing, proctoring…).
+ * Worksheet and class stay the same; existing submissions are kept. Students in the class are
+ * notified when the change gives them more time or more attempts.
+ */
+export async function updateAssignment(id: string, input: UpdateAssignmentInput) {
+  const before = await prisma.assignment.findUnique({
+    where: { id },
+    select: { maxAttempts: true, dueAt: true, classId: true, title: true },
+  });
+  if (!before) throw new AppError("Không tìm thấy bài tập.", 404, "NOT_FOUND");
+
+  const openAt = input.openAt ? new Date(input.openAt) : null;
+  const dueAt = input.dueAt ? new Date(input.dueAt) : null;
+  if (openAt && dueAt && dueAt <= openAt) {
+    throw new AppError("Hạn nộp phải sau thời điểm mở bài.", 400, "VALIDATION_ERROR");
+  }
+
+  const updated = await prisma.assignment.update({
+    where: { id },
+    data: {
+      title: input.title,
+      openAt,
+      dueAt,
+      timeLimitMin: input.timeLimitMin ?? null,
+      maxAttempts: input.maxAttempts,
+      shuffle: input.shuffle,
+      showResult: input.showResult,
+      showAnswerKey: input.showAnswerKey,
+      allowLate: input.allowLate,
+      showLeaderboard: input.showLeaderboard,
+      leaderboardAnon: input.leaderboardAnon,
+      leaderboardScoreRule: input.leaderboardScoreRule,
+      proctorMode: input.proctorMode,
+      violationAction: input.violationAction,
+      maxViolations: input.maxViolations,
+      requireFullscreen: input.proctorMode === "LOCKDOWN" ? true : input.requireFullscreen,
+      blockCopyPaste: input.proctorMode === "LOCKDOWN" ? true : input.blockCopyPaste,
+      sebConfigKeyHash: input.sebConfigKeyHash?.trim() || null,
+      shareProctorWithParent: input.shareProctorWithParent,
+      requireCamera: input.requireCamera,
+      cameraEnforce: input.requireCamera ? input.cameraEnforce : false,
+      cameraSnapshots: input.requireCamera ? input.cameraSnapshots : false,
+      audioMaxPlays: input.audioMaxPlays ?? null,
+      audioBlockPause: input.audioBlockPause,
+      audioBlockSeek: input.audioBlockSeek,
+      oneQuestionPerPage: Boolean(input.oneQuestionPerPage),
+    },
+  });
+
+  const moreAttempts =
+    before.maxAttempts !== null &&
+    (updated.maxAttempts === null || updated.maxAttempts > before.maxAttempts);
+  const laterDue =
+    before.dueAt !== null && (updated.dueAt === null || updated.dueAt > before.dueAt);
+  if (moreAttempts || laterDue) {
+    const enrollments = await prisma.enrollment.findMany({
+      where: { classId: before.classId, status: "ACTIVE" },
+      select: { studentId: true },
+    });
+    const parts = [
+      moreAttempts
+        ? updated.maxAttempts === null
+          ? "Không giới hạn lượt làm"
+          : `Được làm tối đa ${updated.maxAttempts} lượt`
+        : null,
+      laterDue ? (updated.dueAt ? `Hạn nộp mới: ${formatDateTime(updated.dueAt)}` : "Không còn hạn nộp") : null,
+    ].filter(Boolean);
+    await createNotificationsBulk(
+      enrollments.map((e) => ({
+        userId: e.studentId,
+        type: "ASSIGNMENT_CREATED" as const,
+        title: `Bài tập được cập nhật: ${updated.title}`,
+        body: parts.join(" • "),
+        link:
+          updated.proctorMode !== "OFF" || updated.requireCamera
+            ? `/student/assignments/${updated.id}/rules`
+            : `/student/assignments/${updated.id}/do`,
+      }))
+    );
+  }
+  return updated;
 }
 
 export async function listStudentAssignments(studentId: string) {

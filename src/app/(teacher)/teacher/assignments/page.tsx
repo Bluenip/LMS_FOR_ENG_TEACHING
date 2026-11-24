@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Clock, Lock, Plus, Radio, Trophy } from "lucide-react";
+import { Clock, Copy, Lock, Pencil, Plus, Radio, Trophy } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { listTeacherAssignments, describeProctorRuleSummary } from "@/server/assignmentService";
 import { formatDateTime } from "@/lib/utils";
@@ -81,6 +81,21 @@ export default async function TeacherAssignmentsPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" variant="outline" asChild>
+                    <Link href={`/teacher/assignments/new?edit=${a.id}`}>
+                      <Pencil className="h-3.5 w-3.5" />
+                      {tr("Sửa", "Edit")}
+                    </Link>
+                  </Button>
+                  <Button size="sm" variant="outline" asChild>
+                    <Link
+                      href={`/teacher/assignments/new?worksheetId=${a.worksheet.id}&classId=${a.class.id}`}
+                      title={tr("Giao lại phiếu này thành một bài mới", "Assign this worksheet again as a new assignment")}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      {tr("Giao lại", "Assign again")}
+                    </Link>
+                  </Button>
                   <Button size="sm" variant="outline" asChild>
                     <Link
                       href={`/teacher/classes/${a.class.id}/leaderboard?assignmentId=${a.id}`}

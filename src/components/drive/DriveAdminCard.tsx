@@ -203,7 +203,7 @@ export function DriveAdminCard() {
                   {tr("Đã bị thu hồi", "Revoked")}
                 </Badge>
               )}
-              {(!shared || shared.status === "DISCONNECTED" || shared.status === "NOT_CONNECTED") && (
+              {!isLoading && (!shared || shared.status === "DISCONNECTED" || shared.status === "NOT_CONNECTED") && (
                 <Badge variant="neutral" data-testid="drive-status-badge">
                   {tr("Chưa kết nối", "Not connected")}
                 </Badge>
@@ -222,7 +222,9 @@ export function DriveAdminCard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {data?.configured ? (
+          {isLoading ? (
+            <span className="text-xs text-slate-400">{tr("Đang tải…", "Loading…")}</span>
+          ) : data?.configured ? (
             shared?.connected ? (
               <>
                 <Button

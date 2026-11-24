@@ -6,7 +6,11 @@ import {
 } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
 import { getStudentAssignmentPayload } from "@/server/submissionService";
-import { verifySebHeaderIfNeeded } from "@/server/assignmentService";
+import {
+  updateAssignment,
+  verifySebHeaderIfNeeded,
+} from "@/server/assignmentService";
+import { updateAssignmentSchema } from "@/lib/validators";
 import { enqueueDriveTrashByFileIds } from "@/server/driveService";
 
 export async function GET(
@@ -22,6 +26,19 @@ export async function GET(
     const submissionId = url.searchParams.get("submissionId") ?? undefined;
     const payload = await getStudentAssignmentPayload(id, user.id, submissionId);
     return NextResponse.json(payload);
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+/** Teacher edits an assignment after it was given (attempts, deadline, timing, proctoring…). */
+export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await context.params;
+    await requireTeacherOfAssignment(id);
+    const data = updateAssignmentSchema.parse(await req.json());
+    const assignment = await updateAssignment(id, data);
+    return NextResponse.json({ assignment });
   } catch (error) {
     return handleApiError(error);
   }

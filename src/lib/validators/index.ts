@@ -260,6 +260,10 @@ export const createAssignmentSchema = z.object({
   oneQuestionPerPage: z.boolean().default(false),
 });
 
+/** Editing an assignment after it was given: same settings, but worksheet and class are fixed. */
+export const updateAssignmentSchema = createAssignmentSchema.omit({ worksheetId: true, classIds: true });
+export type UpdateAssignmentInput = z.infer<typeof updateAssignmentSchema>;
+
 // ===== Submission & Grading =====
 export const startSubmissionSchema = z.object({
   rulesAccepted: z.boolean().optional(),

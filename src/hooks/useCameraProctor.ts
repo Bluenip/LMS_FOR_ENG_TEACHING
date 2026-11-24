@@ -7,6 +7,16 @@ import { CameraRulesEngine } from "@/lib/proctor/camera-rules";
 
 export type CameraHealthStatus = "initializing" | "ok" | "warning" | "off";
 
+/** Live numbers for the optional debug readout (?camdebug=1). */
+export interface CameraLiveReading {
+  yawDeg: number | null;
+  pitchDeg: number | null;
+  phoneScore: number;
+  calibrated: boolean;
+}
+
+export type CameraWarningType = "CAMERA_NO_FACE" | "CAMERA_MULTI_FACE" | "CAMERA_LOOK_AWAY" | "CAMERA_PHONE";
+
 interface UseCameraProctorOptions {
   enabled: boolean;
   submissionId: string | null;
@@ -17,6 +27,8 @@ interface UseCameraProctorOptions {
     clientAt: string;
     meta?: Record<string, unknown>;
   }) => void | Promise<void>;
+  /** Called when the AI records something, so the page can warn the student right away. */
+  onWarning?: (type: CameraWarningType) => void;
 }
 
 export function useCameraProctor({
@@ -24,7 +36,13 @@ export function useCameraProctor({
   submissionId,
   captureSnapshots,
   onProctorEvent,
+  onWarning,
 }: UseCameraProctorOptions) {
+  const [reading, setReading] = useState<CameraLiveReading | null>(null);
+  const onWarningRef = useRef(onWarning);
+  useEffect(() => {
+    onWarningRef.current = onWarning;
+  }, [onWarning]);
   const [status, setStatus] = useState<CameraHealthStatus>("initializing");
   const [cameraOff, setCameraOff] = useState(false);
   const [modelReady, setModelReady] = useState(false);
@@ -166,15 +184,19 @@ export function useCameraProctor({
               const obs = detector.detect(videoElRef.current, nowMs);
               if (obs) {
                 setFaceCount(obs.faces);
-                const suspiciousNow =
-                  obs.faces !== 1 ||
-                  (obs.yawDeg !== null && Math.abs(obs.yawDeg) > 35) ||
-                  (obs.pitchDeg !== null && Math.abs(obs.pitchDeg) > 25) ||
-                  (obs.phoneScore ?? 0) >= 0.5;
-                setStatus(suspiciousNow ? "warning" : "ok");
-
                 const fired = engine.update(obs);
+                setStatus(engine.isSuspicious(obs) ? "warning" : "ok");
+                const dev = engine.deviation(obs.yawDeg, obs.pitchDeg);
+                setReading((prev) => ({
+                  yawDeg: dev.yawDeg,
+                  pitchDeg: dev.pitchDeg,
+                  // keep the last phone score between object-detector frames
+                  phoneScore: obs.objectChecked ? obs.phoneScore ?? 0 : prev?.phoneScore ?? 0,
+                  calibrated: engine.calibrated,
+                }));
+
                 for (const ev of fired) {
+                  onWarningRef.current?.(ev.type);
                   const snapshotKey = await captureAndUploadSnapshot();
                   void onProctorEventRef.current({
                     type: ev.type,
@@ -233,6 +255,7 @@ export function useCameraProctor({
     cameraOff,
     modelReady,
     faceCount,
+    reading,
     error,
     retryCamera,
   };

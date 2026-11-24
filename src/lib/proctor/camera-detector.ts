@@ -1,7 +1,14 @@
 "use client";
 
 import type { FaceLandmarker, ObjectDetector } from "@mediapipe/tasks-vision";
-import { extractYawPitchFromMatrix, type CameraFrameObservation } from "./camera-rules";
+import {
+  estimateHeadPoseFromLandmarks,
+  extractYawPitchFromMatrix,
+  type CameraFrameObservation,
+} from "./camera-rules";
+
+/** How often the (heavier) phone detector runs. */
+const OBJECT_CHECK_INTERVAL_MS = 700;
 
 export interface MockCameraObservation {
   faces: number;
@@ -82,7 +89,9 @@ export class BrowserCameraDetector {
         this.objectDetector = await vision.ObjectDetector.createFromOptions(fileset, {
           baseOptions: { modelAssetPath: objModel, delegate },
           runningMode: "VIDEO",
-          scoreThreshold: 0.45,
+          // low on purpose: a phone held near the face often scores 0.3-0.5 with this small model;
+          // the rules engine still needs consecutive hits before recording anything
+          scoreThreshold: 0.25,
           maxResults: 5,
           categoryAllowlist: ["cell phone", "book", "laptop"],
         });
@@ -125,18 +134,22 @@ export class BrowserCameraDetector {
 
     let yawDeg: number | null = null;
     let pitchDeg: number | null = null;
-    if (faces === 1 && faceRes.facialTransformationMatrixes?.[0]?.data) {
-      const angles = extractYawPitchFromMatrix(faceRes.facialTransformationMatrixes[0].data);
+    if (faces === 1) {
+      // the 3D transform matrix is the accurate signal; 2D landmark geometry is only a fallback
+      // (it overshoots badly when the face is near the edge of the frame)
+      const angles =
+        extractYawPitchFromMatrix(faceRes.facialTransformationMatrixes?.[0]?.data) ??
+        estimateHeadPoseFromLandmarks(faceRes.faceLandmarks?.[0]);
       if (angles) {
         yawDeg = angles.yawDeg;
         pitchDeg = angles.pitchDeg;
       }
     }
 
-    // Run object detector at a lower cadence (~1.5s) to reduce CPU/GPU usage
+    // Run the object detector at a lower cadence to limit CPU/GPU usage
     let phoneScore = 0;
     let objectChecked = false;
-    if (this.objectDetector && nowMs - this.lastObjectCheckAt >= 1500) {
+    if (this.objectDetector && nowMs - this.lastObjectCheckAt >= OBJECT_CHECK_INTERVAL_MS) {
       this.lastObjectCheckAt = nowMs;
       objectChecked = true;
       try {
