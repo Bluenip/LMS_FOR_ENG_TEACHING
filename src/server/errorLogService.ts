@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import { prisma } from "@/lib/db";
 import { sanitizeAuditMeta } from "@/server/auditService";
 
@@ -49,7 +48,7 @@ async function forwardToSentryIfConfigured(input: {
     if (!publicKey || !projectId) return;
 
     const endpoint = `${parsed.protocol}//${parsed.host}/api/${projectId}/envelope/`;
-    const eventId = crypto.randomBytes(16).toString("hex");
+    const eventId = globalThis.crypto.randomUUID().replace(/-/g, "");
     const sentAt = new Date().toISOString();
 
     const envelopeHeader = JSON.stringify({
