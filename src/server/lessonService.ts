@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { getStorageProvider } from "@/lib/storage";
 import { getMaxUploadBytes, validatePdfBuffer } from "@/lib/pdf/server-pdf";
+import { enqueueDriveTrashForKeys } from "./driveService";
 
 const ALLOWED_MEDIA_EXT: Record<string, string> = {
   "application/pdf": ".pdf",
@@ -50,11 +51,15 @@ export async function deleteLesson(classId: string, lessonId: string) {
   if (!lesson) {
     throw new AppError("Không tìm thấy chương bài giảng.", 404, "NOT_FOUND");
   }
+  const fileKeys = lesson.items
+    .map((item) => item.fileKey)
+    .filter((k): k is string => Boolean(k));
+  const queued = await enqueueDriveTrashForKeys(fileKeys, "LESSON_DELETED");
   await prisma.lesson.delete({ where: { id: lesson.id } });
-  const storage = getStorageProvider();
-  for (const item of lesson.items) {
-    if (item.fileKey) {
-      await storage.delete(item.fileKey).catch(() => undefined);
+  if (queued === 0) {
+    const storage = getStorageProvider();
+    for (const key of fileKeys) {
+      await storage.delete(key).catch(() => undefined);
     }
   }
 }
@@ -67,6 +72,7 @@ export async function createLessonItem(
     type: LessonItemType;
     url?: string | null;
     fileKey?: string | null;
+    driveFileId?: string | null;
     order?: number;
   }
 ) {
@@ -82,6 +88,7 @@ export async function createLessonItem(
       type: input.type,
       url: input.url?.trim() || null,
       fileKey: input.fileKey?.trim() || null,
+      driveFileId: input.driveFileId?.trim() || null,
       order: input.order ?? count,
     },
   });
@@ -117,7 +124,10 @@ export async function uploadLessonAttachment(
   }
 
   const fileKey = `lessons/${classId}/${lessonId}/${crypto.randomUUID()}${ext}`;
-  await getStorageProvider().put(fileKey, buffer, mimeType);
+  await getStorageProvider().put(fileKey, buffer, mimeType, {
+    classId,
+    kind: "LESSON_FILE",
+  });
   return { fileKey };
 }
 
@@ -128,8 +138,11 @@ export async function deleteLessonItem(classId: string, lessonId: string, itemId
   if (!item) {
     throw new AppError("Không tìm thấy tài liệu.", 404, "NOT_FOUND");
   }
+  const queued = item.fileKey
+    ? await enqueueDriveTrashForKeys([item.fileKey], "LESSON_ITEM_DELETED")
+    : 0;
   await prisma.lessonItem.delete({ where: { id: item.id } });
-  if (item.fileKey) {
+  if (item.fileKey && queued === 0) {
     await getStorageProvider().delete(item.fileKey).catch(() => undefined);
   }
 }

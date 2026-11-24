@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetchJson } from "@/lib/api-client";
+import { DriveAdminCard } from "@/components/drive/DriveAdminCard";
 import { toast } from "sonner";
 import {
   BookOpen,
@@ -200,6 +201,11 @@ export default function AdminPortalPage() {
           </p>
         </div>
       </div>
+
+      {/* Google Drive Shared Connection */}
+      <Suspense fallback={null}>
+        <DriveAdminCard />
+      </Suspense>
 
       {/* User Management Table */}
       <section className="stitch-card overflow-hidden">

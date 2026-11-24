@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { getStorageProvider } from "@/lib/storage";
+import { enqueueDriveTrashForKeys } from "./driveService";
 import { getServerDeadline } from "./submissionService";
 
 const ALLOWED_AUDIO_MIMES: Record<string, string> = {
@@ -143,14 +144,20 @@ export async function uploadWorksheetAudio(
 
   const ws = await prisma.worksheet.findUnique({
     where: { id: worksheetId },
-    select: { id: true, _count: { select: { audios: true } } },
+    select: { id: true, ownerId: true, title: true, _count: { select: { audios: true } } },
   });
   if (!ws) {
     throw new AppError("Không tìm thấy phiếu bài tập.", 404, "NOT_FOUND");
   }
 
   const fileKey = `worksheets/${worksheetId}/audio/${crypto.randomUUID()}${ext}`;
-  await getStorageProvider().put(fileKey, input.buffer, mime);
+  await getStorageProvider().put(fileKey, input.buffer, mime, {
+    ownerId: ws.ownerId,
+    kind: "WORKSHEET_AUDIO",
+    worksheetId,
+    worksheetTitle: ws.title,
+    fileName: `audio-${ws._count.audios + 1}${ext}`,
+  });
 
   const fallbackTitle =
     input.originalFilename?.replace(/\.[^.]+$/, "").trim() ||
@@ -203,8 +210,11 @@ export async function deleteWorksheetAudio(worksheetId: string, audioId: string)
   if (!existing) {
     throw new AppError("Không tìm thấy file nghe.", 404, "NOT_FOUND");
   }
+  const queued = await enqueueDriveTrashForKeys([existing.fileKey], "AUDIO_DELETED");
   await prisma.worksheetAudio.delete({ where: { id: audioId } });
-  await getStorageProvider().delete(existing.fileKey).catch(() => undefined);
+  if (queued === 0) {
+    await getStorageProvider().delete(existing.fileKey).catch(() => undefined);
+  }
 }
 
 /**
@@ -345,6 +355,70 @@ export async function getAuthorizedAudioStream(
   }
 
   const stored = await getStorageProvider().get(audio.fileKey);
+  if (!stored) {
+    throw new AppError("Không tìm thấy dữ liệu file nghe.", 404, "NOT_FOUND");
+  }
+
+  return {
+    buffer: stored.buffer,
+    size: stored.size,
+    mimeType: audio.mimeType || stored.contentType,
+  };
+}
+
+export async function getAuthorizedAudioRangeStream(
+  submissionId: string,
+  audioId: string,
+  studentId: string,
+  token: string | null,
+  rangeHeader: string | null
+) {
+  if (!token) {
+    throw new AppError("Thiếu mã xác thực phát âm thanh.", 403, "MISSING_AUDIO_TOKEN");
+  }
+  const payload = verifyAudioStreamToken(token);
+  if (
+    !payload ||
+    payload.sid !== submissionId ||
+    payload.aid !== audioId ||
+    payload.uid !== studentId
+  ) {
+    throw new AppError("Mã phát âm thanh không hợp lệ hoặc đã hết hạn.", 403, "INVALID_AUDIO_TOKEN");
+  }
+
+  const submission = await prisma.submission.findUnique({
+    where: { id: submissionId },
+    select: {
+      studentId: true,
+      assignment: { select: { worksheetId: true } },
+    },
+  });
+  if (!submission || submission.studentId !== studentId) {
+    throw new AppError("Không có quyền truy cập file nghe.", 403, "FORBIDDEN");
+  }
+
+  const audio = await prisma.worksheetAudio.findFirst({
+    where: { id: audioId, worksheetId: submission.assignment.worksheetId },
+  });
+  if (!audio) {
+    throw new AppError("Không tìm thấy file nghe.", 404, "NOT_FOUND");
+  }
+
+  const storage = getStorageProvider();
+  if (storage.getStream) {
+    const streamed = await storage.getStream(audio.fileKey, rangeHeader);
+    if (streamed) {
+      return {
+        stream: streamed.stream,
+        status: streamed.status,
+        mimeType: audio.mimeType || streamed.contentType,
+        contentLength: streamed.contentLength,
+        contentRange: streamed.contentRange,
+      };
+    }
+  }
+
+  const stored = await storage.get(audio.fileKey);
   if (!stored) {
     throw new AppError("Không tìm thấy dữ liệu file nghe.", 404, "NOT_FOUND");
   }

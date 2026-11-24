@@ -5,6 +5,7 @@ import { AppError } from "@/lib/errors";
 import { getStorageProvider } from "@/lib/storage";
 import { parsePdfMetadata, validatePdfBuffer } from "@/lib/pdf/server-pdf";
 import { regradeWorksheetSubmissions } from "./regradeService";
+import { enqueueDriveTrashForKeys, getStorageLocationsForKeys } from "./driveService";
 
 async function countWorksheetSubmissions(worksheetId: string): Promise<number> {
   return prisma.submission.count({ where: { assignment: { worksheetId } } });
@@ -110,13 +111,19 @@ export async function deleteWorksheet(worksheetId: string) {
       "WORKSHEET_HAS_SUBMISSIONS"
     );
   }
+  const keysToClean: string[] = [];
+  if (ws.pdfFileKey) keysToClean.push(ws.pdfFileKey);
+  for (const a of ws.audios) keysToClean.push(a.fileKey);
+
+  // Queue Drive files for asynchronous trash BEFORE deleting DB record (no Google call in DB tx)
+  const queuedCount = await enqueueDriveTrashForKeys(keysToClean, "WORKSHEET_DELETED");
   await prisma.worksheet.delete({ where: { id: worksheetId } });
-  const storage = getStorageProvider();
-  if (ws.pdfFileKey) {
-    await storage.delete(ws.pdfFileKey).catch(() => undefined);
-  }
-  for (const a of ws.audios) {
-    await storage.delete(a.fileKey).catch(() => undefined);
+
+  if (queuedCount === 0) {
+    const storage = getStorageProvider();
+    for (const key of keysToClean) {
+      await storage.delete(key).catch(() => undefined);
+    }
   }
 }
 
@@ -132,7 +139,12 @@ export async function getWorksheetForTeacher(worksheetId: string) {
   if (!worksheet) {
     throw new AppError("Không tìm thấy phiếu bài tập.", 404, "NOT_FOUND");
   }
-  return worksheet;
+  const keys = [
+    ...(worksheet.pdfFileKey ? [worksheet.pdfFileKey] : []),
+    ...worksheet.audios.map((a) => a.fileKey),
+  ];
+  const storageLocations = await getStorageLocationsForKeys(keys);
+  return { ...worksheet, storageLocations };
 }
 
 export async function uploadWorksheetPdf(
@@ -148,7 +160,7 @@ export async function uploadWorksheetPdf(
 
   const existing = await prisma.worksheet.findUnique({
     where: { id: worksheetId },
-    select: { pdfFileKey: true },
+    select: { pdfFileKey: true, ownerId: true, title: true },
   });
   if (!existing) {
     throw new AppError("Không tìm thấy phiếu bài tập.", 404, "NOT_FOUND");
@@ -164,7 +176,13 @@ export async function uploadWorksheetPdf(
 
   const fileKey = `worksheets/${worksheetId}/${crypto.randomUUID()}.pdf`;
   const storage = getStorageProvider();
-  await storage.put(fileKey, buffer, "application/pdf");
+  await storage.put(fileKey, buffer, "application/pdf", {
+    ownerId: existing.ownerId,
+    kind: "WORKSHEET_PDF",
+    worksheetId,
+    worksheetTitle: existing.title,
+    fileName: "de.pdf",
+  });
 
   const updated = await prisma.$transaction(async (tx) => {
     await tx.worksheetPage.deleteMany({ where: { worksheetId } });

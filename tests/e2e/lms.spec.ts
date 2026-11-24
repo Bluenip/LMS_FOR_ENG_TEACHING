@@ -762,7 +762,7 @@ test.describe("Phase 8: Anti-Cheat Proctoring (Rules, SSE Live, LOCK, RESTART, A
         {
           name: "lang",
           value: "en",
-          url: "http://localhost:3000",
+          url: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
         },
       ]);
       await loginAs(enPage, "teacher1@engclass.vn");
@@ -791,6 +791,96 @@ test.describe("Phase 8: Anti-Cheat Proctoring (Rules, SSE Live, LOCK, RESTART, A
       await enCtx.close();
     } finally {
       await prisma.user.deleteMany({ where: { email: tempEmail } }).catch(() => {});
+      await prisma.$disconnect();
+    }
+  });
+
+  test("Flow 11: Google Drive UI (Admin card, Teacher Settings, Revoked banner, Storage badges & API security)", async ({
+    browser,
+  }) => {
+    const prisma = new PrismaClient();
+    const admin = await prisma.user.findUniqueOrThrow({ where: { email: "admin@engclass.vn" } });
+
+    try {
+      // 1. Seed a REVOKED shared Drive connection to verify graceful UI notices without crashing
+      await prisma.driveConnection.upsert({
+        where: { scopeKey: "shared" },
+        create: {
+          scopeKey: "shared",
+          ownerId: null,
+          connectedById: admin.id,
+          email: "school-drive@engclass.vn",
+          encryptedRefreshToken: "",
+          scope: "https://www.googleapis.com/auth/drive.file",
+          status: "REVOKED",
+        },
+        update: {
+          status: "REVOKED",
+          encryptedRefreshToken: "",
+          email: "school-drive@engclass.vn",
+        },
+      });
+
+      // Admin sees Google Drive card with Revoked badge and email
+      const adminCtx = await browser.newContext();
+      const adminPage = await adminCtx.newPage();
+      await loginAs(adminPage, "admin@engclass.vn");
+      await expect(adminPage.getByTestId("admin-drive-card")).toBeVisible({ timeout: 15000 });
+      await expect(adminPage.getByTestId("drive-status-badge")).toContainText(
+        /Đã bị thu hồi|Revoked/
+      );
+      await expect(adminPage.getByTestId("admin-drive-card")).toContainText(
+        "school-drive@engclass.vn"
+      );
+
+      // Origin CSRF check: cross-origin POST /api/drive/disconnect MUST be blocked with 403
+      const csrfRes = await adminPage.request.post("/api/drive/disconnect", {
+        headers: { Origin: "https://evil.example" },
+        data: { scope: "shared" },
+      });
+      expect(csrfRes.status()).toBe(403);
+      await adminCtx.close();
+
+      // Teacher sees revoked banner on /teacher/worksheets (no crash), settings card, and editor storage badges
+      const teacherCtx = await browser.newContext();
+      const tPage = await teacherCtx.newPage();
+      await loginAs(tPage, "teacher1@engclass.vn");
+      await tPage.goto("/teacher/worksheets");
+      await expect(tPage.getByTestId("drive-revoked-banner")).toBeVisible({ timeout: 15000 });
+
+      await tPage.goto("/teacher/settings");
+      await expect(tPage.getByTestId("teacher-drive-settings-card")).toBeVisible({
+        timeout: 15000,
+      });
+
+      // Editor displays storage badge for PDF
+      const unit7Ws = await prisma.worksheet.findFirstOrThrow({
+        where: { pdfFileKey: { not: null } },
+      });
+      await tPage.goto(`/teacher/worksheets/${unit7Ws.id}/edit`);
+      await expect(tPage.getByTestId("pdf-storage-badge")).toBeVisible({ timeout: 15000 });
+      await teacherCtx.close();
+
+      // Student cannot call admin/teacher Drive management routes (403)
+      const studentCtx = await browser.newContext();
+      const sPage = await studentCtx.newPage();
+      await loginAs(sPage, "student1@engclass.vn");
+      const studentForbidden = await sPage.evaluate(async () => {
+        const [r1, r2, r3] = await Promise.all([
+          fetch("/api/drive/maintenance", { method: "POST", body: "{}" }),
+          fetch("/api/drive/backup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ all: true }),
+          }),
+          fetch("/api/drive/files"),
+        ]);
+        return [r1.status, r2.status, r3.status];
+      });
+      expect(studentForbidden).toEqual([403, 403, 403]);
+      await studentCtx.close();
+    } finally {
+      await prisma.driveConnection.deleteMany({ where: { scopeKey: "shared" } }).catch(() => {});
       await prisma.$disconnect();
     }
   });

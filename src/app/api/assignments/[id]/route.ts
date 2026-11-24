@@ -7,6 +7,7 @@ import {
 import { prisma } from "@/lib/db";
 import { getStudentAssignmentPayload } from "@/server/submissionService";
 import { verifySebHeaderIfNeeded } from "@/server/assignmentService";
+import { enqueueDriveTrashByFileIds } from "@/server/driveService";
 
 export async function GET(
   req: Request,
@@ -33,6 +34,16 @@ export async function DELETE(
   try {
     const { id } = await context.params;
     await requireTeacherOfAssignment(id);
+    const subFiles = await prisma.driveFile.findMany({
+      where: { submission: { assignmentId: id }, trashedAt: null },
+      select: { id: true },
+    });
+    if (subFiles.length > 0) {
+      await enqueueDriveTrashByFileIds(
+        subFiles.map((f) => f.id),
+        "ASSIGNMENT_DELETED"
+      );
+    }
     await prisma.assignment.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (error) {

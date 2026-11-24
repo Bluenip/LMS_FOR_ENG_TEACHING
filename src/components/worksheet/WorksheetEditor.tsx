@@ -71,6 +71,7 @@ interface WorksheetEditorProps {
     pages: WorksheetPageDTO[];
     fields: EditorFieldDTO[];
     audios?: WorksheetAudioDTO[];
+    storageLocations?: Record<string, "drive" | "s3" | "local">;
   };
 }
 
@@ -227,6 +228,9 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
   const [worksheetId] = useState(initialWorksheet.id);
   const [title, setTitle] = useState(initialWorksheet.title);
   const [pdfFileKey, setPdfFileKey] = useState<string | null>(initialWorksheet.pdfFileKey);
+  const [storageLocations, setStorageLocations] = useState<
+    Record<string, "drive" | "s3" | "local">
+  >(initialWorksheet.storageLocations ?? {});
   const [pages, setPages] = useState<WorksheetPageDTO[]>(initialWorksheet.pages);
   const [audios, setAudios] = useState<WorksheetAudioDTO[]>(initialWorksheet.audios ?? []);
   const [isShared, setIsShared] = useState(Boolean(initialWorksheet.isShared));
@@ -417,6 +421,12 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? tr("Tải PDF thất bại", "PDF upload failed"));
       setPdfFileKey(json.worksheet.pdfFileKey);
+      if (json.worksheet.pdfFileKey && json.storageLocation) {
+        setStorageLocations((prev) => ({
+          ...prev,
+          [json.worksheet.pdfFileKey]: json.storageLocation,
+        }));
+      }
       setPages(json.worksheet.pages);
       setActivePage(0);
       toast.success(tr(`Đã tải PDF (${json.worksheet.pageCount} trang)!`, `PDF uploaded (${json.worksheet.pageCount} pages)!`));
@@ -458,6 +468,12 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? tr("Tải file nghe thất bại", "Audio upload failed"));
       setAudios((prev) => [...prev, json.audio]);
+      if (json.audio.fileKey && json.storageLocation) {
+        setStorageLocations((prev) => ({
+          ...prev,
+          [json.audio.fileKey]: json.storageLocation,
+        }));
+      }
       toast.success(tr(`Đã tải lên file nghe "${json.audio.title}"`, `Uploaded audio "${json.audio.title}"`));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : tr("Tải file nghe thất bại", "Audio upload failed"));
@@ -1289,6 +1305,22 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                   ? vi.worksheets.replacePdf
                   : vi.worksheets.uploadPdf}
             </Button>
+            {pdfFileKey && (
+              <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
+                <span>{tr("Lưu trữ PDF:", "PDF storage:")}</span>
+                <Badge
+                  variant={storageLocations[pdfFileKey] === "drive" ? "mint" : "neutral"}
+                  className="text-[10px]"
+                  data-testid="pdf-storage-badge"
+                >
+                  {storageLocations[pdfFileKey] === "drive"
+                    ? "Google Drive"
+                    : storageLocations[pdfFileKey] === "s3"
+                      ? "S3"
+                      : tr("Máy chủ", "Server")}
+                </Badge>
+              </div>
+            )}
           </div>
 
           {/* Stitch Total Points Card */}
@@ -1337,6 +1369,19 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                         onBlur={(e) => void handleRenameAudio(a.id, e.target.value)}
                         className="min-w-0 flex-1 rounded bg-transparent px-1 py-0.5 text-[11px] font-semibold text-[#0B1C30] hover:bg-white focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
                       />
+                      {a.fileKey && (
+                        <Badge
+                          variant={storageLocations[a.fileKey] === "drive" ? "mint" : "neutral"}
+                          className="text-[9px] px-1.5 py-0"
+                          data-testid={`audio-storage-badge-${a.id}`}
+                        >
+                          {storageLocations[a.fileKey] === "drive"
+                            ? "Drive"
+                            : storageLocations[a.fileKey] === "s3"
+                              ? "S3"
+                              : tr("Máy chủ", "Server")}
+                        </Badge>
+                      )}
                       <button
                         type="button"
                         onClick={() => void handleDeleteAudio(a.id)}

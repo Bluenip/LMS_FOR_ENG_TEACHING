@@ -1,9 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { apiFetchJson } from "@/lib/api-client";
+import { cancelDirectDriveUpload, uploadDirectToDrive } from "@/lib/drive-upload";
+import type { DriveStatusPayload } from "@/server/driveService";
 import {
   Archive,
   BookOpen,
@@ -180,7 +184,20 @@ export function ClassDetailView({
   const [itemType, setItemType] = useState<LessonItemType>("PDF");
   const [itemUrl, setItemUrl] = useState("");
   const [itemFile, setItemFile] = useState<File | null>(null);
+  const [itemUploadPct, setItemUploadPct] = useState<number | null>(null);
+  const [itemUploading, setItemUploading] = useState(false);
+  const uploadAbortRef = useRef<AbortController | null>(null);
+  const uploadJobIdRef = useRef<string | null>(null);
   const [viewingPdf, setViewingPdf] = useState<{ fileKey: string; title: string } | null>(null);
+
+  const { data: driveStatus } = useQuery<DriveStatusPayload>({
+    queryKey: ["drive-status", "class-detail"],
+    enabled: isTeacher,
+    queryFn: () => apiFetchJson<DriveStatusPayload>("/api/drive/status"),
+  });
+  const driveConnected = Boolean(
+    driveStatus?.personal?.connected || driveStatus?.shared?.connected
+  );
 
   // Settings state
   const [editName, setEditName] = useState(cls.name);
@@ -350,27 +367,82 @@ export function ClassDetailView({
   const handleCreateLessonItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!addingItemLessonId || !itemTitle.trim()) return;
-    const fd = new FormData();
-    fd.append("title", itemTitle);
-    fd.append("type", itemType);
-    if (itemUrl.trim()) fd.append("url", itemUrl.trim());
-    if (itemFile) fd.append("file", itemFile);
+    setItemUploading(true);
+    setItemUploadPct(null);
 
-    const res = await fetch(
-      `/api/classes/${cls.id}/lessons/${addingItemLessonId}/items`,
-      { method: "POST", body: fd }
-    );
-    const json = await res.json();
-    if (!res.ok) {
-      toast.error(json.error ?? tr("Không thể thêm tài liệu", "Could not add the material"));
-      return;
+    try {
+      // Option B: direct browser -> Google Drive resumable upload for large lesson videos
+      if (itemType === "VIDEO" && itemFile && driveConnected) {
+        const controller = new AbortController();
+        uploadAbortRef.current = controller;
+        uploadJobIdRef.current = null;
+        const job = await uploadDirectToDrive(itemFile, {
+          classId: cls.id,
+          lessonId: addingItemLessonId,
+          kind: "video",
+          signal: controller.signal,
+          onJob: (jid) => {
+            uploadJobIdRef.current = jid;
+          },
+          onProgress: (loaded, total) => {
+            setItemUploadPct(total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0);
+          },
+        });
+
+        const res = await fetch(
+          `/api/classes/${cls.id}/lessons/${addingItemLessonId}/items`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: itemTitle.trim(),
+              type: itemType,
+              fileKey: job.storageKey,
+              driveFileId: job.driveFileId,
+              url: job.previewUrl ?? null,
+            }),
+          }
+        );
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(json.error ?? tr("Không thể thêm tài liệu", "Could not add the material"));
+        }
+      } else {
+        const fd = new FormData();
+        fd.append("title", itemTitle);
+        fd.append("type", itemType);
+        if (itemUrl.trim()) fd.append("url", itemUrl.trim());
+        if (itemFile) fd.append("file", itemFile);
+
+        const res = await fetch(
+          `/api/classes/${cls.id}/lessons/${addingItemLessonId}/items`,
+          { method: "POST", body: fd }
+        );
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(json.error ?? tr("Không thể thêm tài liệu", "Could not add the material"));
+        }
+      }
+
+      setAddingItemLessonId(null);
+      setItemTitle("");
+      setItemUrl("");
+      setItemFile(null);
+      setItemUploadPct(null);
+      await refreshClass();
+      toast.success(tr("Đã thêm tài liệu bài giảng!", "Material added!"));
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        toast.info(tr("Đã huỷ tải video lên Drive.", "Drive video upload cancelled."));
+      } else {
+        toast.error(err instanceof Error ? err.message : tr("Không thể thêm tài liệu", "Could not add the material"));
+      }
+    } finally {
+      uploadAbortRef.current = null;
+      uploadJobIdRef.current = null;
+      setItemUploading(false);
+      setItemUploadPct(null);
     }
-    setAddingItemLessonId(null);
-    setItemTitle("");
-    setItemUrl("");
-    setItemFile(null);
-    await refreshClass();
-    toast.success(tr("Đã thêm tài liệu bài giảng!", "Material added!"));
   };
 
   const activeStudents = cls.enrollments.filter((e) => e.status === "ACTIVE");
@@ -1062,15 +1134,40 @@ export function ClassDetailView({
                 />
               </div>
             )}
+            {itemUploadPct !== null && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-xs text-[#3525CD] font-semibold">
+                  <span>{tr("Đang tải video trực tiếp lên Google Drive…", "Uploading video directly to Google Drive…")}</span>
+                  <span className="tabular-nums">{itemUploadPct}%</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                  <div
+                    className="h-full rounded-full bg-[#4F46E5] transition-all"
+                    style={{ width: `${itemUploadPct}%` }}
+                  />
+                </div>
+              </div>
+            )}
             <div className="flex justify-end gap-2">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setAddingItemLessonId(null)}
+                onClick={() => {
+                  if (itemUploading) {
+                    uploadAbortRef.current?.abort();
+                    if (uploadJobIdRef.current) {
+                      void cancelDirectDriveUpload(uploadJobIdRef.current);
+                    }
+                  } else {
+                    setAddingItemLessonId(null);
+                  }
+                }}
               >
                 {tr("Huỷ", "Cancel")}
               </Button>
-              <Button type="submit">{tr("Thêm tài liệu", "Add material")}</Button>
+              <Button type="submit" disabled={itemUploading}>
+                {itemUploading ? tr("Đang tải lên…", "Uploading…") : tr("Thêm tài liệu", "Add material")}
+              </Button>
             </div>
           </form>
         </DialogContent>

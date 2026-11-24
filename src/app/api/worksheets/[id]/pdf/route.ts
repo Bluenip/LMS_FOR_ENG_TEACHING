@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { AppError, handleApiError, requireTeacherOfWorksheet } from "@/lib/permissions";
 import { uploadWorksheetPdf } from "@/server/worksheetService";
+import { getStorageLocationsForKeys } from "@/server/driveService";
 
 export async function POST(
   req: Request,
@@ -16,7 +17,13 @@ export async function POST(
     }
     const buffer = Buffer.from(await file.arrayBuffer());
     const worksheet = await uploadWorksheetPdf(id, buffer, file.type);
-    return NextResponse.json({ worksheet });
+    const locations = worksheet.pdfFileKey
+      ? await getStorageLocationsForKeys([worksheet.pdfFileKey])
+      : {};
+    return NextResponse.json({
+      worksheet,
+      storageLocation: worksheet.pdfFileKey ? (locations[worksheet.pdfFileKey] ?? "local") : "local",
+    });
   } catch (error) {
     return handleApiError(error);
   }

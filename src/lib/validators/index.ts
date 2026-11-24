@@ -256,6 +256,7 @@ export const createLessonItemSchema = z.object({
   type: z.nativeEnum(LessonItemType),
   url: z.string().trim().url("URL không hợp lệ").optional().nullable().or(z.literal("")),
   fileKey: z.string().trim().max(500).optional().nullable(),
+  driveFileId: z.string().trim().max(200).optional().nullable(),
   order: z.number().int().min(0).optional(),
 });
 

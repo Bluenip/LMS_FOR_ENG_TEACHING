@@ -117,6 +117,29 @@ enum NotificationType {
   PARENT_ALERT
 }
 
+enum DriveConnectionStatus {
+  ACTIVE
+  REVOKED
+  DISCONNECTED
+}
+
+enum DriveFileKind {
+  WORKSHEET_PDF
+  WORKSHEET_AUDIO
+  WORD_SOURCE
+  BACKUP
+  LESSON_FILE
+  SUBMISSION_FILE
+}
+
+enum DriveUploadStatus {
+  PENDING
+  UPLOADING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -137,9 +160,13 @@ model User {
   submissions         Submission[]       @relation("StudentSubmissions")
   unlockedSubmissions Submission[]       @relation("UnlockedByTeacher")
   notifications       Notification[]
-  parentLinksAsParent ParentLink[]       @relation("ParentUser")
-  parentLinksAsChild  ParentLink[]       @relation("StudentUser")
-  parentInviteCodes   ParentInviteCode[]
+  parentLinksAsParent    ParentLink[]       @relation("ParentUser")
+  parentLinksAsChild     ParentLink[]       @relation("StudentUser")
+  parentInviteCodes      ParentInviteCode[]
+  driveConnectionsOwned  DriveConnection[]  @relation("DriveConnectionOwner")
+  driveConnectionsLinked DriveConnection[]  @relation("DriveConnectionActor")
+  driveFiles             DriveFile[]        @relation("DriveFileOwner")
+  driveUploads           DriveUpload[]      @relation("DriveUploadOwner")
 }
 
 model ParentLink {
@@ -181,11 +208,13 @@ model Class {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  teacher     User         @relation("TeacherClasses", fields: [teacherId], references: [id], onDelete: Cascade)
-  enrollments Enrollment[]
-  posts       Post[]
-  lessons     Lesson[]
-  assignments Assignment[]
+  teacher      User          @relation("TeacherClasses", fields: [teacherId], references: [id], onDelete: Cascade)
+  enrollments  Enrollment[]
+  posts        Post[]
+  lessons      Lesson[]
+  assignments  Assignment[]
+  driveFiles   DriveFile[]
+  driveUploads DriveUpload[]
 
   @@index([teacherId])
 }
@@ -241,21 +270,23 @@ model Lesson {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  class Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
-  items LessonItem[]
+  class        Class         @relation(fields: [classId], references: [id], onDelete: Cascade)
+  items        LessonItem[]
+  driveUploads DriveUpload[]
 
   @@index([classId, order])
 }
 
 model LessonItem {
-  id        String         @id @default(cuid())
-  lessonId  String
-  title     String
-  type      LessonItemType
-  fileKey   String?
-  url       String?
-  order     Int
-  createdAt DateTime       @default(now())
+  id          String         @id @default(cuid())
+  lessonId    String
+  title       String
+  type        LessonItemType
+  fileKey     String?
+  driveFileId String?
+  url         String?
+  order       Int
+  createdAt   DateTime       @default(now())
 
   lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
@@ -263,21 +294,24 @@ model LessonItem {
 }
 
 model Worksheet {
-  id           String   @id @default(cuid())
-  ownerId      String
-  title        String
-  instructions String?
-  pdfFileKey   String?
-  pageCount    Int      @default(0)
-  isShared     Boolean  @default(false) // shared with other teachers in the LMS
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                    String    @id @default(cuid())
+  ownerId               String
+  title                 String
+  instructions          String?
+  pdfFileKey            String?
+  pageCount             Int       @default(0)
+  isShared              Boolean   @default(false) // shared with other teachers in the LMS
+  lastDriveBackupAt     DateTime?
+  lastDriveBackupFileId String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   owner       User             @relation("WorksheetOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   pages       WorksheetPage[]
   fields      Field[]
   audios      WorksheetAudio[]
   assignments Assignment[]
+  driveFiles  DriveFile[]
 
   @@index([ownerId])
 }
@@ -414,6 +448,7 @@ model Submission {
   answers       Answer[]
   proctorEvents ProctorEvent[]
   audioPlays    AudioPlay[]
+  driveFiles    DriveFile[]
 
   @@unique([assignmentId, studentId, attemptNo])
   @@index([studentId])
@@ -495,4 +530,105 @@ model AudioPlay {
   audio      WorksheetAudio @relation(fields: [audioId], references: [id], onDelete: Cascade)
 
   @@index([submissionId, audioId])
+}
+
+model DriveConnection {
+  id                      String                @id @default(cuid())
+  scopeKey                String                @unique // "shared" or "user:<ownerId>"
+  ownerId                 String?
+  connectedById           String
+  email                   String
+  encryptedRefreshToken   String
+  scope                   String
+  status                  DriveConnectionStatus @default(ACTIVE)
+  rootFolderId            String?
+  allowPublicLessonVideos Boolean               @default(false)
+  autoBackupEnabled       Boolean               @default(false)
+  lastAutoBackupAt        DateTime?
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+
+  owner       User?         @relation("DriveConnectionOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  connectedBy User          @relation("DriveConnectionActor", fields: [connectedById], references: [id], onDelete: Cascade)
+  files       DriveFile[]
+  uploads     DriveUpload[]
+  trashItems  DriveTrash[]
+
+  @@index([ownerId, status])
+}
+
+model DriveFile {
+  id           String        @id @default(cuid())
+  storageKey   String        @unique
+  driveFileId  String        @unique
+  connectionId String
+  ownerId      String?
+  name         String
+  mimeType     String
+  size         Int           @default(0)
+  md5          String?
+  kind         DriveFileKind
+  worksheetId  String?
+  classId      String?
+  submissionId String?
+  shared       Boolean       @default(false)
+  trashedAt    DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  connection DriveConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  owner      User?           @relation("DriveFileOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  worksheet  Worksheet?      @relation(fields: [worksheetId], references: [id], onDelete: SetNull)
+  class      Class?          @relation(fields: [classId], references: [id], onDelete: SetNull)
+  submission Submission?     @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+
+  @@index([connectionId, kind])
+  @@index([ownerId, kind])
+  @@index([worksheetId])
+  @@index([classId])
+  @@index([submissionId])
+}
+
+model DriveUpload {
+  id                  String            @id @default(cuid())
+  connectionId        String
+  ownerId             String
+  classId             String
+  lessonId            String?
+  name                String
+  mimeType            String
+  size                Int
+  kind                String            @default("video") // "video" | "document"
+  status              DriveUploadStatus @default(PENDING)
+  bytesUploaded       Int               @default(0)
+  encryptedSessionUri String?
+  driveFileId         String?           @unique
+  storageKey          String?
+  shared              Boolean           @default(false)
+  errorMessage        String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  connection DriveConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  owner      User            @relation("DriveUploadOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  class      Class           @relation(fields: [classId], references: [id], onDelete: Cascade)
+  lesson     Lesson?         @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId, status])
+  @@index([classId, status])
+  @@index([lessonId])
+}
+
+model DriveTrash {
+  id           String   @id @default(cuid())
+  driveFileId  String
+  connectionId String?
+  storageKey   String?
+  reason       String?
+  createdAt    DateTime @default(now())
+
+  connection DriveConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+
+  @@index([connectionId])
+  @@index([createdAt])
 }

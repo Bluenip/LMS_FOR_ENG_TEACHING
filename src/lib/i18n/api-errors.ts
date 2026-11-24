@@ -165,6 +165,40 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
   "Ảnh giám sát vượt quá giới hạn 120KB.": "Proctoring snapshot exceeds the 120KB limit.",
   "Dữ liệu ảnh JPEG không hợp lệ.": "Invalid JPEG image data.",
 
+  // Google Drive
+  "Google Drive chưa được cấu hình. Quản trị viên cần đặt GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET và DRIVE_ENCRYPTION_KEY.":
+    "Google Drive is not configured. Admin must set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and DRIVE_ENCRYPTION_KEY.",
+  "Chưa cấu hình DRIVE_ENCRYPTION_KEY (tối thiểu 32 ký tự).":
+    "DRIVE_ENCRYPTION_KEY is not configured (minimum 32 characters).",
+  "Yêu cầu không hợp lệ (sai nguồn Origin).": "Invalid request origin.",
+  "Dữ liệu mã hoá Drive không hợp lệ.": "Invalid encrypted Drive payload.",
+  "Không giải mã được kết nối Google Drive. Có thể khoá DRIVE_ENCRYPTION_KEY đã thay đổi; hãy kết nối lại.":
+    "Could not decrypt Google Drive credentials. DRIVE_ENCRYPTION_KEY may have changed; please reconnect.",
+  "Google từ chối mã xác thực OAuth. Vui lòng thử kết nối lại.":
+    "Google rejected the OAuth authorization code. Please reconnect.",
+  "Chưa kết nối Google Drive.": "Google Drive is not connected.",
+  "Google Drive đã bị ngắt kết nối. Vui lòng kết nối lại.":
+    "Google Drive has been disconnected. Please reconnect.",
+  "Kết nối Google Drive đã bị thu hồi hoặc hết hiệu lực. Vui lòng kết nối lại.":
+    "Google Drive connection was revoked or expired. Please reconnect.",
+  "Không làm mới được phiên Google Drive. Vui lòng thử lại.":
+    "Could not refresh the Google Drive session. Please try again.",
+  "Google Drive đã đầy. Hãy giải phóng dung lượng rồi thử lại.":
+    "Google Drive storage is full. Please free up space and try again.",
+  "Google Drive đang giới hạn tần suất. Vui lòng thử lại sau ít phút.":
+    "Google Drive rate limit reached. Please try again in a few minutes.",
+  "Google Drive từ chối yêu cầu không hợp lệ.": "Google Drive rejected the request.",
+  "Phiên Google Drive không hợp lệ. Vui lòng kết nối lại.":
+    "Invalid Google Drive session. Please reconnect.",
+  "Google Drive từ chối quyền truy cập.": "Google Drive denied access.",
+  "Không tìm thấy tệp trên Google Drive.": "File not found on Google Drive.",
+  "Google Drive tạm thời không phản hồi. Vui lòng thử lại.":
+    "Google Drive is temporarily unavailable. Please try again.",
+  "Google Drive không tạo được phiên tải lên.":
+    "Google Drive could not create an upload session.",
+  "Phiên tải lên Google Drive đã hết hạn.": "Google Drive upload session has expired.",
+  "Tải tệp lên Google Drive chưa hoàn tất.": "Google Drive upload did not finish.",
+
   // Zod validator messages
   "Họ tên tối thiểu 2 ký tự": "Full name must be at least 2 characters.",
   "Email không hợp lệ": "Invalid email address.",

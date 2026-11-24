@@ -29,6 +29,7 @@ export default async function TeacherLayout({ children }: { children: React.Reac
           },
           { href: "/teacher/worksheets", label: vi.nav.worksheets },
           { href: "/teacher/assignments", label: vi.nav.assignments },
+          { href: "/teacher/settings", label: tr("Cài đặt", "Settings") },
         ]}
       />
       <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 sm:px-6 lg:px-8">

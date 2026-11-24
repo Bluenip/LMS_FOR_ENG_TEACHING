@@ -16,6 +16,7 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "proctor:purge-snapshots": "tsx scripts/purge-proctor-snapshots.ts",
+    "drive:prune": "tsx scripts/prune-drive.ts",
     "postinstall": "node scripts/copy-pdf-worker.mjs && node scripts/copy-mediapipe-assets.mjs"
   },
   "prisma": {

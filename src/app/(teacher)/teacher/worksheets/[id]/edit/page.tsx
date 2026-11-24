@@ -54,6 +54,7 @@ export default async function WorksheetEditPage({
           isShared: ws.isShared,
           pages: ws.pages,
           fields,
+          storageLocations: ws.storageLocations,
           audios: ws.audios.map((a) => ({
             id: a.id,
             title: a.title,

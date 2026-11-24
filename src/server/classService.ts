@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { generateJoinCode } from "@/lib/utils";
 import { createNotification } from "./notificationService";
+import { enqueueDriveTrashByFileIds } from "./driveService";
 
 async function generateUniqueJoinCode(): Promise<string> {
   for (let attempt = 0; attempt < 15; attempt++) {
@@ -103,6 +104,16 @@ export async function regenerateClassJoinCode(classId: string) {
 }
 
 export async function deleteClass(classId: string) {
+  const driveFiles = await prisma.driveFile.findMany({
+    where: { classId, trashedAt: null },
+    select: { id: true },
+  });
+  if (driveFiles.length > 0) {
+    await enqueueDriveTrashByFileIds(
+      driveFiles.map((f) => f.id),
+      "CLASS_DELETED"
+    );
+  }
   return prisma.class.delete({ where: { id: classId } });
 }
 

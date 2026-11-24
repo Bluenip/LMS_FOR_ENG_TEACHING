@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { AppError, handleApiError, requireTeacherOfWorksheet } from "@/lib/permissions";
 import { listWorksheetAudios, uploadWorksheetAudio } from "@/server/worksheetAudioService";
+import { getStorageLocationsForKeys } from "@/server/driveService";
 
 export async function GET(
   _req: Request,
@@ -45,7 +46,11 @@ export async function POST(
       title: typeof titleRaw === "string" ? titleRaw : undefined,
       durationSec: Number.isFinite(durationSec) ? durationSec : null,
     });
-    return NextResponse.json({ audio }, { status: 201 });
+    const locations = await getStorageLocationsForKeys([audio.fileKey]);
+    return NextResponse.json(
+      { audio, storageLocation: locations[audio.fileKey] ?? "local" },
+      { status: 201 }
+    );
   } catch (error) {
     return handleApiError(error);
   }

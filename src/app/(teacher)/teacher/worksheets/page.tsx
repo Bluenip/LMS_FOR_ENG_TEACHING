@@ -7,7 +7,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetchJson } from "@/lib/api-client";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
   Archive,
+  Cloud,
+  CloudDownload,
+  CloudUpload,
   Copy,
   Download,
   Edit3,
@@ -25,6 +29,8 @@ import {
 } from "lucide-react";
 import { cn, formatDateTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
+import { DriveImportDialog } from "@/components/drive/DriveImportDialog";
+import type { DriveStatusPayload } from "@/server/driveService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,13 +51,14 @@ interface WorksheetRow {
   pdfFileKey: string | null;
   pageCount: number;
   isShared?: boolean;
+  lastDriveBackupAt?: string | null;
   updatedAt: string;
   owner?: { id: string; name: string; email: string };
   _count: { fields: number; assignments: number; audios?: number };
 }
 
 export default function TeacherWorksheetsPage() {
-  const { m: vi, tr } = useI18n();
+  const { m: vi, tr, locale } = useI18n();
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -60,6 +67,9 @@ export default function TeacherWorksheetsPage() {
   const [title, setTitle] = useState("");
   const [instructions, setInstructions] = useState("");
   const [creating, setCreating] = useState(false);
+  const [driveImportOpen, setDriveImportOpen] = useState(false);
+  const [backingUpWsId, setBackingUpWsId] = useState<string | null>(null);
+  const [backingUpAllDrive, setBackingUpAllDrive] = useState(false);
 
   // Word auto-create modal state
   const [wordOpen, setWordOpen] = useState(false);
@@ -91,6 +101,59 @@ export default function TeacherWorksheetsPage() {
         tr("Không thể tải danh sách worksheet", "Could not load worksheets")
       ),
   });
+
+  const { data: driveStatus } = useQuery<DriveStatusPayload>({
+    queryKey: ["drive-status", "worksheets"],
+    queryFn: () => apiFetchJson<DriveStatusPayload>("/api/drive/status"),
+  });
+
+  const driveConnected = Boolean(
+    driveStatus?.personal?.connected || driveStatus?.shared?.connected
+  );
+  const driveRevoked =
+    driveStatus?.personal?.status === "REVOKED" ||
+    (!driveStatus?.personal?.connected && driveStatus?.shared?.status === "REVOKED");
+
+  const handleBackupWorksheetToDrive = async (wsId: string) => {
+    setBackingUpWsId(wsId);
+    try {
+      const res = await apiFetchJson<{ fileName: string }>("/api/drive/backup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ worksheetId: wsId }),
+      });
+      toast.success(
+        tr(`Đã lưu "${res.fileName}" lên Google Drive!`, `Saved "${res.fileName}" to Google Drive!`)
+      );
+      queryClient.invalidateQueries({ queryKey: ["teacher-worksheets"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : tr("Lưu lên Drive thất bại", "Drive backup failed"));
+    } finally {
+      setBackingUpWsId(null);
+    }
+  };
+
+  const handleBackupAllToDrive = async () => {
+    setBackingUpAllDrive(true);
+    try {
+      const res = await apiFetchJson<{ count: number; fileName: string }>("/api/drive/backup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ all: true }),
+      });
+      toast.success(
+        tr(
+          `Đã sao lưu ${res.count} worksheet lên Google Drive (${res.fileName})!`,
+          `Backed up ${res.count} worksheet(s) to Google Drive (${res.fileName})!`
+        )
+      );
+      queryClient.invalidateQueries({ queryKey: ["teacher-worksheets"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : tr("Sao lưu lên Drive thất bại", "Drive backup failed"));
+    } finally {
+      setBackingUpAllDrive(false);
+    }
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -342,6 +405,31 @@ export default function TeacherWorksheetsPage() {
             <Upload className="h-4 w-4 text-[#4F46E5]" />
             {importingBackup ? tr("Đang nhập…", "Importing…") : tr("Nhập Backup", "Import Backup")}
           </Button>
+          {driveConnected && (
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="import-from-drive-btn"
+              onClick={() => setDriveImportOpen(true)}
+            >
+              <CloudDownload className="h-4 w-4 text-[#4F46E5]" />
+              {tr("Nhập từ Drive", "Import from Drive")}
+            </Button>
+          )}
+          {worksheets.length > 0 && driveConnected && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={backingUpAllDrive}
+              data-testid="backup-all-drive-btn"
+              onClick={() => void handleBackupAllToDrive()}
+            >
+              <CloudUpload className="h-4 w-4 text-emerald-600" />
+              {backingUpAllDrive
+                ? tr("Đang sao lưu…", "Backing up…")
+                : tr("Sao lưu tất cả lên Drive", "Backup all to Drive")}
+            </Button>
+          )}
           {worksheets.length > 0 && (
             <Button variant="outline" size="sm" asChild data-testid="export-all-btn">
               <a href="/api/worksheets/export-all" download>
@@ -356,6 +444,24 @@ export default function TeacherWorksheetsPage() {
           </Button>
         </div>
       </div>
+
+      {driveRevoked && (
+        <div
+          data-testid="drive-revoked-banner"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800"
+        >
+          <span className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            {tr(
+              "Kết nối Google Drive đã bị thu hồi hoặc hết hạn. Vui lòng kết nối lại trong phần Cài đặt.",
+              "Google Drive connection was revoked or expired. Please reconnect in Settings."
+            )}
+          </span>
+          <Link href="/teacher/settings" className="font-bold text-[#3525CD] hover:underline">
+            {tr("Mở cài đặt Drive →", "Open Drive settings →")}
+          </Link>
+        </div>
+      )}
 
       {/* Tabs: My Library vs Shared by Other Teachers */}
       <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-[#EFF4FF] p-1 w-fit">
@@ -430,6 +536,15 @@ export default function TeacherWorksheetsPage() {
                           <Share2 className="h-3 w-3" /> {tr("Đã chia sẻ", "Shared")}
                         </Badge>
                       )}
+                      {ws.lastDriveBackupAt && (
+                        <Badge
+                          variant="sky"
+                          data-testid={`drive-backed-up-badge-${ws.id}`}
+                          title={`${tr("Sao lưu Drive gần nhất:", "Last Drive backup:")} ${formatDateTime(ws.lastDriveBackupAt, locale)}`}
+                        >
+                          <Cloud className="h-3 w-3" /> {tr("Đã lưu trên Drive", "Backed up on Drive")}
+                        </Badge>
+                      )}
                     </div>
                   </div>
                   <h3 className="text-base font-bold text-[#0B1C30] line-clamp-2">{ws.title}</h3>
@@ -442,7 +557,10 @@ export default function TeacherWorksheetsPage() {
                     <span>{tr("Đã giao", "Assigned")} {ws._count.assignments} {tr("lần", "times")}</span>
                   </div>
                   <p className="text-[11px] text-slate-400">
-                    {tr("Cập nhật:", "Updated:")} {formatDateTime(ws.updatedAt)}
+                    {tr("Cập nhật:", "Updated:")} {formatDateTime(ws.updatedAt, locale)}
+                    {ws.lastDriveBackupAt && (
+                      <> • Drive: {formatDateTime(ws.lastDriveBackupAt, locale)}</>
+                    )}
                   </p>
                 </div>
 
@@ -487,6 +605,20 @@ export default function TeacherWorksheetsPage() {
                       <Share2 className="h-3 w-3" />
                       {ws.isShared ? tr("Đang chia sẻ", "Shared") : tr("Chia sẻ GV", "Share")}
                     </button>
+                    {driveConnected && (
+                      <button
+                        type="button"
+                        disabled={backingUpWsId === ws.id}
+                        data-testid={`backup-drive-btn-${ws.id}`}
+                        onClick={() => void handleBackupWorksheetToDrive(ws.id)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-[#EEF2FF] px-2 py-1 font-semibold text-[#3525CD] hover:bg-indigo-100 disabled:opacity-50"
+                      >
+                        <CloudUpload className="h-3 w-3" />
+                        {backingUpWsId === ws.id
+                          ? tr("Đang lưu…", "Saving…")
+                          : tr("Lưu lên Drive", "Save to Drive")}
+                      </button>
+                    )}
                   </div>
 
                   <div className="flex items-center justify-between gap-2">
@@ -788,6 +920,18 @@ export default function TeacherWorksheetsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <DriveImportDialog
+        open={driveImportOpen}
+        onOpenChange={setDriveImportOpen}
+        pickerConfigured={Boolean(driveStatus?.pickerConfigured)}
+        onImported={(created) => {
+          queryClient.invalidateQueries({ queryKey: ["teacher-worksheets"] });
+          if (created.length === 1 && created[0]) {
+            router.push(`/teacher/worksheets/${created[0].id}/edit`);
+          }
+        }}
+      />
     </div>
   );
 }
