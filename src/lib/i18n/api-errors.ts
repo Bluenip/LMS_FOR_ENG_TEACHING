@@ -406,6 +406,12 @@ const NOTIFICATION_PATTERNS: Array<[RegExp, (...args: string[]) => string]> = [
     (_m, title) => `"${title}" has been unlocked. You can continue working.`,
   ],
   [/^Nhắc nhở từ giáo viên \((.+)\)$/, (_m, title) => `Reminder from teacher (${title})`],
+  [/^Deploy thất bại \((.+)\)$/, (_m, sha) => `Deployment failed (${sha})`],
+  [
+    /^Triển khai phiên bản (.+) thất bại\. Hệ thống đã giữ\/khôi phục phiên bản trước\. Kiểm tra cron\.log trên máy chủ\.$/,
+    (_m, sha) =>
+      `Deployment of revision ${sha} failed. The previous version was retained or restored. Check cron.log on the server.`,
+  ],
 ];
 
 function localizeLine(text: string, locale: Locale): string {

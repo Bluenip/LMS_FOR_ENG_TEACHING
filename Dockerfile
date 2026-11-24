@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-cert
 WORKDIR /app
 
 FROM base AS build
+LABEL org.engclass.app="engclass-app"
 # postinstall copies pdf.js worker + MediaPipe assets, so scripts/ must exist before install
 COPY package.json pnpm-lock.yaml ./
 COPY scripts ./scripts
@@ -27,6 +28,7 @@ ENV NEXT_PUBLIC_APP_NAME=$NEXT_PUBLIC_APP_NAME \
 RUN pnpm prisma generate && pnpm build
 
 FROM base AS runner
+LABEL org.engclass.app="engclass-app"
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 LOCAL_UPLOAD_DIR=/app/uploads
 # Keep the full node_modules (incl. prisma CLI and tsx) so migrations and `pnpm db:seed` can run in the container
 COPY --from=build /app /app

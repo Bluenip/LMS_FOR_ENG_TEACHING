@@ -8,6 +8,7 @@ import { AppError } from "@/lib/errors";
 import { getRequestLocale } from "@/lib/i18n/server";
 import { localizeApiError } from "@/lib/i18n/api-errors";
 import { getHomeForRole } from "@/lib/utils";
+import { recordError } from "@/server/errorLogService";
 
 export { AppError };
 
@@ -312,6 +313,14 @@ export async function handleApiError(error: unknown): Promise<NextResponse> {
     );
   }
   console.error("[API Error]", error);
+  void recordError({
+    source: "SERVER",
+    level: "ERROR",
+    message: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack ?? null : null,
+    statusCode: 500,
+    meta: { handler: "handleApiError" },
+  });
   return NextResponse.json(
     {
       error: localizeApiError(

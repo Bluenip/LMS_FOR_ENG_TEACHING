@@ -89,6 +89,56 @@ compose() {
   ENGCLASS_IMAGE="$image" docker compose --project-name engclass --env-file "$env_file" \
     -f "$repo_dir/compose.production.yml" "$@"
 }
+
+notify_admins_deploy_failure() {
+  local short_sha="${target:0:12}"
+  local notif_title="Deploy thất bại (${short_sha})"
+  local notif_body="Triển khai phiên bản ${short_sha} thất bại. Hệ thống đã giữ/khôi phục phiên bản trước. Kiểm tra cron.log trên máy chủ."
+  # Best-effort: write directly to Postgres so admins are still alerted even if the app container failed to boot.
+  if ! timeout 30 docker compose --project-name engclass --env-file "$env_file" \
+    -f "$repo_dir/compose.production.yml" exec -T postgres \
+    psql -U "$pg_user" -d "$pg_db" -v ON_ERROR_STOP=1 \
+    -v "notif_title=$notif_title" -v "notif_body=$notif_body" <<'SQL' >/dev/null 2>&1
+SELECT set_config('engclass.notif_title', :'notif_title', false);
+SELECT set_config('engclass.notif_body', :'notif_body', false);
+DO $$
+DECLARE
+  notif_type text := 'PARENT_ALERT';
+  v_title text := current_setting('engclass.notif_title');
+  v_body  text := current_setting('engclass.notif_body');
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_enum e
+    JOIN pg_type t ON t.oid = e.enumtypid
+    WHERE t.typname = 'NotificationType' AND e.enumlabel = 'SYSTEM_ALERT'
+  ) THEN
+    notif_type := 'SYSTEM_ALERT';
+  END IF;
+
+  EXECUTE format(
+    'INSERT INTO "Notification" ("id", "userId", "type", "title", "body", "link", "read", "createdAt")
+     SELECT ''deploy_'' || md5(random()::text || clock_timestamp()::text || u.id),
+            u.id,
+            %L::"NotificationType",
+            $1,
+            $2,
+            ''/admin/errors'',
+            false,
+            NOW()
+     FROM "User" u
+     WHERE u.role = ''ADMIN'' AND u."deletedAt" IS NULL AND u."isLocked" = false',
+    notif_type
+  ) USING v_title, v_body;
+END $$;
+SQL
+  then
+    log 'Warning: could not write deploy failure notification to Postgres.'
+  else
+    log 'Recorded deploy failure notification for active administrators.'
+  fi
+}
+
 failed() {
   status=$?
   trap - ERR
@@ -102,6 +152,7 @@ failed() {
       log 'Application rollback failed. Database backup is retained for recovery.'
     fi
   fi
+  notify_admins_deploy_failure || true
   exit "$status"
 }
 trap failed ERR
@@ -133,4 +184,27 @@ if managed_images=$(docker image ls --format '{{.Repository}}:{{.Tag}}'); then
     fi
   done <<< "$managed_images"
 fi
+
+# Phase 13 automatic post-deploy cleanup (scoped to build cache & engclass-app only; never touches other projects)
+docker builder prune -f --filter until=168h >/dev/null 2>&1 || log 'Docker builder cache prune skipped.'
+docker image prune -f --filter dangling=true --filter label=org.engclass.app=engclass-app >/dev/null 2>&1 || true
+if dangling_engclass=$(docker image ls --filter "reference=${ENGCLASS_IMAGE_PREFIX:-engclass-app}" --filter dangling=true -q); then
+  if [[ -n "$dangling_engclass" ]]; then
+    xargs -r docker image rm >/dev/null 2>&1 <<< "$dangling_engclass" || true
+  fi
+fi
+
+# Trim cron.log if it exceeds 5 MB (keep the last 2,000 lines without breaking cron's >> file descriptor)
+cron_log="$state_dir/cron.log"
+if [[ -f "$cron_log" ]]; then
+  log_size=$(stat -c%s "$cron_log" 2>/dev/null || wc -c < "$cron_log")
+  if [[ "$log_size" =~ ^[0-9]+$ ]] && (( log_size > 5242880 )); then
+    trim_tmp=$(mktemp "$state_dir/cron-trim-XXXXXXXX.log")
+    if tail -n 2000 "$cron_log" > "$trim_tmp" && cat "$trim_tmp" > "$cron_log"; then
+      log 'Trimmed cron.log to the last 2000 lines.'
+    fi
+    rm -f -- "$trim_tmp"
+  fi
+fi
+
 log "Deployed ${target:0:12}; app is healthy, database backup retained."

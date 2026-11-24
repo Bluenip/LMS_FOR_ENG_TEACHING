@@ -225,6 +225,18 @@ docker compose -f compose.production.yml --env-file .env.production up -d --buil
   `docker compose -f compose.production.yml --env-file .env.production exec -e ADMIN_EMAIL=admin@example.com app node_modules/.bin/tsx scripts/create-admin.ts`
   (thêm `--reset` để đặt lại mật khẩu admin). Sau đó admin tạo tài khoản giáo viên; giáo viên tạo học sinh / phụ huynh.
 - File upload nằm trong volume `uploads`, database trong volume `postgres_data`. Sao lưu DB: `docker compose -f compose.production.yml exec postgres pg_dump -U engclass engclass > backup.sql`.
+- **Kiểm tra bản sao lưu DB hằng tuần (`scripts/verify-backup.sh`):**
+  Script tự lấy bản backup `.dump` mới nhất trong `.deploy/backups/` (hoặc truyền đường dẫn file cụ thể), khôi phục vào container `postgres:16-alpine` tạm, đếm số bản ghi các bảng chính (`User`, `Class`, `Worksheet`, `Assignment`, `Submission`, `AuditLog`…) rồi tự xoá container tạm:
+  ```bash
+  # Chạy thủ công kiểm tra bản backup mới nhất
+  bash scripts/verify-backup.sh
+
+  # Hoặc cài cron chạy mỗi Chủ nhật lúc 03:00 sáng:
+  # 0 3 * * 0 ENGCLASS_REPO_DIR="$HOME/apps/engclass" /bin/bash "$HOME/apps/engclass/scripts/verify-backup.sh" >> "$HOME/apps/engclass/.deploy/verify-backup.log" 2>&1
+  ```
+- **Tự động deploy & cảnh báo (`scripts/auto-deploy.sh`):**
+  - Khi deploy thất bại / rollback, script tự ghi thông báo cảnh báo cho tất cả quản trị viên đang hoạt động (xem trên chuông thông báo và `/admin/errors`).
+  - Sau khi deploy thành công, script tự dọn build cache Docker cũ hơn 7 ngày (`docker builder prune -f --filter until=168h`), xoá image `engclass-app` lơ lửng (dangling), và cắt `.deploy/cron.log` giữ 2.000 dòng cuối khi vượt quá 5 MB.
 - Cập nhật phiên bản: `git pull && docker compose -f compose.production.yml --env-file .env.production up -d --build`.
 - Cloudflare Tunnel: trong Zero Trust → Networks → Tunnels, thêm *Public hostname* (ví dụ `lms.<tên-miền>`) trỏ tới `http://localhost:${APP_PORT}`.
 - **Bảo mật:** để `NEXT_PUBLIC_SHOW_DEMO_ACCOUNTS=false` và không chạy `pnpm db:seed` trên bản public (tài khoản mẫu dùng mật khẩu `password123`).

@@ -1,3 +1,5 @@
+import type { Instrumentation } from "next";
+
 /**
  * Runs once when the Next.js Node.js server starts.
  * 1. Schedules Google Drive cleanup (`pruneDrive`) every DRIVE_PRUNE_INTERVAL_MINUTES (default 60; 0 disables).
@@ -46,3 +48,28 @@ export async function register() {
     }
   }
 }
+
+export const onRequestError: Instrumentation.onRequestError = async (err, request, context) => {
+  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  try {
+    const { recordError } = await import("./server/errorLogService");
+    const errObj = err as Error & { digest?: string };
+    await recordError({
+      source: "SERVER",
+      level: "ERROR",
+      message: errObj?.message || "Unhandled Next.js server error",
+      stack: errObj?.stack ?? null,
+      path: request.path,
+      method: request.method,
+      statusCode: 500,
+      meta: {
+        digest: errObj?.digest ?? null,
+        routerKind: context.routerKind,
+        routePath: context.routePath,
+        routeType: context.routeType,
+      },
+    });
+  } catch {
+    // never throw from instrumentation hook
+  }
+};
