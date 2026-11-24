@@ -1,0 +1,911 @@
+import "dotenv/config";
+import bcrypt from "bcryptjs";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { prisma } from "../src/lib/db";
+import { getStorageProvider } from "../src/lib/storage";
+import { parsePdfMetadata } from "../src/lib/pdf/server-pdf";
+
+async function generateMixedOrientationWorksheetPdf(): Promise<Buffer> {
+  const doc = await PDFDocument.create();
+  const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const fontRegular = await doc.embedFont(StandardFonts.Helvetica);
+
+  // Page 1: Portrait A4 (595 x 842 pt)
+  const p1 = doc.addPage([595, 842]);
+  p1.drawRectangle({ x: 36, y: 760, width: 523, height: 52, color: rgb(0.93, 0.95, 1) });
+  p1.drawText("ENGCLASS - ENGLISH 12 PRACTICE WORKSHEET", {
+    x: 52,
+    y: 790,
+    size: 14,
+    font: fontBold,
+    color: rgb(0.21, 0.15, 0.8),
+  });
+  p1.drawText("Unit 7: The World of Work - Combined Overlay & Answer Sheet", {
+    x: 52,
+    y: 772,
+    size: 10,
+    font: fontRegular,
+    color: rgb(0.28, 0.28, 0.35),
+  });
+
+  p1.drawText("PART I: FILL IN THE BLANKS & INTERACTIVE OVERLAY (Questions 1 - 4)", {
+    x: 44,
+    y: 720,
+    size: 11,
+    font: fontBold,
+    color: rgb(0.05, 0.11, 0.19),
+  });
+
+  p1.drawText("1. She _________________________ in Hanoi since 2018. (live)", {
+    x: 44,
+    y: 675,
+    size: 11,
+    font: fontRegular,
+    color: rgb(0.1, 0.1, 0.15),
+  });
+
+  p1.drawText("2. Choose the best connector: He worked hard, ______________ he got promoted.", {
+    x: 44,
+    y: 615,
+    size: 11,
+    font: fontRegular,
+    color: rgb(0.1, 0.1, 0.15),
+  });
+
+  p1.drawText("3. Tick the box if this sentence is grammatically correct: [      ] 'She don't like coffee.'", {
+    x: 44,
+    y: 555,
+    size: 11,
+    font: fontRegular,
+    color: rgb(0.1, 0.1, 0.15),
+  });
+
+  p1.drawText("4. Write 1-2 sentences explaining why teamwork matters at work:", {
+    x: 44,
+    y: 495,
+    size: 11,
+    font: fontRegular,
+    color: rgb(0.1, 0.1, 0.15),
+  });
+  p1.drawRectangle({
+    x: 44,
+    y: 385,
+    width: 505,
+    height: 95,
+    borderColor: rgb(0.75, 0.78, 0.85),
+    borderWidth: 1,
+  });
+
+  p1.drawText("PART II: MULTIPLE CHOICE (Answer on the Answer Sheet on the right)", {
+    x: 44,
+    y: 335,
+    size: 11,
+    font: fontBold,
+    color: rgb(0.05, 0.11, 0.19),
+  });
+  p1.drawText("5. After graduating with honors, he decided ______ for an internship.", {
+    x: 44,
+    y: 305,
+    size: 10.5,
+    font: fontRegular,
+  });
+  p1.drawText("A. apply     B. to apply     C. applied     D. applying", {
+    x: 60,
+    y: 285,
+    size: 10,
+    font: fontRegular,
+    color: rgb(0.25, 0.25, 0.35),
+  });
+  p1.drawText("6. Good communication is an essential ______ skill for every candidate.", {
+    x: 44,
+    y: 250,
+    size: 10.5,
+    font: fontRegular,
+  });
+  p1.drawText("A. soft     B. hard     C. heavy     D. strict", {
+    x: 60,
+    y: 230,
+    size: 10,
+    font: fontRegular,
+    color: rgb(0.25, 0.25, 0.35),
+  });
+  p1.drawText("7. If I had known about the vacancy, I ______ you immediately.", {
+    x: 44,
+    y: 195,
+    size: 10.5,
+    font: fontRegular,
+  });
+  p1.drawText("A. will tell     B. would tell     C. would have told     D. told", {
+    x: 60,
+    y: 175,
+    size: 10,
+    font: fontRegular,
+    color: rgb(0.25, 0.25, 0.35),
+  });
+  p1.drawText("8. True or False: 'CV' stands for Curriculum Vitae.", {
+    x: 44,
+    y: 140,
+    size: 10.5,
+    font: fontRegular,
+  });
+
+  // Page 2: Landscape A4 (842 x 595 pt) to verify mixed orientation alignment!
+  const p2 = doc.addPage([842, 595]);
+  p2.drawRectangle({ x: 36, y: 520, width: 770, height: 42, color: rgb(0.93, 0.98, 0.95) });
+  p2.drawText("PAGE 2 (LANDSCAPE) - READING PASSAGE & NUMBER QUESTION", {
+    x: 52,
+    y: 536,
+    size: 13,
+    font: fontBold,
+    color: rgb(0, 0.33, 0.22),
+  });
+  p2.drawText(
+    "Remote work has transformed how international teams collaborate across time zones.",
+    { x: 52, y: 475, size: 11, font: fontRegular }
+  );
+  p2.drawText(
+    "According to a 2025 survey of 400 companies, 75 percent offer hybrid schedules.",
+    { x: 52, y: 452, size: 11, font: fontRegular }
+  );
+  p2.drawText(
+    "9. According to the passage, what percentage of surveyed companies offer hybrid schedules?  [               ] %",
+    { x: 52, y: 395, size: 11.5, font: fontBold, color: rgb(0.1, 0.1, 0.2) }
+  );
+
+  return Buffer.from(await doc.save());
+}
+
+async function generateSimpleWorksheetPdf(title: string, subtitle: string): Promise<Buffer> {
+  const doc = await PDFDocument.create();
+  const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const fontRegular = await doc.embedFont(StandardFonts.Helvetica);
+  const page = doc.addPage([595, 842]);
+
+  page.drawRectangle({ x: 36, y: 760, width: 523, height: 52, color: rgb(0.95, 0.96, 1) });
+  page.drawText(title, { x: 52, y: 790, size: 14, font: fontBold, color: rgb(0.21, 0.15, 0.8) });
+  page.drawText(subtitle, { x: 52, y: 772, size: 10, font: fontRegular, color: rgb(0.3, 0.3, 0.4) });
+
+  const qs = [
+    "1. Many endangered species are threatened by habitat ______. (A. loss  B. gain  C. build  D. rise)",
+    "2. Wildlife conservation helps protect ______. (A. pollution  B. biodiversity  C. traffic  D. noise)",
+    "3. Deforestation leads to soil ______. (A. erosion  B. growth  C. painting  D. mining)",
+    "4. We should reduce single-use ______. (A. trees  B. oxygen  C. plastics  D. rivers)",
+    "5. True or False: Sea turtles are classified as endangered species.",
+    "6. Short answer: Write the negative contraction of 'do not'.",
+  ];
+  qs.forEach((q, idx) => {
+    page.drawText(q, { x: 48, y: 700 - idx * 55, size: 10.5, font: fontRegular });
+  });
+
+  return Buffer.from(await doc.save());
+}
+
+async function main() {
+  console.log("Seeding EngClass LMS database...");
+  const passwordHash = await bcrypt.hash("password123", 10);
+
+  // Clean existing data in dependency order for idempotent re-seeding
+  await prisma.notification.deleteMany();
+  await prisma.proctorEvent.deleteMany();
+  await prisma.answer.deleteMany();
+  await prisma.submission.deleteMany();
+  await prisma.assignment.deleteMany();
+  await prisma.field.deleteMany();
+  await prisma.worksheetPage.deleteMany();
+  await prisma.worksheet.deleteMany();
+  await prisma.lessonItem.deleteMany();
+  await prisma.lesson.deleteMany();
+  await prisma.comment.deleteMany();
+  await prisma.post.deleteMany();
+  await prisma.enrollment.deleteMany();
+  await prisma.class.deleteMany();
+  await prisma.parentInviteCode.deleteMany();
+  await prisma.parentLink.deleteMany();
+  await prisma.user.deleteMany();
+
+  // 1 Admin
+  const admin = await prisma.user.create({
+    data: {
+      email: "admin@engclass.vn",
+      name: "Quản trị viên Hệ thống",
+      role: "ADMIN",
+      passwordHash,
+    },
+  });
+
+  // 2 Teachers
+  const teacher1 = await prisma.user.create({
+    data: {
+      email: "teacher1@engclass.vn",
+      name: "Cô Mai Phương",
+      role: "TEACHER",
+      passwordHash,
+    },
+  });
+  const teacher2 = await prisma.user.create({
+    data: {
+      email: "teacher2@engclass.vn",
+      name: "Thầy Minh Đức",
+      role: "TEACHER",
+      passwordHash,
+    },
+  });
+
+  // 10 Students
+  const studentNames = [
+    "Nguyễn Văn Minh",
+    "Trần Thị Mai",
+    "Lê Hoàng Long",
+    "Phạm Minh Anh",
+    "Vũ Thu Hà",
+    "Đỗ Đức Trí",
+    "Nguyễn Phương Linh",
+    "Bùi Tuấn Kiệt",
+    "Hoàng Bảo Ngọc",
+    "Đặng Quốc Huy",
+  ];
+
+  const students = [];
+  for (let i = 0; i < studentNames.length; i++) {
+    const s = await prisma.user.create({
+      data: {
+        email: `student${i + 1}@engclass.vn`,
+        name: studentNames[i]!,
+        role: "STUDENT",
+        passwordHash,
+      },
+    });
+    students.push(s);
+  }
+
+  // 2 Parents
+  const parent1 = await prisma.user.create({
+    data: {
+      email: "parent1@engclass.vn",
+      name: "Nguyễn Văn Hùng",
+      role: "PARENT",
+      passwordHash,
+    },
+  });
+  const parent2 = await prisma.user.create({
+    data: {
+      email: "parent2@engclass.vn",
+      name: "Lê Thị Lan",
+      role: "PARENT",
+      passwordHash,
+    },
+  });
+
+  // Link parent1 -> student1 (Nguyễn Văn Minh) & student2 (Trần Thị Mai)
+  // Link parent2 -> student3 (Lê Hoàng Long)
+  await prisma.parentLink.createMany({
+    data: [
+      { parentId: parent1.id, studentId: students[0]!.id, relation: "Bố", verifiedAt: new Date() },
+      { parentId: parent1.id, studentId: students[1]!.id, relation: "Phụ huynh", verifiedAt: new Date() },
+      { parentId: parent2.id, studentId: students[2]!.id, relation: "Mẹ", verifiedAt: new Date() },
+    ],
+  });
+
+  // Create an unused ParentInviteCode for student4 so invite redemption can be tested live
+  await prisma.parentInviteCode.create({
+    data: {
+      studentId: students[3]!.id,
+      code: "PR4INV88",
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  // 2 Classes
+  const class1 = await prisma.class.create({
+    data: {
+      name: "English 12 - Ôn thi THPT Quốc Gia (12A1)",
+      description: "Lớp luyện thi THPT Quốc Gia môn Tiếng Anh — Ngữ pháp, Từ vựng, Đọc hiểu & Viết.",
+      joinCode: "ENG12A",
+      teacherId: teacher1.id,
+      requireApproval: false,
+    },
+  });
+
+  const class2 = await prisma.class.create({
+    data: {
+      name: "IELTS Intensive 6.5+ (K24)",
+      description: "Luyện chuyên sâu 4 kỹ năng IELTS mục tiêu 6.5+.",
+      joinCode: "IELT65",
+      teacherId: teacher2.id,
+      requireApproval: true,
+    },
+  });
+
+  // Enroll students 1..6 into Class 1, students 7..10 into Class 2
+  for (let i = 0; i < 6; i++) {
+    await prisma.enrollment.create({
+      data: { classId: class1.id, studentId: students[i]!.id, status: "ACTIVE" },
+    });
+  }
+  for (let i = 6; i < 10; i++) {
+    await prisma.enrollment.create({
+      data: { classId: class2.id, studentId: students[i]!.id, status: "ACTIVE" },
+    });
+  }
+
+  // Feed Posts & Comments
+  const post1 = await prisma.post.create({
+    data: {
+      classId: class1.id,
+      authorId: teacher1.id,
+      content:
+        "Chào cả lớp 12A1! Tuần này chúng ta hoàn thành phiếu bài tập Unit 7: The World of Work. Các em chú ý điền trực tiếp vào các ô trên PDF và kiểm tra kỹ phần phiếu trả lời bên phải trước khi nộp nhé!",
+    },
+  });
+  await prisma.comment.create({
+    data: {
+      postId: post1.id,
+      authorId: students[0]!.id,
+      content: "Dạ vâng thưa cô, em đã nhận được bài ạ!",
+    },
+  });
+
+  await prisma.post.create({
+    data: {
+      classId: class2.id,
+      authorId: teacher2.id,
+      content:
+        "Welcome to IELTS Intensive K24! Tài liệu Listening & Reading tuần 1 đã có trong mục Bài giảng.",
+    },
+  });
+
+  // Generate real PDFs and store via StorageProvider
+  const storage = getStorageProvider();
+
+  const unit7Pdf = await generateMixedOrientationWorksheetPdf();
+  const unit7Meta = await parsePdfMetadata(unit7Pdf);
+  const unit7Key = "worksheets/seed/unit7-world-of-work.pdf";
+  await storage.put(unit7Key, unit7Pdf, "application/pdf");
+
+  const unit6Pdf = await generateSimpleWorksheetPdf(
+    "UNIT 6: ENDANGERED SPECIES - VOCABULARY",
+    "Answer Sheet Mode (Mode B) - English 12"
+  );
+  const unit6Meta = await parsePdfMetadata(unit6Pdf);
+  const unit6Key = "worksheets/seed/unit6-endangered-species.pdf";
+  await storage.put(unit6Key, unit6Pdf, "application/pdf");
+
+  const lessonPdf = await generateSimpleWorksheetPdf(
+    "GRAMMAR HANDOUT: PRESENT PERFECT & CONDITIONALS",
+    "Class 12A1 Study Material"
+  );
+  const lessonPdfKey = "lessons/seed/grammar-handout.pdf";
+  await storage.put(lessonPdfKey, lessonPdf, "application/pdf");
+
+  // Lessons for Class 1
+  await prisma.lesson.create({
+    data: {
+      classId: class1.id,
+      title: "Chương 1: Thì hiện tại hoàn thành & Câu điều kiện",
+      description: "Tài liệu tổng ôn ngữ pháp trọng tâm học kỳ II.",
+      order: 0,
+      items: {
+        create: [
+          {
+            title: "Tài liệu tóm tắt ngữ pháp (PDF)",
+            type: "PDF",
+            fileKey: lessonPdfKey,
+            order: 0,
+          },
+          {
+            title: "Video bài giảng: Conditional Sentences Type 1, 2, 3",
+            type: "VIDEO",
+            url: "https://www.youtube.com/watch?v=9ifCM8kJFKI",
+            order: 1,
+          },
+          {
+            title: "Từ điển Cambridge Online (Tra cứu từ vựng)",
+            type: "LINK",
+            url: "https://dictionary.cambridge.org/",
+            order: 2,
+          },
+        ],
+      },
+    },
+  });
+
+  // Worksheet 1: Mode A + B Combined (Mixed portrait + landscape PDF)
+  const wsUnit7 = await prisma.worksheet.create({
+    data: {
+      ownerId: teacher1.id,
+      title: "Unit 7: The World of Work - Đề số 1",
+      instructions:
+        "Điền trực tiếp vào các ô tương tác trên trang PDF (câu 1-4 và câu 9) và chọn đáp án trên Phiếu trả lời bên phải (câu 5-8).",
+      pdfFileKey: unit7Key,
+      pageCount: unit7Meta.pageCount,
+      pages: {
+        create: unit7Meta.pages.map((p) => ({
+          pageIndex: p.pageIndex,
+          widthPt: p.widthPt,
+          heightPt: p.heightPt,
+        })),
+      },
+      fields: {
+        create: [
+          {
+            placement: "OVERLAY",
+            type: "TEXT",
+            label: "1",
+            skillTag: "GRAMMAR",
+            order: 0,
+            points: 1,
+            pageIndex: 0,
+            x: 0.1314,
+            y: 0.1787,
+            w: 0.257,
+            h: 0.03,
+            style: { fontSize: 13, align: "center" },
+            answerKey: { accepted: ["has lived", "'s lived"] },
+            gradingOpts: { caseSensitive: false, ignoreExtraSpaces: true },
+            explanation: "Dấu hiệu 'since 2018' dùng thì Hiện tại hoàn thành: has lived.",
+          },
+          {
+            placement: "OVERLAY",
+            type: "DROPDOWN",
+            label: "2",
+            skillTag: "GRAMMAR",
+            order: 1,
+            points: 1,
+            pageIndex: 0,
+            x: 0.4647,
+            y: 0.25,
+            w: 0.1439,
+            h: 0.03,
+            style: { fontSize: 13, align: "left" },
+            options: [
+              { id: "so", text: "so" },
+              { id: "but", text: "but" },
+              { id: "although", text: "although" },
+            ],
+            answerKey: { correct: "so" },
+            explanation: "Chỉ kết quả (làm việc chăm chỉ -> nên được thăng chức) dùng 'so'.",
+          },
+          {
+            placement: "OVERLAY",
+            type: "CHECKBOX",
+            label: "3",
+            skillTag: "GRAMMAR",
+            order: 2,
+            points: 1,
+            pageIndex: 0,
+            x: 0.5279,
+            y: 0.3266,
+            w: 0.0411,
+            h: 0.019,
+            answerKey: { checked: false },
+            explanation: "Câu sai ngữ pháp (phải là 'She doesn't like coffee'), nên không tick.",
+          },
+          {
+            placement: "OVERLAY",
+            type: "ESSAY",
+            label: "4",
+            skillTag: "WRITING",
+            order: 3,
+            points: 2,
+            pageIndex: 0,
+            x: 0.08,
+            y: 0.435,
+            w: 0.84,
+            h: 0.105,
+            style: { fontSize: 13, align: "left" },
+            answerKey: { rubric: "Viết 1-2 câu rõ ý, đúng ngữ pháp giải thích tầm quan trọng của teamwork." },
+          },
+          {
+            placement: "OVERLAY",
+            type: "NUMBER",
+            label: "9",
+            skillTag: "READING",
+            order: 4,
+            points: 1,
+            pageIndex: 1,
+            x: 0.6789,
+            y: 0.3084,
+            w: 0.066,
+            h: 0.042,
+            style: { fontSize: 14, align: "center" },
+            answerKey: { value: 75, tolerance: 0 },
+            explanation: "Đoạn văn nêu rõ '75 percent offer hybrid schedules'.",
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "MULTIPLE_CHOICE",
+            label: "5",
+            prompt: "After graduating with honors, he decided ______ for an internship.",
+            skillTag: "GRAMMAR",
+            order: 5,
+            points: 1,
+            options: [
+              { id: "A", text: "apply" },
+              { id: "B", text: "to apply" },
+              { id: "C", text: "applied" },
+              { id: "D", text: "applying" },
+            ],
+            answerKey: { correct: "B" },
+            explanation: "Cấu trúc decide + to-V.",
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "MULTIPLE_CHOICE",
+            label: "6",
+            prompt: "Good communication is an essential ______ skill for every candidate.",
+            skillTag: "VOCABULARY",
+            order: 6,
+            points: 1,
+            options: [
+              { id: "A", text: "soft" },
+              { id: "B", text: "hard" },
+              { id: "C", text: "heavy" },
+              { id: "D", text: "strict" },
+            ],
+            answerKey: { correct: "A" },
+            explanation: "Cụm từ 'soft skill' (kỹ năng mềm).",
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "MULTIPLE_CHOICE",
+            label: "7",
+            prompt: "If I had known about the vacancy, I ______ you immediately.",
+            skillTag: "GRAMMAR",
+            order: 7,
+            points: 1,
+            options: [
+              { id: "A", text: "will tell" },
+              { id: "B", text: "would tell" },
+              { id: "C", text: "would have told" },
+              { id: "D", text: "told" },
+            ],
+            answerKey: { correct: "C" },
+            explanation: "Câu điều kiện loại 3: If + S + had V3, S + would have V3.",
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "TRUE_FALSE",
+            label: "8",
+            prompt: "'CV' stands for Curriculum Vitae.",
+            skillTag: "VOCABULARY",
+            order: 8,
+            points: 1,
+            answerKey: { correct: true },
+            explanation: "Đúng — CV là viết tắt của Curriculum Vitae.",
+          },
+        ],
+      },
+    },
+    include: { fields: { orderBy: { order: "asc" } } },
+  });
+
+  // Worksheet 2: Mode B (Answer Sheet Only)
+  const wsUnit6 = await prisma.worksheet.create({
+    data: {
+      ownerId: teacher1.id,
+      title: "Unit 6: Endangered Species - Vocabulary",
+      instructions: "Xem đề PDF bên trái và chọn đáp án đúng vào phiếu trả lời bên phải.",
+      pdfFileKey: unit6Key,
+      pageCount: unit6Meta.pageCount,
+      pages: {
+        create: unit6Meta.pages.map((p) => ({
+          pageIndex: p.pageIndex,
+          widthPt: p.widthPt,
+          heightPt: p.heightPt,
+        })),
+      },
+      fields: {
+        create: [
+          {
+            placement: "ANSWER_SHEET",
+            type: "MULTIPLE_CHOICE",
+            label: "1",
+            skillTag: "VOCABULARY",
+            order: 0,
+            points: 2,
+            options: [
+              { id: "A", text: "loss" },
+              { id: "B", text: "gain" },
+              { id: "C", text: "build" },
+              { id: "D", text: "rise" },
+            ],
+            answerKey: { correct: "A" },
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "MULTIPLE_CHOICE",
+            label: "2",
+            skillTag: "VOCABULARY",
+            order: 1,
+            points: 2,
+            options: [
+              { id: "A", text: "pollution" },
+              { id: "B", text: "biodiversity" },
+              { id: "C", text: "traffic" },
+              { id: "D", text: "noise" },
+            ],
+            answerKey: { correct: "B" },
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "MULTIPLE_CHOICE",
+            label: "3",
+            skillTag: "READING",
+            order: 2,
+            points: 2,
+            options: [
+              { id: "A", text: "erosion" },
+              { id: "B", text: "growth" },
+              { id: "C", text: "painting" },
+              { id: "D", text: "mining" },
+            ],
+            answerKey: { correct: "A" },
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "MULTIPLE_CHOICE",
+            label: "4",
+            skillTag: "LISTENING",
+            order: 3,
+            points: 1,
+            options: [
+              { id: "A", text: "trees" },
+              { id: "B", text: "oxygen" },
+              { id: "C", text: "plastics" },
+              { id: "D", text: "rivers" },
+            ],
+            answerKey: { correct: "C" },
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "TRUE_FALSE",
+            label: "5",
+            skillTag: "READING",
+            order: 4,
+            points: 1,
+            answerKey: { correct: true },
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "TEXT",
+            label: "6",
+            skillTag: "GRAMMAR",
+            order: 5,
+            points: 2,
+            answerKey: { accepted: ["don't", "do not"] },
+            gradingOpts: { caseSensitive: false, ignoreExtraSpaces: true },
+          },
+        ],
+      },
+    },
+    include: { fields: { orderBy: { order: "asc" } } },
+  });
+
+  // Assignment 1 (Past Due, Graded -> populates Leaderboard, Reports, Parent Portal)
+  const pastDue = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+  const asgUnit6 = await prisma.assignment.create({
+    data: {
+      classId: class1.id,
+      worksheetId: wsUnit6.id,
+      title: "Unit 6: Endangered Species - Vocabulary",
+      openAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+      dueAt: pastDue,
+      timeLimitMin: 30,
+      maxAttempts: 1,
+      showResult: "AFTER_SUBMIT",
+      showAnswerKey: true,
+      showLeaderboard: "AFTER_DUE",
+      leaderboardAnon: false,
+      proctorMode: "OFF",
+    },
+  });
+
+  // Seed 6 graded submissions for Unit 6 with realistic scores & ties
+  const unit6SeedRuns = [
+    { studentIdx: 2, answers: ["A", "B", "A", "C", true, "don't"], mins: 12, comment: "Xuất sắc! Hoàn thành bài nhanh và chính xác tuyệt đối." }, // 10/10
+    { studentIdx: 1, answers: ["A", "B", "A", "C", true, "don't"], mins: 16, comment: "Rất tốt, nắm chắc từ vựng Unit 6." }, // 10/10 slower -> rank 2
+    { studentIdx: 0, answers: ["A", "B", "A", "A", true, "don't"], mins: 18, comment: "Minh có tiến bộ rõ rệt phần Ngữ pháp và Đọc hiểu. Phụ huynh nhắc con ôn thêm phần Listening nhé!" }, // 9/10
+    { studentIdx: 3, answers: ["A", "B", "B", "C", true, "don't"], mins: 20, comment: "Làm bài cẩn thận, chú ý từ 'erosion'." }, // 8/10
+    { studentIdx: 4, answers: ["A", "B", "B", "C", true, "do not"], mins: 22, comment: "Khá tốt, cần cải thiện tốc độ." }, // 8/10
+    { studentIdx: 5, answers: ["A", "A", "B", "C", false, "dont"], mins: 25, comment: "Cần ôn lại từ vựng trọng tâm Unit 6." }, // 3/10
+  ];
+
+  for (const run of unit6SeedRuns) {
+    const started = new Date(pastDue.getTime() - (run.mins + 60) * 60_000);
+    const submitted = new Date(started.getTime() + run.mins * 60_000);
+    let total = 0;
+    const answerCreates = wsUnit6.fields.map((f, idx) => {
+      const val = run.answers[idx]!;
+      let correct = false;
+      if (f.type === "MULTIPLE_CHOICE") correct = val === (f.answerKey as { correct: string }).correct;
+      if (f.type === "TRUE_FALSE") correct = val === (f.answerKey as { correct: boolean }).correct;
+      if (f.type === "TEXT") {
+        correct = (f.answerKey as { accepted: string[] }).accepted.includes(String(val).toLowerCase());
+      }
+      const sc = correct ? f.points : 0;
+      total += sc;
+      return {
+        fieldId: f.id,
+        value: val,
+        isCorrect: correct,
+        score: sc,
+      };
+    });
+
+    await prisma.submission.create({
+      data: {
+        assignmentId: asgUnit6.id,
+        studentId: students[run.studentIdx]!.id,
+        attemptNo: 1,
+        status: "GRADED",
+        startedAt: started,
+        submittedAt: submitted,
+        autoScore: total,
+        manualScore: 0,
+        totalScore: total,
+        maxScore: 10,
+        teacherComment: run.comment,
+        answers: { create: answerCreates },
+      },
+    });
+  }
+
+  // Assignment 2: Active Mode A+B Assignment (Unit 7)
+  const nextWeek = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+  const asgUnit7 = await prisma.assignment.create({
+    data: {
+      classId: class1.id,
+      worksheetId: wsUnit7.id,
+      title: "Unit 7: The World of Work - Đề số 1",
+      openAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      dueAt: nextWeek,
+      timeLimitMin: 45,
+      maxAttempts: 2,
+      showResult: "AFTER_SUBMIT",
+      showAnswerKey: true,
+      showLeaderboard: "AFTER_SUBMIT",
+      leaderboardAnon: false,
+      proctorMode: "OFF",
+    },
+  });
+
+  // Seed 2 submissions on Unit 7 (student2 graded, student3 pending manual ESSAY grading)
+  // Leave student1 unstarted so student1 can immediately do it in demo / E2E!
+  await prisma.submission.create({
+    data: {
+      assignmentId: asgUnit7.id,
+      studentId: students[1]!.id,
+      attemptNo: 1,
+      status: "GRADED",
+      startedAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
+      submittedAt: new Date(Date.now() - 2.6 * 60 * 60 * 1000),
+      autoScore: 8,
+      manualScore: 1.5,
+      totalScore: 9.5,
+      maxScore: 10,
+      teacherComment: "Bài viết ngắn mạch lạc, ngữ pháp chính xác.",
+      answers: {
+        create: [
+          { fieldId: wsUnit7.fields[0]!.id, value: "has lived", isCorrect: true, score: 1 },
+          { fieldId: wsUnit7.fields[1]!.id, value: "so", isCorrect: true, score: 1 },
+          { fieldId: wsUnit7.fields[2]!.id, value: false, isCorrect: true, score: 1 },
+          {
+            fieldId: wsUnit7.fields[3]!.id,
+            value: "Teamwork helps colleagues share ideas and solve complex tasks faster.",
+            isCorrect: true,
+            score: 1.5,
+            teacherNote: "Ý hay, dùng từ tốt!",
+          },
+          { fieldId: wsUnit7.fields[4]!.id, value: "75", isCorrect: true, score: 1 },
+          { fieldId: wsUnit7.fields[5]!.id, value: "B", isCorrect: true, score: 1 },
+          { fieldId: wsUnit7.fields[6]!.id, value: "A", isCorrect: true, score: 1 },
+          { fieldId: wsUnit7.fields[7]!.id, value: "C", isCorrect: true, score: 1 },
+          { fieldId: wsUnit7.fields[8]!.id, value: true, isCorrect: true, score: 1 },
+        ],
+      },
+    },
+  });
+
+  await prisma.submission.create({
+    data: {
+      assignmentId: asgUnit7.id,
+      studentId: students[2]!.id,
+      attemptNo: 1,
+      status: "SUBMITTED",
+      startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      submittedAt: new Date(Date.now() - 1.5 * 60 * 60 * 1000),
+      autoScore: 7,
+      manualScore: null,
+      totalScore: 7,
+      maxScore: 10,
+      answers: {
+        create: [
+          { fieldId: wsUnit7.fields[0]!.id, value: "has lived", isCorrect: true, score: 1 },
+          { fieldId: wsUnit7.fields[1]!.id, value: "so", isCorrect: true, score: 1 },
+          { fieldId: wsUnit7.fields[2]!.id, value: true, isCorrect: false, score: 0 },
+          {
+            fieldId: wsUnit7.fields[3]!.id,
+            value: "Working in a team creates synergy and improves productivity.",
+            isCorrect: null,
+            score: null,
+          },
+          { fieldId: wsUnit7.fields[4]!.id, value: "75", isCorrect: true, score: 1 },
+          { fieldId: wsUnit7.fields[5]!.id, value: "B", isCorrect: true, score: 1 },
+          { fieldId: wsUnit7.fields[6]!.id, value: "A", isCorrect: true, score: 1 },
+          { fieldId: wsUnit7.fields[7]!.id, value: "C", isCorrect: true, score: 1 },
+          { fieldId: wsUnit7.fields[8]!.id, value: true, isCorrect: true, score: 1 },
+        ],
+      },
+    },
+  });
+
+  // Assignment 3: Proctored Exam (LOCKDOWN + LOCK at 1 violation)
+  await prisma.assignment.create({
+    data: {
+      classId: class1.id,
+      worksheetId: wsUnit6.id,
+      title: "Kiểm tra định kỳ - Chế độ giám sát (Khoá khi rời tab)",
+      openAt: new Date(Date.now() - 60 * 60 * 1000),
+      dueAt: nextWeek,
+      timeLimitMin: 30,
+      maxAttempts: 1,
+      shuffle: true,
+      showResult: "AFTER_SUBMIT",
+      showAnswerKey: false,
+      showLeaderboard: "AFTER_DUE",
+      leaderboardAnon: true,
+      proctorMode: "LOCKDOWN",
+      violationAction: "LOCK",
+      maxViolations: 1,
+      requireFullscreen: true,
+      blockCopyPaste: true,
+      shareProctorWithParent: true,
+    },
+  });
+
+  // Notifications
+  await prisma.notification.createMany({
+    data: [
+      {
+        userId: students[0]!.id,
+        type: "ASSIGNMENT_CREATED",
+        title: "Bài tập mới: Unit 7: The World of Work - Đề số 1",
+        body: "Cô Mai Phương vừa giao bài tập mới cho lớp 12A1.",
+        link: `/student/assignments/${asgUnit7.id}/do`,
+      },
+      {
+        userId: parent1.id,
+        type: "PARENT_ALERT",
+        title: "Nguyễn Văn Minh đạt 9.0/10 bài Unit 6",
+        body: "Xem báo cáo chi tiết và nhận xét của Cô Mai Phương trong Cổng phụ huynh.",
+        link: `/parent?childId=${students[0]!.id}`,
+      },
+      {
+        userId: teacher1.id,
+        type: "SUBMISSION_GRADED",
+        title: "Có 1 bài tự luận chờ chấm",
+        body: "Lê Hoàng Long đã nộp bài Unit 7: The World of Work - Đề số 1.",
+        link: `/teacher/assignments/${asgUnit7.id}/grading`,
+      },
+    ],
+  });
+
+  console.log("Seed completed successfully!");
+  console.log("Accounts (password: password123):");
+  console.log("  Admin   :", admin.email);
+  console.log("  Teacher1:", teacher1.email, "(Class 12A1 joinCode: ENG12A)");
+  console.log("  Teacher2:", teacher2.email, "(Class IELTS joinCode: IELT65)");
+  console.log("  Students: student1@engclass.vn .. student10@engclass.vn");
+  console.log("  Parent1 :", parent1.email, "(Linked to student1 & student2)");
+  console.log("  Parent2 :", parent2.email, "(Linked to student3)");
+  console.log("  Unused Parent Invite Code for student4: PR4INV88");
+}
+
+main()
+  .catch((err) => {
+    console.error("Seed error:", err);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

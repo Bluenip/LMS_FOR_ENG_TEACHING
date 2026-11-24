@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+
+<html lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta content="web_dashboard" name="shell-type"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+    @layer base {
+      html, body { margin: 0; padding: 0; }
+      body { overscroll-behavior: none; }
+    }
+    ::-webkit-scrollbar { display: none; }
+  </style>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "on-secondary": "#ffffff",
+            "on-primary-fixed-variant": "#3323cc",
+            "secondary-fixed-dim": "#ffb690",
+            "on-secondary-container": "#5c2400",
+            "outline": "#777587",
+            "error-container": "#ffdad6",
+            "on-primary-container": "#dad7ff",
+            "surface-bright": "#f8f9ff",
+            "surface-container-highest": "#d3e4fe",
+            "on-error": "#ffffff",
+            "on-secondary-fixed": "#341100",
+            "inverse-primary": "#c3c0ff",
+            "surface-container": "#e5eeff",
+            "on-background": "#0b1c30",
+            "primary-container": "#4f46e5",
+            "tertiary-container": "#006e4b",
+            "on-secondary-fixed-variant": "#783200",
+            "tertiary": "#005338",
+            "surface-container-high": "#dce9ff",
+            "tertiary-fixed-dim": "#4edea3",
+            "on-surface": "#0b1c30",
+            "surface": "#f8f9ff",
+            "on-tertiary": "#ffffff",
+            "secondary": "#9d4300",
+            "surface-dim": "#cbdbf5",
+            "on-tertiary-fixed": "#002113",
+            "surface-tint": "#4d44e3",
+            "outline-variant": "#c7c4d8",
+            "secondary-fixed": "#ffdbca",
+            "surface-container-low": "#eff4ff",
+            "inverse-on-surface": "#eaf1ff",
+            "surface-container-lowest": "#ffffff",
+            "primary-fixed-dim": "#c3c0ff",
+            "tertiary-fixed": "#6ffbbe",
+            "primary-fixed": "#e2dfff",
+            "surface-variant": "#d3e4fe",
+            "on-primary": "#ffffff",
+            "on-tertiary-container": "#67f4b7",
+            "on-tertiary-fixed-variant": "#005236",
+            "background": "#f8f9ff",
+            "error": "#ba1a1a",
+            "inverse-surface": "#213145",
+            "on-surface-variant": "#464555",
+            "primary": "#3525cd",
+            "secondary-container": "#fd761a",
+            "on-error-container": "#93000a",
+            "on-primary-fixed": "#0f0069"
+          },
+          borderRadius: {
+            DEFAULT: "0.25rem",
+            lg: "0.5rem",
+            xl: "0.75rem",
+            full: "9999px"
+          },
+          fontFamily: {
+            "headline-md": ["Inter"],
+            "headline-lg-mobile": ["Inter"],
+            "label-md": ["Inter"],
+            "label-lg": ["Inter"],
+            "label-sm": ["Inter"],
+            "headline-lg": ["Inter"],
+            "body-sm": ["Inter"],
+            "body-lg": ["Inter"],
+            "body-md": ["Inter"],
+            "headline-sm": ["Inter"],
+            "display-lg": ["Inter"]
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-surface font-body-md text-on-surface antialiased min-h-screen flex flex-col">
+<!-- Top Navigation Bar for Teachers -->
+<header class="sticky top-0 w-full h-16 bg-surface-container-lowest border-b border-surface-container shadow-[0_1px_4px_rgba(0,0,0,0.03)] z-40">
+<div class="max-w-[1200px] h-full mx-auto px-6 flex items-center justify-between gap-4">
+<!-- Left: Logo & Nav items -->
+<div class="flex items-center gap-8">
+<a class="flex items-center gap-2.5" href="#">
+<div class="w-8 h-8 rounded-lg bg-primary-container text-on-primary flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-[19px]">auto_stories</span>
+</div>
+<span class="font-headline-sm font-bold text-on-surface tracking-tight leading-none text-xl">EngClass</span>
+</a>
+<nav class="hidden md:flex items-center gap-1 font-label-lg text-label-lg">
+<a class="px-3.5 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors" href="#">Lớp học</a>
+<a class="px-3.5 py-1.5 rounded-lg bg-primary-container text-on-primary font-semibold shadow-xs" href="#">Worksheet</a>
+<a class="px-3.5 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors" href="#">Bài giảng</a>
+<a class="px-3.5 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors" href="#">Báo cáo</a>
+</nav>
+</div>
+<!-- Right: Search, Helpers, Profile -->
+<div class="flex items-center gap-3">
+<div class="relative hidden sm:flex items-center">
+<span class="material-symbols-outlined absolute left-3 text-[18px] text-on-surface-variant pointer-events-none">search</span>
+<input class="w-64 lg:w-72 h-9 pl-9 pr-12 rounded-lg bg-surface-container-low font-body-sm text-body-sm text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:ring-2 focus:ring-primary-container border-none transition-all" placeholder="Tìm kiếm học sinh, đề thi, lớp học..." type="text"/>
+<kbd class="absolute right-2 px-1.5 py-0.5 rounded bg-surface-container-lowest text-on-surface-variant font-label-sm text-[11px] shadow-[0_1px_2px_rgba(0,0,0,0.06)] border border-surface-container">⌘K</kbd>
+</div>
+<button aria-label="Trợ giúp" class="w-9 h-9 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[20px]">help_outline</span>
+</button>
+<button aria-label="Thông báo" class="w-9 h-9 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors relative">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-secondary-container ring-2 ring-surface-container-lowest"></span>
+</button>
+<div class="flex items-center gap-2.5 pl-2 border-l border-surface-container">
+<div class="text-right hidden sm:block">
+<div class="font-label-md font-semibold text-on-surface leading-tight">Cô Mai Phương</div>
+<div class="text-[11px] text-on-surface-variant leading-tight">Giáo viên tiếng Anh</div>
+</div>
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined text-[18px]">person</span>
+</div>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content Centered Container -->
+<main class="flex-1 w-full">
+<div class="mx-auto max-w-[1200px] w-full px-6 py-6 flex flex-col">
+<!-- Top Breadcrumb & Meta Row -->
+<div class="w-full flex items-center justify-between pb-3 mb-2">
+<div class="flex items-center gap-2 text-on-surface-variant text-sm">
+<a class="hover:text-primary transition-colors flex items-center gap-1 text-on-surface-variant" href="#">
+<span class="material-symbols-outlined text-[16px]">arrow_back</span>
+            Worksheet Studio
+          </a>
+<span class="text-outline-variant">/</span>
+<span class="text-on-surface font-semibold">Giao bài &amp; Cấu hình giám sát</span>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant text-xs">
+<span class="inline-flex w-2 h-2 rounded-full bg-tertiary-container animate-pulse"></span>
+          Tự động lưu nháp: <span class="font-semibold text-on-surface">Vừa xong (14:32)</span>
+</div>
+</div>
+<!-- Page Header -->
+<div class="mb-6">
+<div class="flex items-center gap-3">
+<h1 class="font-bold text-2xl md:text-3xl text-on-surface tracking-tight">Thiết lập giao bài &amp; Giám sát thi</h1>
+<span class="px-2.5 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed font-semibold text-xs">Đề thi 45 phút</span>
+</div>
+<p class="text-sm text-on-surface-variant mt-1">Cài đặt thời gian, phạm vi lớp và cấu hình thuật toán chống gian lận cho học sinh.</p>
+</div>
+<!-- Two Column Layout: Left Form (~67%) / Right Sticky Preview (~33%) -->
+<div class="grid grid-cols-12 gap-6 items-start">
+<!-- LEFT COLUMN: Form Settings -->
+<div class="col-span-12 lg:col-span-8 flex flex-col gap-6">
+<!-- KHỐI 1: THÔNG TIN CƠ BẢN -->
+<section class="bg-surface-container-lowest rounded-xl shadow-[0_1px_3px_0_rgba(15,23,42,0.05)] border border-surface-container p-5 flex flex-col gap-4">
+<div class="flex items-center justify-between pb-1 border-b border-surface-container-low">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[20px]">assignment</span>
+</div>
+<div>
+<h2 class="font-semibold text-base text-on-surface leading-tight">1. Thông tin cơ bản</h2>
+<span class="text-xs text-on-surface-variant">Chọn tài liệu nguồn, đối tượng học sinh và thời lượng kiểm tra</span>
+</div>
+</div>
+<span class="text-[11px] px-2 py-0.5 rounded bg-surface-container-low text-on-surface-variant font-medium">Bắt buộc</span>
+</div>
+<!-- Chọn đề Worksheet -->
+<div class="flex flex-col gap-1.5">
+<div class="flex items-center justify-between">
+<label class="text-xs font-semibold text-on-surface">Worksheet đã chọn</label>
+<a class="text-xs font-medium text-primary flex items-center gap-1 hover:underline" href="#">
+<span class="material-symbols-outlined text-[15px]">visibility</span> Xem lại đề
+                </a>
+</div>
+<div class="relative flex items-center">
+<div class="absolute left-3.5 flex items-center pointer-events-none text-primary">
+<span class="material-symbols-outlined text-[19px]">description</span>
+</div>
+<select class="w-full h-10 pl-10 pr-9 rounded-lg bg-surface-container-low text-on-surface text-sm font-medium border-0 focus:ring-2 focus:ring-primary-container cursor-pointer transition-all">
+<option selected="">Unit 7: The World of Work - Đề số 1 (40 câu • Đã biên tập)</option>
+<option>Unit 6: Gender Equality - Đề ôn tập giữa kỳ (50 câu)</option>
+<option>Reading Diagnostic Test 12 - Tháng 11 (30 câu)</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 pointer-events-none text-on-surface-variant text-[18px]">expand_more</span>
+</div>
+</div>
+<!-- Chọn Lớp Áp Dụng -->
+<div class="flex flex-col gap-1.5">
+<label class="text-xs font-semibold text-on-surface">Lớp học áp dụng bài thi</label>
+<div class="flex flex-wrap items-center gap-2">
+<button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-container text-on-primary text-xs font-semibold shadow-xs hover:opacity-95 transition-all" type="button">
+<span class="material-symbols-outlined text-[15px]">check</span>
+<span>12A1 (40 HS)</span>
+</button>
+<button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-container text-on-primary text-xs font-semibold shadow-xs hover:opacity-95 transition-all" type="button">
+<span class="material-symbols-outlined text-[15px]">check</span>
+<span>12A2 (38 HS)</span>
+</button>
+<button class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-surface-container-low text-primary text-xs font-medium hover:bg-surface-container transition-colors" type="button">
+<span class="material-symbols-outlined text-[15px]">group_add</span>
+<span>+ Thêm lớp khác...</span>
+</button>
+</div>
+</div>
+<!-- Hàng Cấu hình Thời gian: Grid 4 cột -->
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-1">
+<div class="flex flex-col gap-1">
+<label class="text-xs text-on-surface-variant truncate">Mở đề lúc</label>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-2.5 text-[15px] text-on-surface-variant pointer-events-none">calendar_today</span>
+<input class="w-full h-9 pl-8 pr-2 rounded-lg bg-surface-container-low text-on-surface text-xs font-medium border-0 focus:ring-2 focus:ring-primary-container transition-all" type="text" value="20/11/2024 - 08:00"/>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<label class="text-xs text-on-surface-variant truncate">Hạn nộp bài</label>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-2.5 text-[15px] text-on-surface-variant pointer-events-none">event_busy</span>
+<input class="w-full h-9 pl-8 pr-2 rounded-lg bg-surface-container-low text-on-surface text-xs font-medium border-0 focus:ring-2 focus:ring-primary-container transition-all" type="text" value="20/11/2024 - 23:59"/>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<label class="text-xs text-on-surface-variant truncate">Thời gian làm bài</label>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-2.5 text-[15px] text-on-surface-variant pointer-events-none">timer</span>
+<select class="w-full h-9 pl-8 pr-6 rounded-lg bg-surface-container-low text-on-surface text-xs font-medium border-0 appearance-none focus:ring-2 focus:ring-primary-container cursor-pointer transition-all">
+<option>15 phút</option>
+<option>30 phút</option>
+<option selected="">45 phút</option>
+<option>60 phút</option>
+<option>90 phút</option>
+</select>
+<span class="material-symbols-outlined absolute right-2 pointer-events-none text-on-surface-variant text-[15px]">expand_more</span>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<label class="text-xs text-on-surface-variant truncate">Số lượt làm bài</label>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-2.5 text-[15px] text-on-surface-variant pointer-events-none">repeat</span>
+<select class="w-full h-9 pl-8 pr-6 rounded-lg bg-surface-container-low text-on-surface text-xs font-medium border-0 appearance-none focus:ring-2 focus:ring-primary-container cursor-pointer transition-all">
+<option selected="">1 lượt duy nhất</option>
+<option>2 lượt (lấy điểm cao nhất)</option>
+<option>Không giới hạn lượt</option>
+</select>
+<span class="material-symbols-outlined absolute right-2 pointer-events-none text-on-surface-variant text-[15px]">expand_more</span>
+</div>
+</div>
+</div>
+</section>
+<!-- KHỐI 2: KẾT QUẢ & XẾP HẠNG -->
+<section class="bg-surface-container-lowest rounded-xl shadow-[0_1px_3px_0_rgba(15,23,42,0.05)] border border-surface-container p-5 flex flex-col gap-4">
+<div class="flex items-center gap-2.5 pb-1 border-b border-surface-container-low">
+<div class="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[20px]">military_tech</span>
+</div>
+<div>
+<h2 class="font-semibold text-base text-on-surface leading-tight">2. Kết quả &amp; Bảng xếp hạng</h2>
+<span class="text-xs text-on-surface-variant">Chính sách công bố điểm số, giải thích chi tiết và vinh danh học sinh</span>
+</div>
+</div>
+<!-- Segmented Control: Hiển thị điểm số -->
+<div class="flex flex-col gap-1.5">
+<label class="text-xs font-semibold text-on-surface">Thời điểm công bố điểm số cho học sinh</label>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-surface-container-low p-1 rounded-lg">
+<button class="flex items-center justify-center gap-2 py-2 px-3 rounded text-on-surface-variant text-xs font-medium hover:text-on-surface transition-all" type="button">
+<span class="material-symbols-outlined text-[17px]">bolt</span>
+<span>Sau khi nộp bài</span>
+</button>
+<button class="flex items-center justify-center gap-2 py-2 px-3 rounded bg-surface-container-lowest text-primary text-xs font-semibold shadow-xs transition-all" type="button">
+<span class="material-symbols-outlined text-[17px]">hourglass_top</span>
+<span>Sau khi hết hạn nộp toàn lớp</span>
+</button>
+</div>
+</div>
+<!-- Danh sách Toggles -->
+<div class="flex flex-col gap-2 pt-1">
+<!-- Toggle 1: Bật -->
+<div class="flex items-center justify-between p-3 rounded-lg bg-surface-container-low hover:bg-surface-container transition-colors">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary text-[20px]">leaderboard</span>
+<div>
+<p class="text-xs font-semibold text-on-surface">Hiển thị Bảng xếp hạng vinh danh sau khi kết thúc ca thi</p>
+<p class="text-[11px] text-on-surface-variant">Khuyến khích thi đua qua Top 5 điểm số và thời gian làm nhanh nhất</p>
+</div>
+</div>
+<button aria-checked="true" class="w-11 h-6 flex items-center bg-primary-container rounded-full p-1 transition-colors cursor-pointer shrink-0" role="switch" type="button">
+<div class="bg-surface-container-lowest w-4 h-4 rounded-full shadow-sm transform translate-x-5 transition-transform"></div>
+</button>
+</div>
+<!-- Toggle 2: Tắt -->
+<div class="flex items-center justify-between p-3 rounded-lg bg-surface-container-low hover:bg-surface-container transition-colors">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">visibility_off</span>
+<div>
+<p class="text-xs font-semibold text-on-surface">Ẩn danh học sinh trên bảng xếp hạng (chỉ hiển thị mã SBD)</p>
+<p class="text-[11px] text-on-surface-variant">Bảo vệ quyền riêng tư điểm số cá nhân đối với các bài kiểm tra khảo sát</p>
+</div>
+</div>
+<button aria-checked="false" class="w-11 h-6 flex items-center bg-surface-variant rounded-full p-1 transition-colors cursor-pointer shrink-0" role="switch" type="button">
+<div class="bg-surface-container-lowest w-4 h-4 rounded-full shadow-sm transform translate-x-0 transition-transform"></div>
+</button>
+</div>
+<!-- Toggle 3: Bật -->
+<div class="flex items-center justify-between p-3 rounded-lg bg-surface-container-low hover:bg-surface-container transition-colors">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-[20px]">fact_check</span>
+<div>
+<p class="text-xs font-semibold text-on-surface">Cho phép học sinh xem lại chi tiết đáp án &amp; giải thích sau khi đóng đề</p>
+<p class="text-[11px] text-on-surface-variant">Giúp học sinh tự chữa bài và đối chiếu kiến thức ngữ pháp/từ vựng</p>
+</div>
+</div>
+<button aria-checked="true" class="w-11 h-6 flex items-center bg-primary-container rounded-full p-1 transition-colors cursor-pointer shrink-0" role="switch" type="button">
+<div class="bg-surface-container-lowest w-4 h-4 rounded-full shadow-sm transform translate-x-5 transition-transform"></div>
+</button>
+</div>
+</div>
+</section>
+<!-- KHỐI 3: CHỐNG GIAN LẬN & BẢO MẬT CA THI -->
+<section class="bg-surface-container-lowest rounded-xl border border-surface-container shadow-[0_1px_3px_0_rgba(15,23,42,0.05)] p-5 flex flex-col gap-4">
+<div class="flex items-center justify-between pb-1 border-b border-surface-container-low">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[20px]">security</span>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<h2 class="font-semibold text-base text-on-surface leading-tight">3. Chống gian lận &amp; Bảo mật ca thi</h2>
+<span class="px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed text-[11px] font-semibold">AI Shield v2.4</span>
+</div>
+<span class="text-xs text-on-surface-variant">Thiết lập thuật toán giám sát hành vi và cơ chế phản ứng tức thì</span>
+</div>
+</div>
+</div>
+<!-- Segmented Control 4 Mức độ -->
+<div class="flex flex-col gap-1.5">
+<label class="text-xs font-semibold text-on-surface">Cấp độ bảo mật tổng thể</label>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-1.5 bg-surface-container-low p-1 rounded-lg">
+<button class="py-2 px-2 text-center rounded text-on-surface-variant text-xs font-medium hover:text-on-surface transition-all" type="button">
+                  Tắt
+                </button>
+<button class="py-2 px-2 text-center rounded text-on-surface-variant text-xs font-medium hover:text-on-surface transition-all" type="button">
+                  Giám sát cơ bản
+                </button>
+<button class="py-2 px-2 text-center rounded bg-primary-container text-on-primary text-xs font-semibold shadow-xs transition-all flex items-center justify-center gap-1" type="button">
+<span class="material-symbols-outlined text-[16px]">lock</span>
+<span>Khoá màn hình</span>
+</button>
+<button class="py-2 px-2 text-center rounded text-on-surface-variant text-xs font-medium hover:text-on-surface transition-all flex items-center justify-center gap-1" type="button">
+<span class="material-symbols-outlined text-[16px]">verified_user</span>
+<span>Safe Exam Browser</span>
+</button>
+</div>
+</div>
+<!-- 5 Selectable Preset Cards (Ensuring Titles never wrap awkwardly) -->
+<div class="flex flex-col gap-2">
+<label class="text-xs font-semibold text-on-surface">Kịch bản phản ứng khi vi phạm cửa sổ thi</label>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+<!-- Preset Card 1: Chỉ cảnh báo -->
+<div class="p-3.5 rounded-xl bg-surface-container-low hover:bg-surface-container cursor-pointer transition-all flex flex-col justify-between gap-2 border border-transparent">
+<div class="flex items-start justify-between">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">notifications_active</span>
+<span class="w-4 h-4 rounded-full border border-outline-variant flex items-center justify-center"></span>
+</div>
+<div>
+<p class="text-xs font-semibold text-on-surface whitespace-nowrap">Chỉ cảnh báo</p>
+<p class="text-[11px] text-on-surface-variant mt-0.5">Nhắc nhở học sinh khi rời màn hình thi, không khoá bài.</p>
+</div>
+</div>
+<!-- Preset Card 2: Nhảy tab là khoá luôn (ACTIVE CHOSEN CARD) -->
+<div class="p-3.5 rounded-xl bg-surface-container text-on-surface shadow-xs border-2 border-primary-container cursor-pointer transition-all flex flex-col justify-between gap-2 relative">
+<div class="flex items-start justify-between">
+<span class="material-symbols-outlined text-primary text-[20px]">lock_reset</span>
+<span class="w-4 h-4 rounded-full bg-primary-container text-on-primary flex items-center justify-center shadow-xs">
+<span class="material-symbols-outlined text-[12px] font-bold">check</span>
+</span>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<p class="text-xs font-bold text-primary whitespace-nowrap">Nhảy tab là khoá luôn</p>
+<span class="px-1.5 py-0.5 bg-primary-fixed text-on-primary-fixed rounded text-[10px] font-semibold whitespace-nowrap">Đang chọn</span>
+</div>
+<p class="text-[11px] text-on-surface-variant mt-0.5">Rời tab/F11 1 lần → Khoá bài thi ngay, cần giáo viên duyệt mở lại.</p>
+</div>
+</div>
+<!-- Preset Card 3: Làm lại từ đầu -->
+<div class="p-3.5 rounded-xl bg-surface-container-low hover:bg-surface-container cursor-pointer transition-all flex flex-col justify-between gap-2 border border-transparent">
+<div class="flex items-start justify-between">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">restart_alt</span>
+<span class="w-4 h-4 rounded-full border border-outline-variant flex items-center justify-center"></span>
+</div>
+<div>
+<p class="text-xs font-semibold text-on-surface whitespace-nowrap">Làm lại từ đầu</p>
+<p class="text-[11px] text-on-surface-variant mt-0.5">Vi phạm sẽ reset bài thi về câu 1 và huỷ toàn bộ câu cũ.</p>
+</div>
+</div>
+<!-- Preset Card 4: Tự nộp sau 3 lần -->
+<div class="p-3.5 rounded-xl bg-surface-container-low hover:bg-surface-container cursor-pointer transition-all flex flex-col justify-between gap-2 border border-transparent">
+<div class="flex items-start justify-between">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">send_time_extension</span>
+<span class="w-4 h-4 rounded-full border border-outline-variant flex items-center justify-center"></span>
+</div>
+<div>
+<p class="text-xs font-semibold text-on-surface whitespace-nowrap">Tự nộp sau 3 lần</p>
+<p class="text-[11px] text-on-surface-variant mt-0.5">Cảnh báo 2 lần đầu; lần thứ 3 hệ thống tự động thu và chấm bài.</p>
+</div>
+</div>
+<!-- Preset Card 5: Cấu hình tuỳ chỉnh linh hoạt (Full span 2 cols) -->
+<div class="md:col-span-2 p-3.5 rounded-xl bg-surface-container-low hover:bg-surface-container cursor-pointer transition-all flex flex-col justify-between gap-2.5 border border-transparent">
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">tune</span>
+<p class="text-xs font-semibold text-on-surface whitespace-nowrap">Cấu hình tuỳ chỉnh linh hoạt</p>
+</div>
+<span class="w-4 h-4 rounded-full border border-outline-variant flex items-center justify-center"></span>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-0.5">
+<div class="flex items-center gap-2">
+<span class="text-xs text-on-surface-variant whitespace-nowrap">Hành vi:</span>
+<select class="h-8 px-2 rounded-lg bg-surface-container-lowest text-on-surface text-xs font-medium border-0 flex-1">
+<option>Khoá bài tạm thời</option>
+<option>Tự nộp bài</option>
+<option>Cảnh báo âm thanh</option>
+</select>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-xs text-on-surface-variant whitespace-nowrap">Số lần cho phép:</span>
+<select class="h-8 px-2 rounded-lg bg-surface-container-lowest text-on-surface text-xs font-medium border-0 w-28">
+<option>1 lần</option>
+<option>2 lần</option>
+<option>3 lần</option>
+<option>5 lần</option>
+</select>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Toggles Kiểm Soát Chi Tiết -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+<div class="flex items-center justify-between p-3 rounded-lg bg-surface-container-low">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[18px]">fullscreen</span>
+<span class="text-xs font-medium text-on-surface">Bắt buộc toàn màn hình (Full Screen lock)</span>
+</div>
+<button aria-checked="true" class="w-10 h-5 flex items-center bg-primary-container rounded-full p-0.5 transition-colors cursor-pointer shrink-0" role="switch" type="button">
+<div class="bg-surface-container-lowest w-4 h-4 rounded-full shadow-xs transform translate-x-5 transition-transform"></div>
+</button>
+</div>
+<div class="flex items-center justify-between p-3 rounded-lg bg-surface-container-low">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[18px]">content_paste_off</span>
+<span class="text-xs font-medium text-on-surface">Chặn sao chép / dán (Disable Copy &amp; Paste)</span>
+</div>
+<button aria-checked="true" class="w-10 h-5 flex items-center bg-primary-container rounded-full p-0.5 transition-colors cursor-pointer shrink-0" role="switch" type="button">
+<div class="bg-surface-container-lowest w-4 h-4 rounded-full shadow-xs transform translate-x-5 transition-transform"></div>
+</button>
+</div>
+<div class="flex items-center justify-between p-3 rounded-lg bg-surface-container-low">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[18px]">shuffle</span>
+<span class="text-xs font-medium text-on-surface">Xáo trộn ngẫu nhiên thứ tự câu và đáp án</span>
+</div>
+<button aria-checked="true" class="w-10 h-5 flex items-center bg-primary-container rounded-full p-0.5 transition-colors cursor-pointer shrink-0" role="switch" type="button">
+<div class="bg-surface-container-lowest w-4 h-4 rounded-full shadow-xs transform translate-x-5 transition-transform"></div>
+</button>
+</div>
+<div class="flex items-center justify-between p-3 rounded-lg bg-surface-container-low">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[18px]">camera</span>
+<span class="text-xs font-medium text-on-surface">Tự động chụp màn hình khi có nghi vấn</span>
+</div>
+<button aria-checked="true" class="w-10 h-5 flex items-center bg-primary-container rounded-full p-0.5 transition-colors cursor-pointer shrink-0" role="switch" type="button">
+<div class="bg-surface-container-lowest w-4 h-4 rounded-full shadow-xs transform translate-x-5 transition-transform"></div>
+</button>
+</div>
+</div>
+<!-- Technical Note -->
+<div class="p-3.5 rounded-lg bg-surface-container-low flex items-start gap-3 mt-1 border border-surface-container">
+<span class="material-symbols-outlined text-primary text-[20px] mt-0.5 shrink-0">info</span>
+<div class="flex flex-col gap-0.5">
+<h4 class="text-xs font-bold text-on-surface">Lưu ý kỹ thuật cho giáo viên:</h4>
+<p class="text-xs text-on-surface-variant leading-relaxed">
+                  Trình duyệt web thông thường không thể ngăn chặn học sinh dùng thiết bị khác (điện thoại, máy tính bảng bên cạnh). Hãy kích hoạt chế độ Safe Exam Browser (SEB) hoặc yêu cầu bật webcam nếu cần khoá môi trường thi máy tính hoàn toàn.
+                </p>
+</div>
+</div>
+</section>
+</div>
+<!-- RIGHT COLUMN: Sticky Student View Preview & Actions -->
+<div class="col-span-12 lg:col-span-4 sticky top-20 flex flex-col gap-4">
+<!-- Live Preview Card -->
+<div class="bg-surface-container-lowest rounded-xl border border-surface-container shadow-[0_1px_3px_0_rgba(15,23,42,0.05)] p-4 flex flex-col gap-3.5">
+<div class="flex items-center justify-between pb-1 border-b border-surface-container-low">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[18px]">devices</span>
+<span class="text-xs font-bold text-on-surface">Học sinh sẽ thấy (Live Preview)</span>
+</div>
+<span class="w-2.5 h-2.5 rounded-full bg-tertiary-container"></span>
+</div>
+<!-- Mockup Inner Card -->
+<div class="bg-surface-container-low rounded-xl p-4 flex flex-col gap-3 shadow-inner">
+<div class="flex items-center justify-between">
+<span class="px-2 py-0.5 rounded bg-surface-container-highest text-on-surface-variant text-[11px] font-semibold">BÀI KIỂM TRA ĐỊNH KỲ</span>
+<span class="text-[11px] text-on-surface-variant flex items-center gap-1 font-medium">
+<span class="material-symbols-outlined text-[13px]">lock</span> Chế độ giám sát
+                </span>
+</div>
+<div>
+<h3 class="font-bold text-base text-on-surface">Unit 7: The World of Work</h3>
+<p class="text-xs text-on-surface-variant mt-0.5">Tiếng Anh 12 • 40 câu hỏi trắc nghiệm</p>
+</div>
+<div class="flex items-center gap-2 text-xs">
+<span class="px-2.5 py-1 rounded bg-surface-container-lowest shadow-xs flex items-center gap-1 font-medium">
+<span class="material-symbols-outlined text-[15px] text-secondary">schedule</span> 45 phút
+                </span>
+<span class="px-2.5 py-1 rounded bg-surface-container-lowest shadow-xs flex items-center gap-1 font-medium">
+<span class="material-symbols-outlined text-[15px] text-primary">looks_one</span> 1 lượt làm
+                </span>
+</div>
+<!-- Red Law Warning Banner -->
+<div class="p-3 rounded-lg bg-error-container text-on-error-container flex items-start gap-2.5">
+<span class="material-symbols-outlined text-[18px] shrink-0 mt-0.5 text-error">warning</span>
+<div class="text-xs leading-snug">
+<span class="font-bold">Luật thi nghiêm ngặt:</span> Rời tab hoặc thoát F11 là <strong class="underline font-bold">BỊ KHOÁ BÀI NGAY</strong>. Cần cô Mai Phương mở khoá trực tiếp tại lớp.
+                </div>
+</div>
+<!-- Rules checklist -->
+<div class="flex flex-col gap-1.5 pt-0.5 text-xs text-on-surface-variant">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-tertiary">check_circle</span>
+<span>Bắt buộc toàn màn hình liên tục</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-tertiary">check_circle</span>
+<span>Vô hiệu hoá chuột phải &amp; phím tắt Copy/Paste</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-tertiary">check_circle</span>
+<span>Mã đề và câu hỏi xáo ngẫu nhiên</span>
+</div>
+</div>
+<!-- Mock Button Disabled -->
+<div class="w-full py-2 rounded-lg bg-surface-variant text-on-surface-variant text-center text-xs font-semibold cursor-not-allowed">
+                Đợi mở đề (08:00 Ngày mai)
+              </div>
+</div>
+<!-- Scope badge -->
+<div class="p-2.5 rounded-lg bg-surface-container flex items-center justify-between text-on-surface text-xs">
+<div class="flex items-center gap-2 font-medium">
+<span class="material-symbols-outlined text-primary text-[18px]">groups</span>
+<span>2 lớp (78 học sinh)</span>
+</div>
+<span class="text-on-surface-variant">Mở: 20/11 • 08:00</span>
+</div>
+</div>
+<!-- Actions -->
+<div class="bg-surface-container-lowest rounded-xl border border-surface-container shadow-[0_1px_3px_0_rgba(15,23,42,0.05)] p-4 flex flex-col gap-2.5">
+<!-- Primary Action Button: Orange Giao bài ngay -->
+<button class="w-full h-11 rounded-lg bg-secondary-container hover:bg-secondary text-on-secondary text-sm font-semibold flex items-center justify-center gap-2 shadow-sm hover:translate-y-[-1px] transition-all cursor-pointer" type="button">
+<span class="material-symbols-outlined text-[19px]">rocket_launch</span>
+<span>Giao bài ngay</span>
+</button>
+<!-- Secondary Action Button: Outline Lưu nháp -->
+<button class="w-full h-10 rounded-lg bg-surface-container-low hover:bg-surface-container text-on-surface text-sm font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer border border-surface-container" type="button">
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant">save</span>
+<span>Lưu bản nháp (Chưa công bố)</span>
+</button>
+<!-- Schedule link -->
+<div class="pt-1 text-center">
+<a class="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1" href="#">
+<span class="material-symbols-outlined text-[15px]">schedule_send</span>
+<span>Lên lịch giao bài tự động theo thời gian</span>
+</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Full-Width Footer -->
+<footer class="w-full bg-surface-container-lowest border-t border-surface-container mt-12">
+<div class="max-w-[1200px] mx-auto px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-on-surface-variant">
+<div>EngClass LMS • Hệ sinh thái học tập và phiếu bài tập tương tác thông minh</div>
+<div class="flex items-center gap-6 font-medium">
+<a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Trung tâm hỗ trợ giáo viên</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Chính sách bảo mật</a>
+<span>© 2025 EngClass Education Vietnam</span>
+</div>
+</div>
+</footer>
+<script>
+    // Micro-interactions for toggles
+    document.querySelectorAll('[role="switch"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const isChecked = btn.getAttribute('aria-checked') === 'true';
+        btn.setAttribute('aria-checked', !isChecked);
+        const circle = btn.querySelector('div');
+        if (isChecked) {
+          btn.classList.remove('bg-primary-container');
+          btn.classList.add('bg-surface-variant');
+          circle.classList.remove('translate-x-5');
+          circle.classList.add('translate-x-0');
+        } else {
+          btn.classList.add('bg-primary-container');
+          btn.classList.remove('bg-surface-variant');
+          circle.classList.add('translate-x-5');
+          circle.classList.remove('translate-x-0');
+        }
+      });
+    });
+  </script>
+</body></html>

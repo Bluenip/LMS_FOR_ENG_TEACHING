@@ -1,0 +1,15 @@
+/node_modules
+/.next/
+/out/
+/build
+/uploads/
+/public/pdf.worker.min.mjs
+/playwright-report/
+/test-results/
+.DS_Store
+*.pem
+.env
+.env*.local
+*.tsbuildinfo
+next-env.d.ts
+stitch_engclass_learning_management_system.zip

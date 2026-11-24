@@ -1,0 +1,257 @@
+import type {
+  LeaderboardMode,
+  ProctorMode,
+  ShowResultMode,
+  ViolationAction,
+} from "@prisma/client";
+import { prisma } from "@/lib/db";
+import { AppError } from "@/lib/errors";
+import { createNotificationsBulk } from "./notificationService";
+import { canRevealResult } from "./submissionService";
+import { formatDateTime } from "@/lib/utils";
+
+export interface CreateAssignmentInput {
+  worksheetId: string;
+  classIds: string[];
+  title: string;
+  openAt?: string | null;
+  dueAt?: string | null;
+  timeLimitMin?: number | null;
+  maxAttempts: number;
+  shuffle: boolean;
+  showResult: ShowResultMode;
+  showAnswerKey: boolean;
+  allowLate: boolean;
+  showLeaderboard: LeaderboardMode;
+  leaderboardAnon: boolean;
+  leaderboardScoreRule: "BEST" | "LAST";
+  proctorMode: ProctorMode;
+  violationAction: ViolationAction;
+  maxViolations: number;
+  requireFullscreen: boolean;
+  blockCopyPaste: boolean;
+  sebConfigKeyHash?: string | null;
+  shareProctorWithParent: boolean;
+}
+
+export async function createAssignmentsForClasses(
+  teacherId: string,
+  isAdmin: boolean,
+  input: CreateAssignmentInput
+) {
+  const worksheet = await prisma.worksheet.findUnique({
+    where: { id: input.worksheetId },
+    include: { _count: { select: { fields: true } } },
+  });
+  if (!worksheet) {
+    throw new AppError("Không tìm thấy phiếu bài tập.", 404, "NOT_FOUND");
+  }
+  if (!isAdmin && worksheet.ownerId !== teacherId) {
+    throw new AppError("Bạn không sở hữu phiếu bài tập này.", 403, "FORBIDDEN");
+  }
+
+  const classes = await prisma.class.findMany({
+    where: {
+      id: { in: input.classIds },
+      ...(isAdmin ? {} : { teacherId }),
+    },
+    include: {
+      enrollments: {
+        where: { status: "ACTIVE" },
+        include: {
+          student: {
+            select: {
+              id: true,
+              name: true,
+              parentLinksAsChild: {
+                where: { verifiedAt: { not: null } },
+                select: { parentId: true },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (classes.length !== input.classIds.length) {
+    throw new AppError("Một hoặc nhiều lớp học không hợp lệ hoặc không thuộc quyền quản lý của bạn.", 403, "FORBIDDEN");
+  }
+
+  const openAt = input.openAt ? new Date(input.openAt) : null;
+  const dueAt = input.dueAt ? new Date(input.dueAt) : null;
+
+  const createdAssignments = [];
+  for (const cls of classes) {
+    const assignment = await prisma.assignment.create({
+      data: {
+        classId: cls.id,
+        worksheetId: worksheet.id,
+        title: input.title,
+        openAt,
+        dueAt,
+        timeLimitMin: input.timeLimitMin ?? null,
+        maxAttempts: input.maxAttempts,
+        shuffle: input.shuffle,
+        showResult: input.showResult,
+        showAnswerKey: input.showAnswerKey,
+        allowLate: input.allowLate,
+        showLeaderboard: input.showLeaderboard,
+        leaderboardAnon: input.leaderboardAnon,
+        leaderboardScoreRule: input.leaderboardScoreRule,
+        proctorMode: input.proctorMode,
+        violationAction: input.violationAction,
+        maxViolations: input.maxViolations,
+        requireFullscreen:
+          input.proctorMode === "LOCKDOWN" ? true : input.requireFullscreen,
+        blockCopyPaste:
+          input.proctorMode === "LOCKDOWN" ? true : input.blockCopyPaste,
+        sebConfigKeyHash: input.sebConfigKeyHash?.trim() || null,
+        shareProctorWithParent: input.shareProctorWithParent,
+      },
+    });
+    createdAssignments.push(assignment);
+
+    const notifications: Array<{
+      userId: string;
+      type: "ASSIGNMENT_CREATED" | "PARENT_ALERT";
+      title: string;
+      body: string;
+      link: string;
+    }> = [];
+
+    const dueLabel = dueAt ? ` • Hạn nộp: ${formatDateTime(dueAt)}` : "";
+    for (const enr of cls.enrollments) {
+      notifications.push({
+        userId: enr.studentId,
+        type: "ASSIGNMENT_CREATED",
+        title: `Bài tập mới: ${assignment.title}`,
+        body: `Lớp ${cls.name}${dueLabel}`,
+        link:
+          assignment.proctorMode !== "OFF"
+            ? `/student/assignments/${assignment.id}/rules`
+            : `/student/assignments/${assignment.id}/do`,
+      });
+      for (const pl of enr.student.parentLinksAsChild) {
+        notifications.push({
+          userId: pl.parentId,
+          type: "PARENT_ALERT",
+          title: `${enr.student.name} có bài tập mới`,
+          body: `${assignment.title} (${cls.name})${dueLabel}`,
+          link: `/parent?childId=${enr.studentId}`,
+        });
+      }
+    }
+    await createNotificationsBulk(notifications);
+  }
+
+  return createdAssignments;
+}
+
+export async function listStudentAssignments(studentId: string) {
+  const assignments = await prisma.assignment.findMany({
+    where: {
+      class: {
+        archived: false,
+        enrollments: {
+          some: { studentId, status: "ACTIVE" },
+        },
+      },
+    },
+    include: {
+      class: { select: { id: true, name: true, teacher: { select: { name: true } } } },
+      worksheet: {
+        select: {
+          id: true,
+          title: true,
+          pageCount: true,
+          _count: { select: { fields: true } },
+        },
+      },
+      submissions: {
+        where: { studentId },
+        orderBy: { attemptNo: "desc" },
+        select: {
+          id: true,
+          attemptNo: true,
+          status: true,
+          startedAt: true,
+          submittedAt: true,
+          isLate: true,
+          totalScore: true,
+          maxScore: true,
+          lockedAt: true,
+          violationCount: true,
+        },
+      },
+    },
+    orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }],
+  });
+
+  const now = new Date();
+  return assignments.map((a) => ({
+    ...a,
+    submissions: a.submissions.map((s) => ({
+      ...s,
+      totalScore: canRevealResult(a, s.status, now) ? s.totalScore : null,
+    })),
+  }));
+}
+
+export async function listTeacherAssignments(teacherId: string) {
+  return prisma.assignment.findMany({
+    where: { class: { teacherId } },
+    include: {
+      class: {
+        select: {
+          id: true,
+          name: true,
+          _count: { select: { enrollments: { where: { status: "ACTIVE" } } } },
+        },
+      },
+      worksheet: {
+        select: {
+          id: true,
+          title: true,
+          _count: { select: { fields: true } },
+        },
+      },
+      submissions: {
+        select: {
+          id: true,
+          studentId: true,
+          status: true,
+          totalScore: true,
+          maxScore: true,
+          lockedAt: true,
+          violationCount: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export { describeProctorRuleSummary } from "@/lib/proctor-helpers";
+
+export function verifySebHeaderIfNeeded(
+  assignment: { proctorMode: ProctorMode; sebConfigKeyHash: string | null },
+  headers: Headers
+): void {
+  if (assignment.proctorMode !== "SEB") return;
+  const incomingHash = headers.get("x-safeexambrowser-configkeyhash")?.trim();
+  if (!incomingHash) {
+    throw new AppError(
+      "Bài thi này yêu cầu mở bằng Safe Exam Browser (thiếu header X-SafeExamBrowser-ConfigKeyHash).",
+      403,
+      "SEB_REQUIRED"
+    );
+  }
+  if (assignment.sebConfigKeyHash && incomingHash !== assignment.sebConfigKeyHash.trim()) {
+    throw new AppError(
+      "Cấu hình Safe Exam Browser không khớp với bài thi này.",
+      403,
+      "SEB_HASH_MISMATCH"
+    );
+  }
+}

@@ -1,0 +1,255 @@
+import { z } from "zod";
+import {
+  FieldPlacement,
+  FieldType,
+  LeaderboardMode,
+  LessonItemType,
+  ProctorEventType,
+  ProctorMode,
+  Role,
+  ShowResultMode,
+  SkillTag,
+  ViolationAction,
+} from "@prisma/client";
+
+// ===== Auth =====
+export const registerSchema = z.object({
+  name: z.string().trim().min(2, "Họ tên tối thiểu 2 ký tự").max(100),
+  email: z.string().trim().toLowerCase().email("Email không hợp lệ"),
+  phone: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
+  password: z.string().min(6, "Mật khẩu tối thiểu 6 ký tự").max(100),
+  role: z.enum(["TEACHER", "STUDENT", "PARENT"]).default("STUDENT"),
+});
+
+// ===== Class =====
+export const createClassSchema = z.object({
+  name: z.string().trim().min(2, "Tên lớp tối thiểu 2 ký tự").max(120),
+  description: z.string().trim().max(1000).optional().nullable(),
+  requireApproval: z.boolean().optional().default(false),
+});
+
+export const updateClassSchema = z.object({
+  name: z.string().trim().min(2).max(120).optional(),
+  description: z.string().trim().max(1000).optional().nullable(),
+  requireApproval: z.boolean().optional(),
+  archived: z.boolean().optional(),
+});
+
+export const joinClassSchema = z.object({
+  joinCode: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .min(4, "Mã lớp không hợp lệ")
+    .max(12),
+});
+
+export const createPostSchema = z.object({
+  content: z.string().trim().min(1, "Nội dung không được để trống").max(5000),
+});
+
+export const createCommentSchema = z.object({
+  content: z.string().trim().min(1, "Bình luận không được để trống").max(2000),
+});
+
+// ===== Worksheet & Fields =====
+export const createWorksheetSchema = z.object({
+  title: z.string().trim().min(2, "Tiêu đề tối thiểu 2 ký tự").max(200),
+  instructions: z.string().trim().max(3000).optional().nullable(),
+});
+
+export const updateWorksheetSchema = z.object({
+  title: z.string().trim().min(2).max(200).optional(),
+  instructions: z.string().trim().max(3000).optional().nullable(),
+});
+
+export const fieldOptionSchema = z.object({
+  id: z.string().trim().min(1).max(64),
+  text: z.string().trim().max(500),
+});
+
+export const fieldStyleSchema = z
+  .object({
+    fontSize: z.number().min(8).max(48).optional(),
+    align: z.enum(["left", "center", "right"]).optional(),
+    color: z.string().max(32).optional(),
+    transparentBg: z.boolean().optional(),
+  })
+  .optional()
+  .nullable();
+
+export const gradingOptsSchema = z
+  .object({
+    caseSensitive: z.boolean().optional(),
+    ignorePunctuation: z.boolean().optional(),
+    ignoreExtraSpaces: z.boolean().optional(),
+    partialCredit: z.boolean().optional(),
+  })
+  .optional()
+  .nullable();
+
+export const fieldItemSchema = z
+  .object({
+    id: z.string().trim().min(1).max(64).optional(),
+    placement: z.nativeEnum(FieldPlacement),
+    type: z.nativeEnum(FieldType),
+    label: z.string().trim().min(1).max(40),
+    prompt: z.string().trim().max(2000).optional().nullable(),
+    explanation: z.string().trim().max(2000).optional().nullable(),
+    skillTag: z.nativeEnum(SkillTag).optional().nullable(),
+    order: z.number().int().min(0),
+    points: z.number().min(0).max(1000).default(1),
+    pageIndex: z.number().int().min(0).optional().nullable(),
+    x: z.number().min(0).max(1).optional().nullable(),
+    y: z.number().min(0).max(1).optional().nullable(),
+    w: z.number().min(0.005).max(1).optional().nullable(),
+    h: z.number().min(0.005).max(1).optional().nullable(),
+    style: fieldStyleSchema,
+    options: z.array(fieldOptionSchema).optional().nullable(),
+    answerKey: z.record(z.unknown()),
+    gradingOpts: gradingOptsSchema,
+  })
+  .superRefine((field, ctx) => {
+    if (field.placement === "OVERLAY") {
+      if (
+        field.pageIndex === null ||
+        field.pageIndex === undefined ||
+        field.x === null ||
+        field.x === undefined ||
+        field.y === null ||
+        field.y === undefined ||
+        field.w === null ||
+        field.w === undefined ||
+        field.h === null ||
+        field.h === undefined
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Ô Overlay bắt buộc có toạ độ chuẩn hoá (pageIndex, x, y, w, h).",
+        });
+      }
+    }
+  });
+
+export const saveWorksheetFieldsSchema = z.object({
+  fields: z.array(fieldItemSchema).max(500),
+});
+
+// ===== Assignment =====
+export const createAssignmentSchema = z.object({
+  worksheetId: z.string().min(1),
+  classIds: z.array(z.string().min(1)).min(1, "Vui lòng chọn ít nhất 1 lớp"),
+  title: z.string().trim().min(2, "Tên bài giao tối thiểu 2 ký tự").max(200),
+  openAt: z.string().datetime().optional().nullable().or(z.literal("")),
+  dueAt: z.string().datetime().optional().nullable().or(z.literal("")),
+  timeLimitMin: z.number().int().min(1).max(600).optional().nullable(),
+  maxAttempts: z.number().int().min(1).max(20).default(1),
+  shuffle: z.boolean().default(false),
+  showResult: z.nativeEnum(ShowResultMode).default("AFTER_SUBMIT"),
+  showAnswerKey: z.boolean().default(false),
+  allowLate: z.boolean().default(false),
+  showLeaderboard: z.nativeEnum(LeaderboardMode).default("AFTER_DUE"),
+  leaderboardAnon: z.boolean().default(false),
+  leaderboardScoreRule: z.enum(["BEST", "LAST"]).default("BEST"),
+  proctorMode: z.nativeEnum(ProctorMode).default("OFF"),
+  violationAction: z.nativeEnum(ViolationAction).default("WARN"),
+  maxViolations: z.number().int().min(1).max(20).default(3),
+  requireFullscreen: z.boolean().default(false),
+  blockCopyPaste: z.boolean().default(false),
+  sebConfigKeyHash: z.string().trim().max(256).optional().nullable(),
+  shareProctorWithParent: z.boolean().default(false),
+});
+
+// ===== Submission & Grading =====
+export const startSubmissionSchema = z.object({
+  rulesAccepted: z.boolean().optional(),
+  attemptToken: z.string().max(128).optional(),
+});
+
+export const autosaveAnswersSchema = z.object({
+  attemptVersion: z.number().int().min(0),
+  attemptToken: z.string().max(128).optional(),
+  answers: z.array(
+    z.object({
+      fieldId: z.string().min(1),
+      value: z.union([z.string(), z.array(z.string()), z.boolean(), z.number(), z.null()]),
+    })
+  ),
+});
+
+export const submitSubmissionSchema = z.object({
+  attemptVersion: z.number().int().min(0).optional(),
+  attemptToken: z.string().max(128).optional(),
+  answers: z
+    .array(
+      z.object({
+        fieldId: z.string().min(1),
+        value: z.union([z.string(), z.array(z.string()), z.boolean(), z.number(), z.null()]),
+      })
+    )
+    .optional(),
+});
+
+export const manualGradeSchema = z.object({
+  teacherComment: z.string().trim().max(3000).optional().nullable(),
+  flagged: z.boolean().optional(),
+  grades: z.array(
+    z.object({
+      fieldId: z.string().min(1),
+      score: z.number().min(0).max(1000),
+      isCorrect: z.boolean().optional().nullable(),
+      teacherNote: z.string().trim().max(1000).optional().nullable(),
+    })
+  ),
+});
+
+// ===== Proctoring =====
+export const proctorEventSchema = z.object({
+  type: z.nativeEnum(ProctorEventType),
+  durationMs: z.number().int().min(0).max(86400000).optional().nullable(),
+  clientAt: z.string().optional(),
+  attemptToken: z.string().max(128).optional(),
+  meta: z.record(z.unknown()).optional(),
+});
+
+export const proctorTeacherActionSchema = z.object({
+  action: z.enum(["UNLOCK", "LOCK", "FORCE_SUBMIT", "REMIND", "FLAG", "UNFLAG"]),
+  message: z.string().trim().max(500).optional(),
+});
+
+// ===== Parent =====
+export const redeemParentInviteSchema = z.object({
+  code: z.string().trim().toUpperCase().min(6).max(16),
+  relation: z.string().trim().max(50).optional().default("Phụ huynh"),
+});
+
+// ===== Lesson =====
+export const createLessonSchema = z.object({
+  title: z.string().trim().min(2).max(200),
+  description: z.string().trim().max(1000).optional().nullable(),
+  order: z.number().int().min(0).optional(),
+});
+
+export const createLessonItemSchema = z.object({
+  title: z.string().trim().min(2).max(200),
+  type: z.nativeEnum(LessonItemType),
+  url: z.string().trim().url("URL không hợp lệ").optional().nullable().or(z.literal("")),
+  fileKey: z.string().trim().max(500).optional().nullable(),
+  order: z.number().int().min(0).optional(),
+});
+
+// ===== Admin =====
+export const adminUpdateUserSchema = z.object({
+  role: z.nativeEnum(Role).optional(),
+  isLocked: z.boolean().optional(),
+});
+
+export const adminParentLinkSchema = z.object({
+  parentId: z.string().min(1),
+  studentId: z.string().min(1),
+  relation: z.string().trim().max(50).optional().default("Phụ huynh"),
+});

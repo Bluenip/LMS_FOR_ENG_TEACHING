@@ -1,0 +1,437 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+  PARENT
+}
+
+enum EnrollmentStatus {
+  PENDING
+  ACTIVE
+}
+
+enum LessonItemType {
+  PDF
+  VIDEO
+  AUDIO
+  LINK
+}
+
+enum FieldPlacement {
+  OVERLAY
+  ANSWER_SHEET
+}
+
+enum FieldType {
+  TEXT
+  NUMBER
+  MULTIPLE_CHOICE
+  MULTI_SELECT
+  TRUE_FALSE
+  DROPDOWN
+  CHECKBOX
+  ESSAY
+}
+
+enum SkillTag {
+  GRAMMAR
+  VOCABULARY
+  READING
+  LISTENING
+  WRITING
+  SPEAKING
+}
+
+enum ShowResultMode {
+  NEVER
+  AFTER_SUBMIT
+  AFTER_DUE
+}
+
+enum LeaderboardMode {
+  OFF
+  AFTER_SUBMIT
+  AFTER_DUE
+}
+
+enum ProctorMode {
+  OFF
+  MONITOR
+  LOCKDOWN
+  SEB
+}
+
+enum ViolationAction {
+  WARN
+  LOCK
+  RESTART
+  AUTO_SUBMIT
+}
+
+enum ProctorEventType {
+  TAB_HIDDEN
+  WINDOW_BLUR
+  FULLSCREEN_EXIT
+  COPY
+  PASTE
+  CUT
+  CONTEXT_MENU
+  PRINT_SCREEN_KEY
+  DEVTOOLS_SUSPECTED
+  MULTI_SCREEN
+  MULTI_SESSION
+  NETWORK_OFFLINE
+  RESIZE_SUSPICIOUS
+}
+
+enum SubmissionStatus {
+  IN_PROGRESS
+  SUBMITTED
+  GRADED
+}
+
+enum NotificationType {
+  ASSIGNMENT_CREATED
+  SUBMISSION_GRADED
+  ENROLLMENT_REQUEST
+  ENROLLMENT_APPROVED
+  POST_CREATED
+  PROCTOR_REMINDER
+  PARENT_ALERT
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  phone        String?  @unique
+  name         String
+  passwordHash String
+  role         Role     @default(STUDENT)
+  avatarUrl    String?
+  isLocked     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  classesTaught       Class[]            @relation("TeacherClasses")
+  enrollments         Enrollment[]
+  posts               Post[]
+  comments            Comment[]
+  worksheets          Worksheet[]        @relation("WorksheetOwner")
+  submissions         Submission[]       @relation("StudentSubmissions")
+  unlockedSubmissions Submission[]       @relation("UnlockedByTeacher")
+  notifications       Notification[]
+  parentLinksAsParent ParentLink[]       @relation("ParentUser")
+  parentLinksAsChild  ParentLink[]       @relation("StudentUser")
+  parentInviteCodes   ParentInviteCode[]
+}
+
+model ParentLink {
+  id         String    @id @default(cuid())
+  parentId   String
+  studentId  String
+  relation   String?
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  parent  User @relation("ParentUser", fields: [parentId], references: [id], onDelete: Cascade)
+  student User @relation("StudentUser", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([parentId, studentId])
+  @@index([studentId])
+}
+
+model ParentInviteCode {
+  id        String    @id @default(cuid())
+  studentId String
+  code      String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+}
+
+model Class {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  joinCode        String   @unique
+  teacherId       String
+  archived        Boolean  @default(false)
+  requireApproval Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  teacher     User         @relation("TeacherClasses", fields: [teacherId], references: [id], onDelete: Cascade)
+  enrollments Enrollment[]
+  posts       Post[]
+  lessons     Lesson[]
+  assignments Assignment[]
+
+  @@index([teacherId])
+}
+
+model Enrollment {
+  id        String           @id @default(cuid())
+  classId   String
+  studentId String
+  status    EnrollmentStatus @default(ACTIVE)
+  joinedAt  DateTime         @default(now())
+
+  class   Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student User  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, studentId])
+  @@index([studentId])
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  classId   String
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  class    Class     @relation(fields: [classId], references: [id], onDelete: Cascade)
+  author   User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments Comment[]
+
+  @@index([classId, createdAt])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  postId    String
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+}
+
+model Lesson {
+  id          String   @id @default(cuid())
+  classId     String
+  title       String
+  description String?
+  order       Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  class Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  items LessonItem[]
+
+  @@index([classId, order])
+}
+
+model LessonItem {
+  id        String         @id @default(cuid())
+  lessonId  String
+  title     String
+  type      LessonItemType
+  fileKey   String?
+  url       String?
+  order     Int
+  createdAt DateTime       @default(now())
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId, order])
+}
+
+model Worksheet {
+  id           String   @id @default(cuid())
+  ownerId      String
+  title        String
+  instructions String?
+  pdfFileKey   String?
+  pageCount    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  owner       User            @relation("WorksheetOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  pages       WorksheetPage[]
+  fields      Field[]
+  assignments Assignment[]
+
+  @@index([ownerId])
+}
+
+model WorksheetPage {
+  id          String @id @default(cuid())
+  worksheetId String
+  pageIndex   Int
+  widthPt     Float
+  heightPt    Float
+
+  worksheet Worksheet @relation(fields: [worksheetId], references: [id], onDelete: Cascade)
+
+  @@unique([worksheetId, pageIndex])
+}
+
+model Field {
+  id          String         @id @default(cuid())
+  worksheetId String
+  placement   FieldPlacement
+  type        FieldType
+  label       String
+  prompt      String?
+  explanation String?
+  skillTag    SkillTag?
+  order       Int
+  points      Float          @default(1)
+
+  // Normalized coordinates 0..1 relative to page dimensions (OVERLAY only)
+  pageIndex Int?
+  x         Float?
+  y         Float?
+  w         Float?
+  h         Float?
+  style     Json?
+
+  options     Json?
+  answerKey   Json
+  gradingOpts Json?
+
+  worksheet Worksheet @relation(fields: [worksheetId], references: [id], onDelete: Cascade)
+  answers   Answer[]
+
+  @@index([worksheetId, order])
+}
+
+model Assignment {
+  id            String         @id @default(cuid())
+  classId       String
+  worksheetId   String
+  title         String
+  openAt        DateTime?
+  dueAt         DateTime?
+  timeLimitMin  Int?
+  maxAttempts   Int            @default(1)
+  shuffle       Boolean        @default(false)
+  showResult    ShowResultMode @default(AFTER_SUBMIT)
+  showAnswerKey Boolean        @default(false)
+  allowLate     Boolean        @default(false)
+
+  // Leaderboard
+  showLeaderboard      LeaderboardMode @default(AFTER_DUE)
+  leaderboardAnon      Boolean         @default(false)
+  leaderboardScoreRule String          @default("BEST") // "BEST" | "LAST"
+
+  // Proctoring
+  proctorMode            ProctorMode     @default(OFF)
+  violationAction        ViolationAction @default(WARN)
+  maxViolations          Int             @default(3)
+  requireFullscreen      Boolean         @default(false)
+  blockCopyPaste         Boolean         @default(false)
+  sebConfigKeyHash       String?
+  shareProctorWithParent Boolean         @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  class       Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  worksheet   Worksheet    @relation(fields: [worksheetId], references: [id], onDelete: Cascade)
+  submissions Submission[]
+
+  @@index([classId])
+  @@index([worksheetId])
+}
+
+model Submission {
+  id              String           @id @default(cuid())
+  assignmentId    String
+  studentId       String
+  attemptNo       Int
+  status          SubmissionStatus @default(IN_PROGRESS)
+  startedAt       DateTime         @default(now())
+  submittedAt     DateTime?
+  isLate          Boolean          @default(false)
+  autoScore       Float?
+  manualScore     Float?
+  totalScore      Float?
+  maxScore        Float
+  questionOrder   Json?
+  teacherComment  String?
+
+  // Proctoring tracking
+  violationCount  Int       @default(0)
+  flagged         Boolean   @default(false)
+  lockedAt        DateTime?
+  attemptVersion  Int       @default(0)
+  restartCount    Int       @default(0)
+  rulesAcceptedAt DateTime?
+  unlockedById    String?
+  attemptToken    String?
+  lastHeartbeatAt DateTime?
+
+  assignment    Assignment     @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student       User           @relation("StudentSubmissions", fields: [studentId], references: [id], onDelete: Cascade)
+  unlockedBy    User?          @relation("UnlockedByTeacher", fields: [unlockedById], references: [id], onDelete: SetNull)
+  answers       Answer[]
+  proctorEvents ProctorEvent[]
+
+  @@unique([assignmentId, studentId, attemptNo])
+  @@index([studentId])
+  @@index([assignmentId, status])
+}
+
+model ProctorEvent {
+  id           String           @id @default(cuid())
+  submissionId String
+  type         ProctorEventType
+  at           DateTime         @default(now())
+  durationMs   Int?
+  meta         Json?
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId, at])
+}
+
+model Answer {
+  id           String   @id @default(cuid())
+  submissionId String
+  fieldId      String
+  value        Json
+  isCorrect    Boolean?
+  score        Float?
+  isOverridden Boolean  @default(false)
+  teacherNote  String?
+  updatedAt    DateTime @updatedAt
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  field      Field      @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, fieldId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  link      String?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read, createdAt])
+}

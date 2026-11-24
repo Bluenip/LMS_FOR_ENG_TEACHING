@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+
+<html lang="vi"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+          "surface": "#f8f9ff",
+          "on-secondary-fixed-variant": "#783200",
+          "on-primary-container": "#dad7ff",
+          "inverse-surface": "#213145",
+          "on-primary-fixed-variant": "#3323cc",
+          "secondary-container": "#fd761a",
+          "inverse-primary": "#c3c0ff",
+          "error": "#ba1a1a",
+          "surface-container": "#e5eeff",
+          "secondary-fixed": "#ffdbca",
+          "primary-fixed-dim": "#c3c0ff",
+          "tertiary-container": "#006e4b",
+          "surface-tint": "#4d44e3",
+          "surface-variant": "#d3e4fe",
+          "primary": "#3525cd",
+          "surface-bright": "#f8f9ff",
+          "on-surface": "#0b1c30",
+          "on-surface-variant": "#464555",
+          "on-background": "#0b1c30",
+          "on-error-container": "#93000a",
+          "surface-dim": "#cbdbf5",
+          "secondary-fixed-dim": "#ffb690",
+          "on-primary-fixed": "#0f0069",
+          "inverse-on-surface": "#eaf1ff",
+          "surface-container-lowest": "#ffffff",
+          "surface-container-high": "#dce9ff",
+          "tertiary": "#005338",
+          "tertiary-fixed": "#6ffbbe",
+          "surface-container-highest": "#d3e4fe",
+          "surface-container-low": "#eff4ff",
+          "error-container": "#ffdad6",
+          "on-secondary-fixed": "#341100",
+          "on-secondary": "#ffffff",
+          "on-tertiary-container": "#67f4b7",
+          "tertiary-fixed-dim": "#4edea3",
+          "on-tertiary": "#ffffff",
+          "secondary": "#9d4300",
+          "on-tertiary-fixed": "#002113",
+          "outline-variant": "#c7c4d8",
+          "background": "#f8f9ff",
+          "on-secondary-container": "#5c2400",
+          "primary-container": "#4f46e5",
+          "on-primary": "#ffffff",
+          "on-tertiary-fixed-variant": "#005236",
+          "primary-fixed": "#e2dfff",
+          "outline": "#777587",
+          "on-error": "#ffffff"
+        },
+        "borderRadius": {
+          "DEFAULT": "0.25rem",
+          "lg": "0.5rem",
+          "xl": "0.75rem",
+          "full": "9999px"
+        },
+        "spacing": {
+          "space-sm": "0.5rem",
+          "margin-mobile": "1rem",
+          "space-xl": "2.5rem",
+          "space-md": "1rem",
+          "space-xs": "0.25rem",
+          "gutter": "1.5rem",
+          "space-lg": "1.5rem",
+          "margin": "2rem",
+          "gutter-mobile": "1rem"
+        },
+        "fontFamily": {
+          "headline-lg": ["Inter"],
+          "label-sm": ["Inter"],
+          "headline-lg-mobile": ["Inter"],
+          "body-md": ["Inter"],
+          "headline-sm": ["Inter"],
+          "body-sm": ["Inter"],
+          "headline-md": ["Inter"],
+          "display-lg": ["Inter"],
+          "body-lg": ["Inter"],
+          "label-lg": ["Inter"],
+          "label-md": ["Inter"]
+        },
+        "fontSize": {
+          "headline-lg": ["2.25rem", {"lineHeight": "2.75rem", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+          "label-sm": ["0.6875rem", {"lineHeight": "0.875rem", "letterSpacing": "0.025em", "fontWeight": "500"}],
+          "headline-lg-mobile": ["1.75rem", {"lineHeight": "2.25rem", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+          "body-md": ["1rem", {"lineHeight": "1.5rem", "fontWeight": "400"}],
+          "headline-sm": ["1.25rem", {"lineHeight": "1.75rem", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+          "body-sm": ["0.875rem", {"lineHeight": "1.25rem", "fontWeight": "400"}],
+          "headline-md": ["1.5rem", {"lineHeight": "2rem", "letterSpacing": "-0.015em", "fontWeight": "600"}],
+          "display-lg": ["3rem", {"lineHeight": "3.75rem", "letterSpacing": "-0.025em", "fontWeight": "700"}],
+          "body-lg": ["1.125rem", {"lineHeight": "1.75rem", "fontWeight": "400"}],
+          "label-lg": ["0.875rem", {"lineHeight": "1.25rem", "letterSpacing": "0.01em", "fontWeight": "600"}],
+          "label-md": ["0.75rem", {"lineHeight": "1.0rem", "letterSpacing": "0.02em", "fontWeight": "600"}]
+        }
+      }
+    }
+  }</script></head><body class="bg-surface font-body-md text-body-md text-on-surface min-h-screen"><header class="fixed top-0 left-0 right-0 z-50 bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="h-16 max-w-[1440px] mx-auto px-margin flex items-center justify-between gap-gutter"><div class="flex items-center gap-space-xl"><div class="flex items-center gap-space-sm cursor-pointer select-none"><div class="w-9 h-9 rounded-xl bg-primary-container flex items-center justify-center text-on-primary shadow-sm"><span class="material-symbols-outlined text-[22px]">auto_stories</span></div><span class="font-headline-sm text-headline-sm tracking-tight text-primary font-bold">EngClass</span></div><nav class="hidden lg:flex items-center gap-space-xs" data-active-classes="bg-primary-container text-on-primary font-semibold"><a class="px-space-md py-space-sm rounded-lg font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors" data-path="bai-tap" href="#">Bài tập</a><a class="px-space-md py-space-sm rounded-lg font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors" data-path="lop-hoc" href="#">Lớp học</a><a class="px-space-md py-space-sm rounded-lg font-label-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors" data-path="xep-hang" href="#">Xếp hạng</a><a class="px-space-md py-space-sm rounded-lg font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors" data-path="ket-qua" href="#">Kết quả</a></nav></div><div class="flex items-center gap-space-md"><div class="hidden md:flex items-center gap-space-sm bg-surface-container-low px-space-md py-space-xs rounded-xl text-on-surface-variant w-56 cursor-pointer"><span class="material-symbols-outlined text-[18px]">search</span><span class="font-body-sm text-body-sm flex-1 text-on-surface-variant">Tìm kiếm...</span><kbd class="bg-surface-container-lowest text-on-surface-variant px-space-xs py-0.5 rounded text-[11px] font-mono shadow-[0_1px_2px_rgba(0,0,0,0.05)]">⌘K</kbd></div><button class="relative p-space-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low rounded-xl transition-colors"><span class="material-symbols-outlined text-[22px]">notifications</span><span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-secondary-container"></span></button><div class="flex items-center gap-space-sm pl-space-sm"><div class="text-right hidden sm:block"><p class="font-label-lg text-label-lg text-on-surface leading-tight">Nguyễn Văn Minh</p><p class="font-label-sm text-label-sm text-on-surface-variant">Lớp 12A1</p></div><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></div></header><main class="w-full pt-16 bg-surface"><div class="flex flex-col w-full pb-16">
+<!-- Top Navigation Sub-Bar & Breadcrumbs -->
+<section class="w-full bg-surface-container-lowest shadow-sm mb-space-lg">
+<div class="max-w-[1440px] mx-auto px-margin py-space-md flex flex-col lg:flex-row lg:items-center justify-between gap-space-md">
+<!-- Title & Breadcrumb Block -->
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center gap-space-xs text-on-surface-variant font-label-md text-label-md">
+<span class="hover:text-primary cursor-pointer transition-colors">Lớp học 12A1</span>
+<span class="material-symbols-outlined text-[14px]">chevron_right</span>
+<span class="text-on-surface font-semibold">Bảng vinh danh & Xếp hạng</span>
+</div>
+<div class="flex items-center gap-space-md">
+<h1 class="font-headline-md text-headline-md text-on-surface font-semibold tracking-tight">Bảng xếp hạng - Lớp 12A1</h1>
+<span class="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed-variant font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+            Niên khóa 2024 - 2025
+          </span>
+</div>
+</div>
+<!-- Controls Block -->
+<div class="flex flex-wrap items-center gap-space-md">
+<!-- Segmented Tab Pills -->
+<div class="bg-surface-container-low p-1 rounded-xl flex items-center shadow-inner">
+<button class="bg-primary text-on-primary px-space-md py-1.5 rounded-lg font-label-md text-label-md font-semibold shadow-sm transition-all">
+            Theo bài tập
+          </button>
+<button class="text-on-surface-variant hover:text-on-surface px-space-md py-1.5 rounded-lg font-label-md text-label-md transition-all">
+            Toàn lớp (Học kỳ)
+          </button>
+</div>
+<!-- Assignment Selector Dropdown -->
+<div class="relative inline-flex items-center">
+<button class="bg-surface-container-lowest text-on-surface px-3.5 py-1.5 rounded-xl shadow-sm hover:shadow transition-all flex items-center gap-space-sm font-label-lg text-label-lg bg-white">
+<span class="material-symbols-outlined text-primary text-[18px]">assignment</span>
+<span class="truncate max-w-[240px]">Unit 7: The World of Work - Đề số 1</span>
+<span class="material-symbols-outlined text-on-surface-variant text-[18px]">expand_more</span>
+</button>
+</div>
+<!-- Info Pill Note -->
+<div class="hidden xl:flex items-center gap-1.5 text-on-surface-variant bg-surface-container-low px-3 py-1.5 rounded-xl font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-secondary-container text-[16px]">info</span>
+<span>Cùng điểm xếp theo thời gian nộp sớm hơn</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Main Leaderboard Body -->
+<div class="max-w-[1440px] mx-auto px-margin w-full flex flex-col gap-space-xl">
+<!-- Top 3 Podium (Bục vinh danh danh dự) -->
+<div class="w-full bg-surface-container-lowest rounded-2xl shadow-sm p-space-lg relative overflow-hidden">
+<!-- Ambient Background Glow -->
+<div class="absolute -top-24 left-1/2 -translate-x-1/2 w-[520px] h-48 bg-primary/5 blur-3xl pointer-events-none rounded-full"></div>
+<div class="flex items-center justify-between mb-space-lg relative z-10">
+<div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-[24px]">military_tech</span>
+<h2 class="font-headline-sm text-headline-sm text-on-surface font-semibold">Bục vinh quang kỳ kiểm tra</h2>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Top 3 học sinh có kết quả xuất sắc nhất trong đề thi Unit 7</p>
+</div>
+<div class="flex items-center gap-2 bg-secondary-fixed text-on-secondary-fixed-variant px-3 py-1 rounded-full font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>
+<span>Điểm tuyệt đối: 1 học sinh</span>
+</div>
+</div>
+<!-- Podium Cards Layout -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-space-lg items-end pt-4 pb-2 relative z-10">
+<!-- 2nd Place: Silver (Left) -->
+<div class="flex flex-col items-center order-2 md:order-1 group">
+<div class="relative mb-3 flex flex-col items-center">
+<div class="w-6 h-6 rounded-full bg-surface-container-highest text-on-surface-variant flex items-center justify-center font-label-sm text-label-sm font-semibold mb-1 shadow-sm">
+              2
+            </div>
+<div class="relative w-20 h-20 rounded-full p-1 bg-gradient-to-tr from-outline-variant via-surface-container to-outline-variant shadow-md">
+<img class="w-full h-full rounded-full object-cover" data-alt="Portrait photo of a smiling Vietnamese female high school student in pristine white uniform looking confident and sharp, soft studio lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBkLgmNTkCp-aLU37kx3BKqA-48TDeGpRK-MzDlKPnjNV5tt9Evie2kWrc0DSxr-7rNFYpQMjZwX2Q6bjwo_nNN_oQis2MGK5k8Dat6EjL3xQNtyLjNVwoxyBuzlB_iIErWuYfmqVJmiM7TtEalp9pCTPzSatAMfod8geV-fdTblPbC0bFZcRSbOYN0ellMeupn98i7twxeuqCiL3xtjTmG9oKJourDYTSwAHB09lOV"/>
+</div>
+</div>
+<div class="w-full bg-surface-container-low rounded-2xl p-space-md text-center flex flex-col items-center shadow-sm group-hover:shadow-md transition-shadow">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm mb-1.5 font-semibold">
+              Á Quân • Hạng 2
+            </span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold truncate max-w-full">Trần Thị Mai</h3>
+<div class="my-2 flex items-baseline gap-1 text-primary">
+<span class="font-headline-lg text-headline-lg font-bold">9.75</span>
+<span class="font-label-md text-label-md text-on-surface-variant">/ 10</span>
+</div>
+<div class="grid grid-cols-2 gap-2 w-full pt-2 bg-surface-container-lowest rounded-xl p-2 mt-1">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Thời gian</span>
+<span class="font-label-lg text-label-lg text-on-surface font-semibold">28:15</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Chính xác</span>
+<span class="font-label-lg text-label-lg text-tertiary font-semibold">39/40 câu</span>
+</div>
+</div>
+</div>
+</div>
+<!-- 1st Place: Gold (Center - Elevated) -->
+<div class="flex flex-col items-center order-1 md:order-2 -mt-4 group">
+<div class="relative mb-3 flex flex-col items-center">
+<!-- Crown Badge -->
+<div class="flex items-center justify-center text-secondary-container mb-0.5 animate-bounce">
+<span class="material-symbols-outlined text-[32px]" style="font-variation-settings: 'FILL' 1;">crown</span>
+</div>
+<div class="relative w-24 h-24 rounded-full p-1.5 bg-gradient-to-tr from-secondary-container via-secondary-fixed to-secondary shadow-lg">
+<img class="w-full h-full rounded-full object-cover" data-alt="Close up portrait of an intelligent Vietnamese male high school student with modern hairstyle wearing crisp school uniform smiling proudly, educational background, natural illumination" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAvlRthoJlcPWUdlrYX6Oo0-6L3pRHhC3ovQQtSATohgcCdnXfpR2YML8oDFlwkmmUh3St-EknDihwXlecG0jtBhQaVTTh32He3nQIE66hunUsqZO5V83_nfQXgkWprdFvzd_V5YoHf-iIzBq1dbi7f7NehDnuIwQ9zXWZlQt5lCWwiDODq5gIwyOTJ4sjzeIjDMBvaPTQQITzi_Xl08emU7Rf9ubYxnaNersoGJBs-"/>
+<div class="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-secondary-container text-on-secondary flex items-center justify-center font-label-md text-label-md font-bold shadow-md">
+                1
+              </div>
+</div>
+</div>
+<div class="w-full bg-surface-container rounded-2xl p-space-md text-center flex flex-col items-center shadow-md ring-2 ring-primary/10 group-hover:shadow-xl transition-shadow relative overflow-hidden">
+<div class="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-secondary via-secondary-container to-secondary"></div>
+<span class="inline-flex items-center gap-1 px-3 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm mb-1.5 font-semibold">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">grade</span>
+              Quán Quân • Hạng 1
+            </span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold truncate max-w-full">Lê Hoàng Long</h3>
+<div class="my-2 flex items-baseline gap-1 text-secondary-container">
+<span class="font-display-lg text-display-lg font-bold leading-none">10.0</span>
+<span class="font-label-md text-label-md text-on-surface-variant font-semibold">/ 10</span>
+</div>
+<div class="grid grid-cols-2 gap-2 w-full pt-2 bg-surface-container-lowest rounded-xl p-2.5 mt-1 shadow-sm">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Thời gian hoàn thành</span>
+<span class="font-label-lg text-label-lg text-on-surface font-semibold">24:40</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Độ chuẩn xác</span>
+<span class="font-label-lg text-label-lg text-tertiary font-semibold">40/40 (100%)</span>
+</div>
+</div>
+</div>
+</div>
+<!-- 3rd Place: Bronze (Right) -->
+<div class="flex flex-col items-center order-3 group">
+<div class="relative mb-3 flex flex-col items-center">
+<div class="w-6 h-6 rounded-full bg-secondary-fixed-dim text-on-secondary-fixed flex items-center justify-center font-label-sm text-label-sm font-semibold mb-1 shadow-sm">
+              3
+            </div>
+<div class="relative w-20 h-20 rounded-full p-1 bg-gradient-to-tr from-secondary-fixed via-outline-variant to-secondary-fixed shadow-md">
+<img class="w-full h-full rounded-full object-cover" data-alt="Portrait of an energetic young Vietnamese female student with eyeglasses and cheerful expression in modern classroom setting, soft warm lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBYEkGoIxHRNA_9vH08l7F79hq6ZbWlqX2EKIJlnTW_v70D5iTHwPF3uiJp7LT4pxdwyduzZg1U0uSzP7Up8IAbbVk-uY5jhlbnfXYi_zX_AQIvwaOqfisAH2VXXbbixWcT1u_DV9bqog-bwt280UaRcRIseB_v0FRLF2q_wfB2pgrQZ3ma99PAJdoDT3zvF2j7s9gj7gB_4VSvDqFXg_Hgj7Vek9PVvPsJ-z1gGM9g"/>
+</div>
+</div>
+<div class="w-full bg-surface-container-low rounded-2xl p-space-md text-center flex flex-col items-center shadow-sm group-hover:shadow-md transition-shadow">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm mb-1.5 font-semibold">
+              Hạng Ba
+            </span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold truncate max-w-full">Phạm Minh Anh</h3>
+<div class="my-2 flex items-baseline gap-1 text-primary">
+<span class="font-headline-lg text-headline-lg font-bold">9.50</span>
+<span class="font-label-md text-label-md text-on-surface-variant">/ 10</span>
+</div>
+<div class="grid grid-cols-2 gap-2 w-full pt-2 bg-surface-container-lowest rounded-xl p-2 mt-1">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Thời gian</span>
+<span class="font-label-lg text-label-lg text-on-surface font-semibold">31:20</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Chính xác</span>
+<span class="font-label-lg text-label-lg text-tertiary font-semibold">38/40 câu</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Ranked Table: Bảng thành tích chi tiết -->
+<div class="w-full bg-surface-container-lowest rounded-2xl shadow-sm overflow-hidden flex flex-col">
+<!-- Table Header Bar -->
+<div class="px-space-lg py-space-md bg-surface-container-low flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-primary text-[20px]">format_list_numbered</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold">Bảng thành tích chi tiết</h3>
+<span class="text-on-surface-variant font-body-sm text-body-sm">(Tổng số: 40 học sinh)</span>
+</div>
+<div class="flex items-center gap-space-sm">
+<button class="bg-surface-container-lowest hover:bg-surface-container px-3 py-1.5 rounded-lg text-on-surface font-label-md text-label-md flex items-center gap-1 shadow-sm transition-colors">
+<span class="material-symbols-outlined text-[16px]">file_download</span>
+<span>Xuất bảng điểm</span>
+</button>
+<button class="bg-surface-container-lowest hover:bg-surface-container p-1.5 rounded-lg text-on-surface-variant shadow-sm transition-colors">
+<span class="material-symbols-outlined text-[18px]">filter_list</span>
+</button>
+</div>
+</div>
+<!-- Data Table -->
+<div class="overflow-x-auto w-full">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low/60 text-on-surface-variant font-label-md text-label-md uppercase tracking-wider">
+<th class="py-3.5 px-space-md text-center w-20" scope="col">Hạng</th>
+<th class="py-3.5 px-space-md" scope="col">Học sinh</th>
+<th class="py-3.5 px-space-md text-center" scope="col">Điểm số</th>
+<th class="py-3.5 px-space-md text-center" scope="col">Thời gian làm bài</th>
+<th class="py-3.5 px-space-md text-center" scope="col">Số câu đúng</th>
+<th class="py-3.5 px-space-md text-center" scope="col">Xu hướng</th>
+</tr>
+</thead>
+<tbody class="divide-y-0 font-body-md text-body-md text-on-surface">
+<!-- Row 1 -->
+<tr class="bg-surface-container-lowest hover:bg-surface-container-low transition-colors">
+<td class="py-3.5 px-space-md text-center font-semibold">
+<span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-md text-label-md">1</span>
+</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded-full overflow-hidden shadow-sm flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="Portrait of an intelligent Vietnamese high school boy smiling brightly in uniform" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAQJf79RmpXQVAfVEG57MFLypLazbnN10lVbUyou9PuOCULK6P0llHp_s_Fy_gomXpEsLoKrZ_cyV2-wr2INDVAVPDK1qf_o8PGnMXBB8gvTRM0VIz1Bscqt6kYLNfpegcgKPel3briNGg5KUS6miQOvh9Qx-uHEjtHytlTDL95IKPtk0-X4hHmtFhLPv4e4t4Xz8wPNJMyk5SFIa1uWkhcmowZk2xF2I5vN8Dg331P"/>
+</div>
+<div>
+<p class="font-label-lg text-label-lg font-semibold text-on-surface">Lê Hoàng Long</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">SBD: 12A1-08</p>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="font-headline-sm text-headline-sm font-semibold text-secondary-container">10.0</span>
+</td>
+<td class="py-3.5 px-space-md text-center text-on-surface font-label-lg text-label-lg">24:40</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-block px-2.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-label-md text-label-md font-semibold">40/40</span>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-flex items-center gap-0.5 text-tertiary font-label-md text-label-md font-semibold">
+<span class="material-symbols-outlined text-[16px]">arrow_upward</span> +2
+                </span>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="bg-surface-container-lowest hover:bg-surface-container-low transition-colors">
+<td class="py-3.5 px-space-md text-center font-semibold">
+<span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-surface-container text-on-surface-variant font-label-md text-label-md">2</span>
+</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded-full overflow-hidden shadow-sm flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="Portrait of an elegant Vietnamese school girl with neat uniform and ponytail" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCpH0gdf6XvldalQFveNhfdpvusGfW-8rWxZYI-xOchQq0tQTyEdnaUDRsh7AoujG3cCODJDl_xTW1SVl-XnGXR_8Ux4G83RQgcWiHtbxdmVOHKzC2G-Z5IhiDg0U99LnKVRn_7hPAqQ2WJtE1pZBnykpX6JhNwD7u9u5rPymVPcqn9yS5bmDBRIeHn0Xd1wR2CycWe3n5KA76ATyoYHFPOqCGArSaFJ0SBrWno-ccK"/>
+</div>
+<div>
+<p class="font-label-lg text-label-lg font-semibold text-on-surface">Trần Thị Mai</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">SBD: 12A1-19</p>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="font-headline-sm text-headline-sm font-semibold text-primary">9.75</span>
+</td>
+<td class="py-3.5 px-space-md text-center text-on-surface font-label-lg text-label-lg">28:15</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-block px-2.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-label-md text-label-md font-semibold">39/40</span>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-flex items-center gap-0.5 text-tertiary font-label-md text-label-md font-semibold">
+<span class="material-symbols-outlined text-[16px]">arrow_upward</span> +1
+                </span>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="bg-surface-container-lowest hover:bg-surface-container-low transition-colors">
+<td class="py-3.5 px-space-md text-center font-semibold">
+<span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-secondary-fixed-dim text-on-secondary-fixed font-label-md text-label-md">3</span>
+</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded-full overflow-hidden shadow-sm flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="Portrait of a cheerful female Vietnamese student in white uniform wearing round glasses" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAARnO-OJWIMLNnkvEOIHb4eq2qSbjRN5Lin2ikjz4u_uMaGdqCV0UV_-cyBoKicE365VX1PfRrROfGRE_YGlf_8vQzn65u7kOmR0EQQuZFW2QrKwo3_ch3Bllimwrx74UH-RXJc3igHLKFODrmZCrz4TG6qU74De7PFOal9umK_TgJ-R2GwWyeuJpPqojILR1XLIbKa5a59unb041y5wtNWyiHP4FF8lhLKr99BQ7d"/>
+</div>
+<div>
+<p class="font-label-lg text-label-lg font-semibold text-on-surface">Phạm Minh Anh</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">SBD: 12A1-03</p>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="font-headline-sm text-headline-sm font-semibold text-primary">9.50</span>
+</td>
+<td class="py-3.5 px-space-md text-center text-on-surface font-label-lg text-label-lg">31:20</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-block px-2.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-label-md text-label-md font-semibold">38/40</span>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-flex items-center gap-0.5 text-on-surface-variant font-label-md text-label-md">
+<span class="material-symbols-outlined text-[16px]">trending_flat</span> 0
+                </span>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="bg-surface-container-lowest hover:bg-surface-container-low transition-colors">
+<td class="py-3.5 px-space-md text-center font-semibold text-on-surface-variant">4</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded-full overflow-hidden shadow-sm flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="Vietnamese girl high school student sitting at classroom desk, soft daylight" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBxGbZlgZVPr1g4RDnGcoYJ-pS3Acte2gh4ozOeg-2VYeA8BfN8oYsf68ksOCgUGWk8trCnxqFF5_6TR4V5_nUQHdRkU6Kq8xoa55j1-Mh7LLTR9K_Vsqh-_SiWrluCm3wm9LYZDTRPdGGHLwpcDqeQ7GEvrqO7uwpXZFTd9mhqcd8PihlSDPZ4drZfSNLK09BU7S5dAmGaR2VozQuD0HoyLEW4KbaDmfyMBa4-ZpbS"/>
+</div>
+<div>
+<p class="font-label-lg text-label-lg font-semibold text-on-surface">Vũ Thu Hà</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">SBD: 12A1-07</p>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="font-headline-sm text-headline-sm font-semibold text-on-surface">9.25</span>
+</td>
+<td class="py-3.5 px-space-md text-center text-on-surface font-label-lg text-label-lg">33:10</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-block px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-md text-label-md">37/40</span>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-flex items-center gap-0.5 text-error font-label-md text-label-md font-semibold">
+<span class="material-symbols-outlined text-[16px]">arrow_downward</span> -1
+                </span>
+</td>
+</tr>
+<!-- Row 5 -->
+<tr class="bg-surface-container-lowest hover:bg-surface-container-low transition-colors">
+<td class="py-3.5 px-space-md text-center font-semibold text-on-surface-variant">5</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded-full overflow-hidden shadow-sm flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="Portrait of an energetic Vietnamese high school male student smiling at library" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD8TyjtXZIP9lwRXmmOGzggNhDUDmOGQ6OhR1zMbj5VXzisfzfUH1bR4NWaY04-bfTt1LCfk1mIcISTLCw5ymFTM7swMVJ6v6HuWffCUdsR3nfVGUhXzUlcNpwT4jn5utfLoPHdFCmv97TSLw00gnHDpevVbc8Mxjc8cKbIElg2q8NJBYWVUAoxyTHXaoXff9C9xsWVZzXlpdRisUAiZpNYYrqLYkywBhbDm0cyJuwP"/>
+</div>
+<div>
+<p class="font-label-lg text-label-lg font-semibold text-on-surface">Đỗ Đức Trí</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">SBD: 12A1-35</p>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="font-headline-sm text-headline-sm font-semibold text-on-surface">9.00</span>
+</td>
+<td class="py-3.5 px-space-md text-center text-on-surface font-label-lg text-label-lg">34:05</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-block px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-md text-label-md">36/40</span>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-flex items-center gap-0.5 text-tertiary font-label-md text-label-md font-semibold">
+<span class="material-symbols-outlined text-[16px]">arrow_upward</span> +3
+                </span>
+</td>
+</tr>
+<!-- Row 6 -->
+<tr class="bg-surface-container-lowest hover:bg-surface-container-low transition-colors">
+<td class="py-3.5 px-space-md text-center font-semibold text-on-surface-variant">6</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded-full overflow-hidden shadow-sm flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="Portrait of gentle Vietnamese school girl in school garden" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA2rWuk9xlWK2YMFFXSqdN7nJUVA8buHdxSXvR0BL-I2cD2IzrY4ah1j4mveReH8Oe7NVURdonvq5Hg5ksnmrGYLC66MkJ0D7cq87Jwy5EmNR3lF_182lgSk8MmTzKn0BZ24VUt2BSeYfDIAlV-f9sLOi7NhHXh888kai-aTu_tysCUf2lVdReLjXFEd0SzOYEiRHMP9ifQo1jM9DsruWVcU_n4NW6Vi2fzue52sjfm"/>
+</div>
+<div>
+<p class="font-label-lg text-label-lg font-semibold text-on-surface">Nguyễn Phương Linh</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">SBD: 12A1-14</p>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="font-headline-sm text-headline-sm font-semibold text-on-surface">8.75</span>
+</td>
+<td class="py-3.5 px-space-md text-center text-on-surface font-label-lg text-label-lg">35:20</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-block px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-md text-label-md">35/40</span>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-flex items-center gap-0.5 text-on-surface-variant font-label-md text-label-md">
+<span class="material-symbols-outlined text-[16px]">trending_flat</span> 0
+                </span>
+</td>
+</tr>
+<!-- Row 7 -->
+<tr class="bg-surface-container-lowest hover:bg-surface-container-low transition-colors">
+<td class="py-3.5 px-space-md text-center font-semibold text-on-surface-variant">7</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded-full overflow-hidden shadow-sm flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="Portrait of a young Vietnamese student with headphones around neck" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAcatPRJLqjINC47ZfpxaIF4USAHz6wzpv_MJqqxWokZSDZZfyjPEMFbdmINPoRUy6G4yq6HvQY4KJvPheqM9oZ6GCyzGs-AGWqFfDOWLxzzsfXKNU1t2d6EW5BYjh2JIDJx7f4f5Ph1M5e4dPkW8XqOwJ2hAmVOLXtRZ0BLx1CMY7DQO2MQDqnNdp6k7cUBPoMKwAPKYwkzFedMabN3F6qefNSIALUJQGc4zeHbe66"/>
+</div>
+<div>
+<p class="font-label-lg text-label-lg font-semibold text-on-surface">Bùi Tuấn Kiệt</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">SBD: 12A1-11</p>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="font-headline-sm text-headline-sm font-semibold text-on-surface">8.50</span>
+</td>
+<td class="py-3.5 px-space-md text-center text-on-surface font-label-lg text-label-lg">36:45</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-block px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-md text-label-md">34/40</span>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-flex items-center gap-0.5 text-tertiary font-label-md text-label-md font-semibold">
+<span class="material-symbols-outlined text-[16px]">arrow_upward</span> +2
+                </span>
+</td>
+</tr>
+<!-- Row 8 -->
+<tr class="bg-surface-container-lowest hover:bg-surface-container-low transition-colors">
+<td class="py-3.5 px-space-md text-center font-semibold text-on-surface-variant">8</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded-full overflow-hidden shadow-sm flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="Portrait of friendly Vietnamese female student with braided hair" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDdoQsBeocAULYwziKmz8a7obpIhcsqW-DR6Xsl33ZSl0poQyPx2w8KRrA3DEq_wFA7vVNJnbdRGlPUP5v4_y_cymk-sWWSmiJHwftsITL-Pn82GUNDGDLxTjJNXEnpqc8O94LXWJg6qbhUBWeEU4Ws3_G5L9ZZnOgwlDF8ik-_uriU1upmM5ONXO-5Uc4VMW9d6mulea2gea1D5KkvM4dK5ywXthFRHJ-MBTXhtq25"/>
+</div>
+<div>
+<p class="font-label-lg text-label-lg font-semibold text-on-surface">Hoàng Bảo Ngọc</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">SBD: 12A1-22</p>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="font-headline-sm text-headline-sm font-semibold text-on-surface">8.50</span>
+</td>
+<td class="py-3.5 px-space-md text-center text-on-surface font-label-lg text-label-lg">38:12</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-block px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-md text-label-md">34/40</span>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-flex items-center gap-0.5 text-error font-label-md text-label-md font-semibold">
+<span class="material-symbols-outlined text-[16px]">arrow_downward</span> -2
+                </span>
+</td>
+</tr>
+<!-- Row 9 -->
+<tr class="bg-surface-container-lowest hover:bg-surface-container-low transition-colors">
+<td class="py-3.5 px-space-md text-center font-semibold text-on-surface-variant">9</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded-full overflow-hidden shadow-sm flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="Vietnamese teenage student in modern classroom with notebook in hand" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDT7ENjmjRHsmZvtmylpXYlI_gR9gJfmbG4cimEpQ7vJ-x-1_pRZ3LFl_S57qJSu-sNw9v5esubENuWtvHKp4E14Iefe95-B6O63VoduIGP9COCe0ZAkd-EjlnfSGgt2ItmLkMOgSh8rub64P9oFsKoyVRWZI6M7NMFW5wqwINdnVcOmQuqQX5XYhIYq-VS9WUplSST4JeM2huKPeQmpGaP1pzcuG1qeqIWlN0IlzSG"/>
+</div>
+<div>
+<p class="font-label-lg text-label-lg font-semibold text-on-surface">Đặng Quốc Huy</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">SBD: 12A1-06</p>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="font-headline-sm text-headline-sm font-semibold text-on-surface">8.25</span>
+</td>
+<td class="py-3.5 px-space-md text-center text-on-surface font-label-lg text-label-lg">37:30</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-block px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-md text-label-md">33/40</span>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-flex items-center gap-0.5 text-on-surface-variant font-label-md text-label-md">
+<span class="material-symbols-outlined text-[16px]">trending_flat</span> 0
+                </span>
+</td>
+</tr>
+<!-- Row 10 -->
+<tr class="bg-surface-container-lowest hover:bg-surface-container-low transition-colors">
+<td class="py-3.5 px-space-md text-center font-semibold text-on-surface-variant">10</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded-full overflow-hidden shadow-sm flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="Portrait of an optimistic Vietnamese girl student studying in study hall" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAaS8-0x0saskHx8Rh8YNHEXygwz-CHfeYdNZrPI3m193fqL9yJYsGfW73icbMrV-RVUOl8fXAO35TRVTnqn-sFjXlsPnSHfuSfJdsg0bDVl8hRhLMYhqueEouuKuWwHuxYy_xYqoApeM2RNVHfst1nKHinWCMtFsWSSa0Ef06e9ksLdTKTDN75MVFkOg0hWbcJ1zNYU9ba0EryZ-amuGRTc_9xcfqcu8SfpMZ8KE_A"/>
+</div>
+<div>
+<p class="font-label-lg text-label-lg font-semibold text-on-surface">Trịnh Khánh Vy</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">SBD: 12A1-38</p>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="font-headline-sm text-headline-sm font-semibold text-on-surface">8.00</span>
+</td>
+<td class="py-3.5 px-space-md text-center text-on-surface font-label-lg text-label-lg">39:15</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-block px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-md text-label-md">32/40</span>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-flex items-center gap-0.5 text-tertiary font-label-md text-label-md font-semibold">
+<span class="material-symbols-outlined text-[16px]">arrow_upward</span> +1
+                </span>
+</td>
+</tr>
+<!-- Row 11 -->
+<tr class="bg-surface-container-lowest hover:bg-surface-container-low transition-colors">
+<td class="py-3.5 px-space-md text-center font-semibold text-on-surface-variant">11</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded-full overflow-hidden shadow-sm flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="Portrait of thoughtful young Vietnamese high school male student" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDrV4sJBoCVdPU6l7FDv3Vhq206420A7191WtrkWQ4O8fyvtNX0qMFGN7KCNqfeDQYW3FAEFTch6b2g7YjMSbnnQg8mNAukpyFA7RYOPURwzKpPrQmVqAHeLwq9fucfc5AUCwVU6wXsGvnnJWB1o_H24FsIdYKQzOsXYNJl5EmRUYP8HRerWuYRQ7ZvXdJoQM7-8yfjJJBEeQ2_jm4LjS8_34MXuBFOe-knXObnCCLO"/>
+</div>
+<div>
+<p class="font-label-lg text-label-lg font-semibold text-on-surface">Võ Thành Nam</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">SBD: 12A1-25</p>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="font-headline-sm text-headline-sm font-semibold text-on-surface">7.75</span>
+</td>
+<td class="py-3.5 px-space-md text-center text-on-surface font-label-lg text-label-lg">41:00</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-block px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-md text-label-md">31/40</span>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-flex items-center gap-0.5 text-error font-label-md text-label-md font-semibold">
+<span class="material-symbols-outlined text-[16px]">arrow_downward</span> -1
+                </span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Tie-Break Rule Footer Note inside table card -->
+<div class="px-space-lg py-space-sm bg-surface-container-low text-on-surface-variant font-body-sm text-body-sm flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-primary">gavel</span>
+<span><strong>Quy tắc xếp hạng:</strong> Điểm cao hơn xếp trước. Khi cùng điểm, học sinh hoàn thành với thời gian ngắn hơn được ưu tiên xếp trên.</span>
+</div>
+<div class="hidden sm:flex items-center gap-4 text-on-surface-variant font-label-md text-label-md">
+<span>Hiển thị 11 / 40 học sinh</span>
+</div>
+</div>
+</div>
+<!-- Pinned & Highlighted Row for Logged-In Student: Nguyễn Văn Minh -->
+<div class="sticky bottom-4 z-40 bg-primary-fixed shadow-xl rounded-2xl p-space-md">
+<div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-space-md">
+<!-- Left: Student info & current badge -->
+<div class="flex items-center gap-space-md">
+<div class="w-12 h-12 rounded-full bg-primary text-on-primary flex items-center justify-center font-headline-sm text-headline-sm font-bold shadow-md flex-shrink-0">
+            12
+          </div>
+<div>
+<div class="flex items-center gap-space-sm flex-wrap">
+<span class="font-headline-sm text-headline-sm font-bold text-on-surface">Nguyễn Văn Minh</span>
+<span class="bg-primary text-on-primary text-label-sm font-label-sm font-semibold px-2.5 py-0.5 rounded-full">Bạn</span>
+<span class="text-on-primary-fixed-variant font-label-md text-label-md font-semibold">Vị trí của bạn: Hạng 12/40</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Lớp 12A1 • Mã học sinh: 12A1-20</p>
+</div>
+</div>
+<!-- Center: Detailed Test Performance for user -->
+<div class="flex items-center gap-space-lg bg-surface-container-lowest px-space-md py-2 rounded-xl shadow-sm">
+<div class="flex flex-col items-center">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Điểm số</span>
+<span class="font-headline-sm text-headline-sm font-bold text-primary">7.50</span>
+</div>
+<div class="w-[1px] h-8 bg-surface-container"></div>
+<div class="flex flex-col items-center">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Thời gian</span>
+<span class="font-label-lg text-label-lg font-semibold text-on-surface">42:10</span>
+</div>
+<div class="w-[1px] h-8 bg-surface-container"></div>
+<div class="flex flex-col items-center">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Số câu đúng</span>
+<span class="font-label-lg text-label-lg font-semibold text-tertiary">30/40</span>
+</div>
+<div class="w-[1px] h-8 bg-surface-container"></div>
+<div class="flex flex-col items-center">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Xu hướng</span>
+<span class="font-label-lg text-label-lg font-semibold text-tertiary flex items-center">
+<span class="material-symbols-outlined text-[16px]">arrow_upward</span> +3 bậc
+            </span>
+</div>
+</div>
+<!-- Right: Action & Encouragement Pill -->
+<div class="flex items-center gap-space-sm w-full lg:w-auto justify-end">
+<div class="bg-secondary-fixed text-on-secondary-fixed px-3 py-1.5 rounded-xl font-label-md text-label-md font-semibold flex items-center gap-1.5 shadow-sm">
+<span class="material-symbols-outlined text-secondary text-[18px]">bolt</span>
+<span>Chỉ cách Top 10: 0.5 điểm!</span>
+</div>
+<button class="bg-primary hover:bg-primary-container text-on-primary font-label-md text-label-md font-semibold px-space-md py-2 rounded-xl shadow-md transition-all flex items-center gap-1.5">
+<span>Xem chi tiết bài làm</span>
+<span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div></main><footer class="w-full bg-surface-container-lowest py-space-lg"><div class="max-w-[1440px] mx-auto px-margin flex flex-col sm:flex-row items-center justify-between gap-space-md"><div class="flex items-center gap-space-sm text-on-surface-variant font-body-sm text-body-sm"><span>© 2025 EngClass Education Vietnam. Bảo lưu mọi quyền.</span></div><div class="flex items-center gap-space-lg font-label-md text-label-md text-on-surface-variant"><a class="hover:text-on-surface transition-colors" href="#">Điều khoản</a><a class="hover:text-on-surface transition-colors" href="#">Bảo mật dữ liệu</a><a class="hover:text-on-surface transition-colors" href="#">Hỗ trợ học tập</a><a class="hover:text-on-surface transition-colors" href="#">Trung tâm trợ giúp</a></div></div></footer></body></html>

@@ -1,0 +1,659 @@
+<!DOCTYPE html><html lang="vi"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Worksheet Editor - EngClass</title>
+<!-- Material Symbols & Inter Font -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Merriweather:ital,wght@0,300;0,400;0,700;1,300&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<style>
+    @layer base {
+      html, body {
+        margin: 0;
+        padding: 0;
+        font-family: 'Inter', sans-serif;
+      }
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 9999px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+    }
+    .font-serif-doc {
+      font-family: 'Merriweather', Georgia, serif;
+    }
+    .canvas-grid {
+      background-color: #f8fafc;
+      background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col select-none overflow-x-hidden">
+<!-- ================= 1. PRIMARY APP HEADER ================= -->
+<header class="h-14 w-full bg-white border-b border-slate-200 sticky top-0 z-50 flex items-center px-6 justify-between flex-shrink-0">
+<!-- Left: Single EngClass Brand & Clean Primary Nav -->
+<div class="flex items-center gap-8">
+<a class="flex items-center gap-2.5 text-indigo-600 group focus:outline-none" href="#">
+<div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-sm shadow-indigo-200">
+<span class="material-symbols-outlined text-[20px]">school</span>
+</div>
+<span class="font-bold text-[19px] tracking-tight text-slate-900 group-hover:text-indigo-600 transition-colors">EngClass</span>
+</a>
+<!-- Primary Horizontal Navigation (No Wrap) -->
+<nav class="hidden lg:flex items-center gap-1">
+<a class="px-3.5 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all" href="#">Lớp học</a>
+<a class="px-3.5 py-1.5 rounded-lg text-sm font-semibold text-indigo-700 bg-indigo-50 transition-all" href="#">Worksheet</a>
+<a class="px-3.5 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all" href="#">Bài giảng</a>
+<a class="px-3.5 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all" href="#">Báo cáo &amp; Thống kê</a>
+</nav>
+</div>
+<!-- Right: Search + Quick Shortcut, Notifications, Help & Teacher Avatar -->
+<div class="flex items-center gap-3">
+<!-- Search Input with Keyboard Shortcut -->
+<div class="relative w-64 hidden xl:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+<input class="w-full pl-9 pr-14 py-1.5 text-xs bg-slate-100 border border-transparent rounded-lg placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all" placeholder="Tìm kiếm tài liệu, lớp..." type="text">
+<kbd class="absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[10px] font-medium font-sans text-slate-400 bg-white border border-slate-200 rounded shadow-xs">⌘K</kbd>
+</div>
+<div class="h-4 w-px bg-slate-200 hidden sm:block mx-1"></div>
+<!-- Notification with Unread Dot -->
+<button class="relative w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all" title="Thông báo">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+<span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-orange-500 ring-2 ring-white"></span>
+</button>
+<!-- Help Icon -->
+<button class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all" title="Trợ giúp">
+<span class="material-symbols-outlined text-[20px]">help_outline</span>
+</button>
+<!-- User Teacher Avatar & Meta -->
+<div class="flex items-center gap-2.5 pl-2 border-l border-slate-200">
+<img alt="Cô Mai Phương" class="w-8 h-8 rounded-full object-cover ring-1 ring-slate-200" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDsi3a9In1HFjiYLUj-tjVVZXK7XZx7VdSg01gH0zQzHYn864TpfkWZqzQGWRtYChExN6VfwlP1x2hTSyPj1kKZ5l6di3q6mS7YwP9CSlgyTmtbB9aunkpt9d2oV-Un4lgnQjALcRm4hwmdPciILQ5PWNpDgnbR9OD6WS3eHNMnfiWppG9jMY8QlWo4cB3eqSJWm3y6IqA9jWdh4zEaWI0-G7FQQtUe4mRDovmtwWd7">
+<div class="hidden md:flex flex-col">
+<span class="text-xs font-semibold text-slate-800 leading-tight">Cô Mai Phương</span>
+<span class="text-[10px] text-slate-500 font-normal">Giáo viên tiếng Anh</span>
+</div>
+</div>
+</div>
+</header>
+<!-- ================= 2. EDITOR SUB-HEADER / TOOLBAR ================= -->
+<div class="w-full bg-white border-b border-slate-200 sticky top-14 z-40 flex flex-col flex-shrink-0 shadow-xs">
+  <!-- Row 1: Dedicated Document Title & Meta Row -->
+  <div class="h-12 px-6 border-b border-slate-100 flex items-center justify-between gap-4">
+    <div class="flex items-center gap-3 min-w-0">
+      <button class="w-7 h-7 rounded-lg border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 flex items-center justify-center transition-all flex-shrink-0" title="Quay lại danh sách">
+        <span class="material-symbols-outlined text-[16px]">arrow_back</span>
+      </button>
+      <div class="flex items-center gap-2 min-w-0">
+        <h1 class="text-sm font-semibold text-slate-900 truncate">Unit 7: The World of Work - Đề số 1</h1>
+        <button class="text-slate-400 hover:text-indigo-600 p-0.5 rounded transition-colors flex-shrink-0" title="Đổi tên đề">
+          <span class="material-symbols-outlined text-[15px]">edit</span>
+        </button>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 text-[11px] text-slate-500 flex-shrink-0">
+      <span>Khổ A4</span>
+      <span>•</span>
+      <span>3 trang</span>
+      <span>•</span>
+      <span class="text-indigo-600 font-medium">24 ô tương tác</span>
+      <span>•</span>
+      <span class="text-slate-400">Tự động lưu 14:32</span>
+    </div>
+  </div>
+
+  <!-- Row 2: Dedicated Horizontal Tools and Action Buttons Bar -->
+  <div class="h-12 px-6 flex items-center justify-between gap-4 bg-slate-50/50">
+    <!-- Left / Center-left: Tools Row + Zoom Controls -->
+    <div class="flex items-center gap-3 overflow-x-auto">
+      <div class="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 flex-shrink-0">
+        <button class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-white/60 transition-all" title="Công cụ chọn / Di chuyển">
+          <span class="material-symbols-outlined text-[16px]">near_me</span>
+          <span>Chọn</span>
+        </button>
+        <button class="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-indigo-700 bg-white shadow-xs border border-indigo-200/50 transition-all" title="Tạo ô điền từ vào chỗ trống">
+          <span class="material-symbols-outlined text-[16px]">edit_note</span>
+          <span>Điền từ</span>
+        </button>
+        <button class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-white/60 transition-all" title="Tạo menu chọn dropdown">
+          <span class="material-symbols-outlined text-[16px]">arrow_drop_down_circle</span>
+          <span>Dropdown</span>
+        </button>
+        <button class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-white/60 transition-all" title="Tạo hộp kiểm checkbox">
+          <span class="material-symbols-outlined text-[16px]">check_box</span>
+          <span>Checkbox</span>
+        </button>
+        <button class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-white/60 transition-all" title="Tạo câu hỏi trắc nghiệm ABCD">
+          <span class="material-symbols-outlined text-[16px]">radio_button_checked</span>
+          <span>Trắc nghiệm</span>
+        </button>
+        <button class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-white/60 transition-all" title="Tạo ô tự luận">
+          <span class="material-symbols-outlined text-[16px]">notes</span>
+          <span>Tự luận</span>
+        </button>
+      </div>
+      <div class="flex items-center bg-white border border-slate-200 rounded-lg px-1.5 py-0.5 shadow-xs flex-shrink-0">
+        <button class="w-6 h-6 rounded flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all" title="Thu nhỏ">
+          <span class="material-symbols-outlined text-[15px]">remove</span>
+        </button>
+        <span class="text-[11px] font-semibold text-slate-700 px-1.5 select-none">100%</span>
+        <button class="w-6 h-6 rounded flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all" title="Phóng to">
+          <span class="material-symbols-outlined text-[15px]">add</span>
+        </button>
+        <div class="h-3 w-px bg-slate-200 mx-1"></div>
+        <button class="w-6 h-6 rounded flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all" title="Vừa chiều ngang màn hình">
+          <span class="material-symbols-outlined text-[15px]">fit_screen</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Right: Neatly Aligned Single-Line Action Buttons -->
+    <div class="flex items-center gap-2 flex-shrink-0">
+      <button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-100 transition-all">
+        <span class="material-symbols-outlined text-[16px] text-slate-500">visibility</span>
+        <span>Xem trước</span>
+      </button>
+      <button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 transition-all shadow-xs">
+        <span class="material-symbols-outlined text-[16px] text-slate-500">save</span>
+        <span>Lưu nháp</span>
+      </button>
+      <button class="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold text-white bg-orange-600 hover:bg-orange-500 active:bg-orange-700 shadow-sm shadow-orange-200 transition-all">
+        <span class="material-symbols-outlined text-[16px]">send</span>
+        <span>Giao bài</span>
+      </button>
+    </div>
+  </div>
+</div>
+<!-- ================= 3. MAIN WORKSPACE CONTAINER ================= -->
+<main class="flex-1 w-full max-w-[1440px] mx-auto flex items-start p-4 gap-4 overflow-hidden">
+<!-- ================= LEFT COLUMN: THUMBNAILS (180px - 200px) ================= -->
+<aside class="w-[190px] flex-shrink-0 flex flex-col gap-3">
+<div class="bg-white rounded-xl border border-slate-200 p-3 shadow-xs flex flex-col">
+<div class="flex items-center justify-between pb-2.5 border-b border-slate-100 mb-2.5">
+<span class="text-xs font-semibold text-slate-800">Trang tài liệu</span>
+<span class="text-[10px] font-semibold px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded">3 trang</span>
+</div>
+<div class="flex flex-col gap-2.5">
+<!-- Thumbnail 1: ACTIVE -->
+<div class="relative group cursor-pointer p-1.5 rounded-lg bg-indigo-50/50 ring-2 ring-indigo-600 transition-all shadow-xs">
+<div class="w-full aspect-[1/1.414] bg-white rounded border border-indigo-200 p-2 shadow-inner flex flex-col justify-between overflow-hidden">
+<div class="space-y-1">
+<div class="h-1.5 bg-slate-300 rounded-xs w-3/4 mb-1"></div>
+<div class="h-1 bg-slate-200 rounded-xs w-full"></div>
+<div class="h-1 bg-slate-200 rounded-xs w-5/6"></div>
+<!-- Marked interactive slots -->
+<div class="h-1.5 bg-indigo-200 border border-indigo-400 rounded-xs w-2/3 mt-2"></div>
+<div class="h-1 bg-slate-200 rounded-xs w-full mt-1"></div>
+<div class="h-1.5 bg-indigo-200 border border-indigo-400 rounded-xs w-1/2 mt-1"></div>
+</div>
+<div class="h-0.5 bg-slate-200 rounded-xs w-full"></div>
+</div>
+<div class="flex items-center justify-between mt-1 px-0.5">
+<span class="text-[11px] font-bold text-indigo-700">Trang 1</span>
+<span class="text-[10px] font-medium text-slate-500">12 ô</span>
+</div>
+</div>
+<!-- Thumbnail 2 -->
+<div class="relative group cursor-pointer p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-all">
+<div class="w-full aspect-[1/1.414] bg-white rounded border border-slate-200 p-2 shadow-xs flex flex-col justify-between overflow-hidden">
+<div class="space-y-1">
+<div class="h-1 bg-slate-200 rounded-xs w-full"></div>
+<div class="h-1 bg-slate-200 rounded-xs w-4/5"></div>
+<div class="h-1.5 bg-slate-200 border border-slate-300 rounded-xs w-2/4 mt-2"></div>
+<div class="h-1 bg-slate-200 rounded-xs w-full mt-1"></div>
+</div>
+<div class="h-0.5 bg-slate-200 rounded-xs w-full"></div>
+</div>
+<div class="flex items-center justify-between mt-1 px-0.5">
+<span class="text-[11px] font-semibold text-slate-700">Trang 2</span>
+<span class="text-[10px] font-medium text-slate-500">8 ô</span>
+</div>
+</div>
+<!-- Thumbnail 3 -->
+<div class="relative group cursor-pointer p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-all">
+<div class="w-full aspect-[1/1.414] bg-white rounded border border-slate-200 p-2 shadow-xs flex flex-col justify-between overflow-hidden">
+<div class="space-y-1">
+<div class="h-1 bg-slate-200 rounded-xs w-full"></div>
+<div class="h-1 bg-slate-200 rounded-xs w-3/4"></div>
+<div class="h-1.5 bg-slate-200 border border-slate-300 rounded-xs w-1/3 mt-2"></div>
+</div>
+<div class="h-0.5 bg-slate-200 rounded-xs w-full"></div>
+</div>
+<div class="flex items-center justify-between mt-1 px-0.5">
+<span class="text-[11px] font-semibold text-slate-700">Trang 3</span>
+<span class="text-[10px] font-medium text-slate-500">4 ô</span>
+</div>
+</div>
+<!-- Bottom Action: Thêm trang PDF -->
+<button class="w-full py-2 px-2 mt-1 rounded-lg border border-dashed border-slate-300 hover:border-indigo-400 hover:bg-indigo-50/50 text-indigo-600 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all">
+<span class="material-symbols-outlined text-[16px]">add</span>
+<span>Thêm trang PDF</span>
+</button>
+</div>
+</div>
+</aside>
+<!-- ================= CENTER COLUMN: REAL SCANNED A4 ENGLISH WORKSHEET ================= -->
+<section class="flex-1 min-w-0 bg-slate-100 canvas-grid rounded-xl border border-slate-200/80 p-6 flex justify-center overflow-auto max-h-[calc(100vh-190px)] shadow-inner">
+<!-- Authentic A4 Paper Sheet (Aspect ratio ~ 1:1.414, ~760px desktop width) -->
+<article class="relative w-full max-w-[760px] bg-white rounded-xs shadow-[0_4px_24px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)] border border-slate-200/90 p-10 md:p-12 text-slate-900 font-serif-doc select-text flex flex-col justify-between min-h-[1075px]">
+<!-- Document Scanned Top Header -->
+<div>
+<div class="flex justify-between items-start pb-4 border-b-2 border-slate-800">
+<div class="space-y-0.5">
+<p class="text-[11px] font-bold tracking-wider uppercase">SỞ GD&amp;ĐT TP. HÀ NỘI</p>
+<p class="text-[11px] font-semibold uppercase">TRƯỜNG THPT CHUYÊN NGOẠI NGỮ</p>
+<p class="text-[10px] italic text-slate-600 mt-1">Mã đề thi: 104 • Học kỳ II</p>
+</div>
+<div class="text-right space-y-0.5">
+<h2 class="text-sm font-bold uppercase tracking-wide text-slate-900">ĐỀ KIỂM TRA HỌC KỲ II</h2>
+<p class="text-xs font-semibold">MÔN: TIẾNG ANH 12</p>
+<p class="text-[10px] italic text-slate-600">Thời gian làm bài: 45 phút (không kể phát đề)</p>
+</div>
+</div>
+<!-- Student Info Header Line -->
+<div class="flex items-center justify-between text-[11px] py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-sm my-4 font-sans text-slate-700">
+<span>Họ và tên thí sinh: ................................................................................................</span>
+<span>Lớp: .........................</span>
+</div>
+<!-- Part 1 Title -->
+<div class="mt-4 mb-4">
+<h3 class="text-xs font-bold uppercase tracking-wider text-slate-900 font-sans">PART 1: VOCABULARY &amp; GRAMMAR</h3>
+<p class="text-[11px] italic text-slate-600">Mark the letter A, B, C, or D to indicate the correct answer to each of the following questions.</p>
+</div>
+<!-- Question Content Block with Precise Gaps -->
+<div class="space-y-6 text-[13px] leading-relaxed text-slate-800 font-sans">
+<!-- Question 1 -->
+<div class="relative">
+<div class="flex flex-wrap items-baseline gap-1">
+<span class="font-bold text-slate-900">Question 1:</span>
+<span>She</span>
+<!-- Exact Blank Slot on paper -->
+<span class="inline-block relative w-44 h-6 mx-1 align-middle">
+<!-- Underlying realistic dotted line on printed test paper -->
+<span class="absolute inset-x-0 bottom-1 border-b border-dotted border-slate-400"></span>
+<!-- OVERLAY ANSWER BOX 1: Selected, active state with 8 handles -->
+<div class="absolute -top-1.5 -left-1 -right-1 bottom-0 bg-indigo-600/10 border-2 border-indigo-600 rounded flex items-center justify-between px-2 cursor-pointer z-20 shadow-xs">
+<!-- Badge 1 at top-left corner -->
+<span class="absolute -top-3.5 -left-1 bg-indigo-600 text-white text-[9px] font-bold px-1.5 py-0.2 rounded shadow-xs">1</span>
+<span class="text-[11px] font-semibold text-indigo-900 truncate">has lived | 's lived</span>
+<span class="material-symbols-outlined text-[13px] text-indigo-600">edit_note</span>
+<!-- 8 Crisp White Resize Handles with Dark Borders around perimeter -->
+<span class="absolute -top-1.5 -left-1.5 w-2.5 h-2.5 bg-white border border-slate-800 rounded-xs cursor-nwse-resize shadow-xs"></span>
+<span class="absolute -top-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-white border border-slate-800 rounded-xs cursor-ns-resize shadow-xs"></span>
+<span class="absolute -top-1.5 -right-1.5 w-2.5 h-2.5 bg-white border border-slate-800 rounded-xs cursor-nesw-resize shadow-xs"></span>
+<span class="absolute top-1/2 -translate-y-1/2 -left-1.5 w-2.5 h-2.5 bg-white border border-slate-800 rounded-xs cursor-ew-resize shadow-xs"></span>
+<span class="absolute top-1/2 -translate-y-1/2 -right-1.5 w-2.5 h-2.5 bg-white border border-slate-800 rounded-xs cursor-ew-resize shadow-xs"></span>
+<span class="absolute -bottom-1.5 -left-1.5 w-2.5 h-2.5 bg-white border border-slate-800 rounded-xs cursor-nesw-resize shadow-xs"></span>
+<span class="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-white border border-slate-800 rounded-xs cursor-ns-resize shadow-xs"></span>
+<span class="absolute -bottom-1.5 -right-1.5 w-2.5 h-2.5 bg-white border border-slate-800 rounded-xs cursor-nwse-resize shadow-xs"></span>
+</div>
+</span>
+<span>in Hanoi since 2018 and has worked at three multinational corporations.</span>
+</div>
+</div>
+<!-- Question 2 -->
+<div class="relative">
+<div class="flex flex-wrap items-baseline gap-1">
+<span class="font-bold text-slate-900">Question 2:</span>
+<span>If I had known about the job vacancy earlier, I</span>
+<!-- Dropdown gap slot sitting exactly in sentence -->
+<span class="inline-block relative w-40 h-6 mx-1 align-middle">
+<span class="absolute inset-x-0 bottom-1 border-b border-dotted border-slate-400"></span>
+<!-- OVERLAY ANSWER BOX 2: Dropdown with dashed indigo border & badge 2 -->
+<div class="absolute -top-1 -left-0.5 -right-0.5 bottom-0.5 bg-white border border-dashed border-indigo-600 rounded flex items-center justify-between px-2 cursor-pointer shadow-xs hover:bg-indigo-50/30 transition-all z-10">
+<span class="absolute -top-3.5 -left-1 bg-indigo-600 text-white text-[9px] font-bold px-1.5 py-0.2 rounded shadow-xs">2</span>
+<span class="text-[11px] font-medium text-slate-600">Chọn đáp án</span>
+<span class="material-symbols-outlined text-[15px] text-indigo-600">arrow_drop_down</span>
+</div>
+</span>
+<span>you immediately so that you could apply in time.</span>
+</div>
+</div>
+<!-- Question 3: Multiple Choice ABCD with precise interactive overlays -->
+<div class="relative pt-1">
+<p>
+<span class="font-bold text-slate-900">Question 3:</span>
+                After graduating from university with honors, he decided .................... for an internship at a tech company.
+              </p>
+<!-- 4 neatly aligned options with interactive check boxes exactly positioned next to options -->
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2 pl-4">
+<!-- Option A -->
+<div class="flex items-center gap-2 group cursor-pointer">
+<div class="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-[10px] text-slate-600 group-hover:border-indigo-400"></div>
+<span class="text-xs text-slate-700">A. apply</span>
+</div>
+<!-- Option B (Marked Correct with Badge 3) -->
+<div class="flex items-center gap-2 relative group cursor-pointer">
+<div class="w-4 h-4 rounded-full border-2 border-indigo-600 bg-indigo-600 flex items-center justify-center text-[10px] text-white shadow-xs">
+<span class="w-1.5 h-1.5 rounded-full bg-white"></span>
+</div>
+<span class="text-xs font-semibold text-indigo-900">B. to apply</span>
+<!-- Badge 3 -->
+<span class="absolute -top-3 -left-1 bg-indigo-600 text-white text-[8px] font-bold px-1 rounded shadow-xs">3</span>
+</div>
+<!-- Option C -->
+<div class="flex items-center gap-2 group cursor-pointer">
+<div class="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-[10px] text-slate-600 group-hover:border-indigo-400"></div>
+<span class="text-xs text-slate-700">C. applied</span>
+</div>
+<!-- Option D -->
+<div class="flex items-center gap-2 group cursor-pointer">
+<div class="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-[10px] text-slate-600 group-hover:border-indigo-400"></div>
+<span class="text-xs text-slate-700">D. applying</span>
+</div>
+</div>
+</div>
+<!-- Question 4: Short essay framed cleanly below question text -->
+<div class="relative pt-2">
+<p class="font-bold text-slate-900">Question 4: Write 1-2 sentences explaining why soft skills are essential.</p>
+<!-- Neatly Framed Answer Box below prompt with badge 4 -->
+<div class="relative mt-2.5 w-full h-20 bg-slate-50 border border-dashed border-indigo-400 rounded-lg p-2.5 flex flex-col justify-between hover:bg-indigo-50/20 transition-all cursor-pointer">
+<span class="absolute -top-3 left-2 bg-indigo-600 text-white text-[9px] font-bold px-1.5 py-0.2 rounded shadow-xs">4</span>
+<span class="text-[11px] text-slate-400 italic">Khu vực học sinh nhập câu trả lời tự luận (Tối đa 100 từ)...</span>
+<div class="flex justify-end items-center gap-2">
+<span class="text-[10px] font-medium text-slate-400">Tự luận • 1.0 điểm</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Scanned Document Footer -->
+<div class="pt-4 border-t border-slate-200 flex justify-between items-center text-[10px] font-sans text-slate-400">
+<span>EngClass Smart Worksheet Engine</span>
+<span>Trang 1 / 3</span>
+<span>Mã tài liệu: 2025-ENG12-U7-TEST1</span>
+</div>
+</article>
+</section>
+<!-- ================= RIGHT PROPERTIES PANEL (320px - 340px) ================= -->
+<aside class="w-[330px] flex-shrink-0 bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between h-[calc(100vh-190px)] overflow-y-auto">
+<div class="space-y-4">
+<!-- Header with Active Tag -->
+<div class="flex items-center justify-between pb-3 border-b border-slate-100">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-indigo-600 text-[18px]">tune</span>
+<h2 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Thuộc tính câu hỏi</h2>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[11px] font-semibold border border-indigo-200/60">Câu 1 (Điền từ)</span>
+</div>
+<!-- Form: Loại câu hỏi -->
+<div class="space-y-1">
+<label class="text-xs font-semibold text-slate-700">Loại câu hỏi</label>
+<div class="relative">
+<select class="w-full text-xs font-medium bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white appearance-none cursor-pointer">
+<option selected="">Điền vào chỗ trống (Text Input)</option>
+<option>Trắc nghiệm một lựa chọn (ABCD)</option>
+<option>Menu chọn thả xuống (Dropdown)</option>
+<option>Hộp kiểm (Checkbox)</option>
+<option>Đoạn văn tự luận (Essay)</option>
+</select>
+<span class="material-symbols-outlined absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[16px] pointer-events-none">expand_more</span>
+</div>
+</div>
+<!-- Form: Đáp án đúng chấp nhận (Clean Chips/Tags) -->
+<div class="space-y-1.5">
+<div class="flex items-center justify-between">
+<label class="text-xs font-semibold text-slate-700">Đáp án đúng chấp nhận</label>
+<span class="text-[11px] text-indigo-600 font-medium hover:underline cursor-pointer">+ Thêm đáp án</span>
+</div>
+<div class="p-2 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+<!-- Chips List -->
+<div class="flex flex-wrap gap-1.5">
+<span class="inline-flex items-center gap-1 px-2 py-1 bg-white border border-slate-200 rounded text-xs font-medium text-slate-800 shadow-2xs">
+                has lived
+                <button class="text-slate-400 hover:text-red-500" title="Xóa"><span class="material-symbols-outlined text-[13px]">close</span></button>
+</span>
+<span class="inline-flex items-center gap-1 px-2 py-1 bg-white border border-slate-200 rounded text-xs font-medium text-slate-800 shadow-2xs">
+                's lived
+                <button class="text-slate-400 hover:text-red-500" title="Xóa"><span class="material-symbols-outlined text-[13px]">close</span></button>
+</span>
+<span class="inline-flex items-center gap-1 px-2 py-1 bg-white border border-slate-200 rounded text-xs font-medium text-slate-800 shadow-2xs">
+                have lived
+                <button class="text-slate-400 hover:text-red-500" title="Xóa"><span class="material-symbols-outlined text-[13px]">close</span></button>
+</span>
+</div>
+<p class="text-[10px] text-slate-500 flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px] text-slate-400">info</span>
+<span>Phân cách các đáp án bằng dấu gạch đứng <code class="font-bold text-indigo-600">|</code></span>
+</p>
+</div>
+</div>
+<!-- Form: Two-column row: Điểm số & Cỡ chữ ô điền -->
+<div class="grid grid-cols-2 gap-2.5">
+<div class="space-y-1">
+<label class="text-xs font-semibold text-slate-700">Điểm số</label>
+<div class="relative">
+<input class="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white" step="0.25" type="number" value="1.0">
+<span class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">điểm</span>
+</div>
+</div>
+<div class="space-y-1">
+<label class="text-xs font-semibold text-slate-700">Cỡ chữ ô điền</label>
+<div class="relative">
+<select class="w-full text-xs font-medium bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white appearance-none cursor-pointer">
+<option selected="">14px (Chuẩn)</option>
+<option>12px</option>
+<option>16px</option>
+</select>
+<span class="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 text-[16px] pointer-events-none">expand_more</span>
+</div>
+</div>
+</div>
+<!-- Form: Toggle Switch: Phân biệt HOA / thường -->
+<div class="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+<div>
+<p class="text-xs font-semibold text-slate-700">Phân biệt HOA / thường</p>
+<p class="text-[10px] text-slate-500">Ví dụ: 'He' khác 'he'</p>
+</div>
+<!-- Toggle switch (Off state) -->
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox">
+<div class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+</label>
+</div>
+<!-- Form: Lời giải thích chi tiết -->
+<div class="space-y-1">
+<div class="flex items-center justify-between">
+<label class="text-xs font-semibold text-slate-700">Lời giải thích chi tiết</label>
+<span class="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">Hiển thị sau khi nộp bài</span>
+</div>
+<textarea class="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white resize-none leading-relaxed" placeholder="Nhập giải thích ngữ pháp hoặc dịch nghĩa..." rows="3">Dấu hiệu nhận biết thì Hiện tại hoàn thành: 'since 2018' diễn tả hành động bắt đầu trong quá khứ và vẫn tiếp diễn ở hiện tại. Chủ ngữ là ngôi thứ 3 số ít 'She' nên dùng 'has lived'.</textarea>
+</div>
+</div>
+<!-- Footer of Right Panel -->
+<div class="pt-3 border-t border-slate-200 space-y-3 mt-4">
+<!-- Total Score Summary Badge (Moved from Left Column) -->
+<div class="px-3 py-2 rounded-lg bg-indigo-50/70 border border-indigo-100 flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-indigo-600">verified</span>
+<span class="text-xs font-semibold text-indigo-900">Tổng điểm bài: 10.0</span>
+</div>
+<span class="text-[11px] font-medium text-indigo-700">24 câu hỏi</span>
+</div>
+<!-- Panel Action Buttons -->
+<div class="grid grid-cols-2 gap-2">
+<button class="py-1.5 px-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center justify-center gap-1 transition-all">
+<span class="material-symbols-outlined text-[15px] text-slate-500">content_copy</span>
+<span>Nhân bản ô</span>
+</button>
+<button class="py-1.5 px-2 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center justify-center gap-1 transition-all">
+<span class="material-symbols-outlined text-[15px]">delete</span>
+<span>Xóa ô này</span>
+</button>
+</div>
+</div>
+</aside>
+</main>
+<!-- ================= 4. BOTTOM COLLAPSIBLE ANSWER SHEET ================= -->
+<footer class="w-full bg-white border-t border-slate-200 shadow-md sticky bottom-0 z-30 transition-all">
+<!-- Top Bar of Docked Answer Sheet -->
+<div class="px-6 py-2 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-slate-50/80">
+<!-- Left: Tabs & Toggle -->
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-1 text-xs font-bold text-slate-700 hover:text-indigo-600 transition-colors" title="Mở rộng / Thu gọn">
+<span class="material-symbols-outlined text-[16px]">expand_less</span>
+<span>Thu gọn / Mở rộng</span>
+</button>
+<div class="h-3 w-px bg-slate-300"></div>
+<div class="flex items-center gap-1">
+<button class="px-2.5 py-1 rounded text-xs font-semibold text-indigo-700 bg-white shadow-2xs border border-slate-200">Phiếu trả lời trắc nghiệm</button>
+<button class="px-2.5 py-1 rounded text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors">Tạo ô tự động</button>
+</div>
+</div>
+<!-- Right: Quick Automation Controls & Quick Key String Input -->
+<div class="flex items-center gap-3 flex-wrap">
+<!-- Quick add batch -->
+<div class="flex items-center gap-1.5 text-xs text-slate-600">
+<span>Thêm nhanh</span>
+<input class="w-10 text-center py-0.5 text-xs font-semibold bg-white border border-slate-200 rounded focus:outline-none focus:border-indigo-500" type="text" value="10">
+<span>câu kiểu</span>
+<select class="py-0.5 px-1.5 text-xs bg-white border border-slate-200 rounded focus:outline-none focus:border-indigo-500">
+<option>Trắc nghiệm A-D</option>
+<option>Điền từ</option>
+<option>Đúng / Sai</option>
+</select>
+<button class="px-2 py-0.5 rounded bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold text-[11px] transition-all">+ Tạo ngay</button>
+</div>
+<div class="h-3 w-px bg-slate-300"></div>
+<!-- Answer Key String with Apply -->
+<div class="flex items-center gap-1.5">
+<span class="text-xs text-slate-500 whitespace-nowrap">Nhập chuỗi đáp án (Quick key):</span>
+<input class="w-56 px-2 py-0.5 text-xs font-mono tracking-wider font-semibold text-indigo-700 uppercase bg-white border border-slate-200 rounded focus:outline-none focus:border-indigo-500" type="text" value="ABCDA BCDDA CABDA DDBCA ABCA">
+<button class="px-2.5 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-all shadow-2xs">Áp dụng</button>
+</div>
+</div>
+</div>
+<!-- Bottom: Compact Horizontal Scrolling Grid of 24 Numbered Questions (1 to 24) with Circular Bubbles A, B, C, D -->
+<div class="px-6 py-2 overflow-x-auto flex items-center gap-3 select-none">
+<!-- Question 1 Item (Filled / Active state sync) -->
+<div class="flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-indigo-50/80 border border-indigo-200">
+<span class="text-xs font-bold text-indigo-900 w-5">1.</span>
+<div class="flex items-center gap-1">
+<button class="w-5 h-5 rounded-full text-[10px] font-semibold flex items-center justify-center bg-indigo-600 text-white shadow-2xs">A</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">B</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">C</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">D</button>
+</div>
+</div>
+<!-- Question 2 -->
+<div class="flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-slate-200">
+<span class="text-xs font-bold text-slate-800 w-5">2.</span>
+<div class="flex items-center gap-1">
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">A</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-semibold flex items-center justify-center bg-indigo-600 text-white shadow-2xs">B</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">C</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">D</button>
+</div>
+</div>
+<!-- Question 3 -->
+<div class="flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-slate-200">
+<span class="text-xs font-bold text-slate-800 w-5">3.</span>
+<div class="flex items-center gap-1">
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">A</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-semibold flex items-center justify-center bg-indigo-600 text-white shadow-2xs">B</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">C</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">D</button>
+</div>
+</div>
+<!-- Question 4 -->
+<div class="flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-slate-200">
+<span class="text-xs font-bold text-slate-800 w-5">4.</span>
+<div class="flex items-center gap-1">
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">A</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">B</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">C</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-semibold flex items-center justify-center bg-indigo-600 text-white shadow-2xs">D</button>
+</div>
+</div>
+<!-- Question 5 to 24 generated cleanly -->
+<div class="flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-slate-200">
+<span class="text-xs font-bold text-slate-800 w-5">5.</span>
+<div class="flex items-center gap-1">
+<button class="w-5 h-5 rounded-full text-[10px] font-semibold flex items-center justify-center bg-indigo-600 text-white shadow-2xs">A</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">B</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">C</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">D</button>
+</div>
+</div>
+<div class="flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-slate-200">
+<span class="text-xs font-bold text-slate-800 w-5">6.</span>
+<div class="flex items-center gap-1">
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">A</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-semibold flex items-center justify-center bg-indigo-600 text-white shadow-2xs">B</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">C</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">D</button>
+</div>
+</div>
+<div class="flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-slate-200">
+<span class="text-xs font-bold text-slate-800 w-5">7.</span>
+<div class="flex items-center gap-1">
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">A</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">B</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-semibold flex items-center justify-center bg-indigo-600 text-white shadow-2xs">C</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">D</button>
+</div>
+</div>
+<div class="flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-slate-200">
+<span class="text-xs font-bold text-slate-800 w-5">8.</span>
+<div class="flex items-center gap-1">
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">A</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">B</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">C</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-semibold flex items-center justify-center bg-indigo-600 text-white shadow-2xs">D</button>
+</div>
+</div>
+<div class="flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-slate-200">
+<span class="text-xs font-bold text-slate-800 w-5">9.</span>
+<div class="flex items-center gap-1">
+<button class="w-5 h-5 rounded-full text-[10px] font-semibold flex items-center justify-center bg-indigo-600 text-white shadow-2xs">A</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">B</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">C</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">D</button>
+</div>
+</div>
+<div class="flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-slate-200">
+<span class="text-xs font-bold text-slate-800 w-6">10.</span>
+<div class="flex items-center gap-1">
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">A</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">B</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-semibold flex items-center justify-center bg-indigo-600 text-white shadow-2xs">C</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">D</button>
+</div>
+</div>
+<div class="flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-slate-200">
+<span class="text-xs font-bold text-slate-800 w-6">11.</span>
+<div class="flex items-center gap-1">
+<button class="w-5 h-5 rounded-full text-[10px] font-semibold flex items-center justify-center bg-indigo-600 text-white shadow-2xs">A</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">B</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">C</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">D</button>
+</div>
+</div>
+<div class="flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-slate-200">
+<span class="text-xs font-bold text-slate-800 w-6">12.</span>
+<div class="flex items-center gap-1">
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">A</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-semibold flex items-center justify-center bg-indigo-600 text-white shadow-2xs">B</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">C</button>
+<button class="w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center border border-slate-200 hover:bg-slate-100 text-slate-600">D</button>
+</div>
+</div>
+<!-- Compact remainder 13 to 24 indicator -->
+<div class="flex-shrink-0 flex items-center gap-1 text-slate-400 text-xs font-medium px-2">
+<span>...</span>
+<span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold text-[11px]">13 - 24 sẵn sàng</span>
+</div>
+</div>
+</footer>
+
+
+</body></html>

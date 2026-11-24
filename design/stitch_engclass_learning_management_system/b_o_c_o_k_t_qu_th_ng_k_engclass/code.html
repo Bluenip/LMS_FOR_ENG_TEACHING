@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+
+<html lang="vi"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={"darkMode":"class","theme":{"extend":{"colors":{"on-tertiary-fixed-variant":"#005236","on-primary-container":"#dad7ff","secondary-fixed":"#ffdbca","outline":"#777587","surface-container-highest":"#d3e4fe","error-container":"#ffdad6","tertiary-fixed":"#6ffbbe","on-surface":"#0b1c30","surface-bright":"#f8f9ff","secondary-container":"#fd761a","on-secondary-container":"#5c2400","tertiary-container":"#006e4b","on-primary-fixed":"#0f0069","primary":"#3525cd","background":"#f8f9ff","on-tertiary":"#ffffff","on-error":"#ffffff","secondary-fixed-dim":"#ffb690","inverse-primary":"#c3c0ff","surface-tint":"#4d44e3","surface-container-low":"#eff4ff","on-primary-fixed-variant":"#3323cc","primary-fixed":"#e2dfff","error":"#ba1a1a","on-secondary-fixed":"#341100","tertiary-fixed-dim":"#4edea3","on-secondary-fixed-variant":"#783200","primary-container":"#4f46e5","on-tertiary-container":"#67f4b7","tertiary":"#005338","outline-variant":"#c7c4d8","inverse-on-surface":"#eaf1ff","secondary":"#9d4300","on-error-container":"#93000a","surface-dim":"#cbdbf5","surface-variant":"#d3e4fe","on-tertiary-fixed":"#002113","surface-container-lowest":"#ffffff","on-background":"#0b1c30","surface-container":"#e5eeff","primary-fixed-dim":"#c3c0ff","inverse-surface":"#213145","on-primary":"#ffffff","surface-container-high":"#dce9ff","on-secondary":"#ffffff","on-surface-variant":"#464555","surface":"#f8f9ff"},"borderRadius":{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},"spacing":{"gutter":"1.5rem","space-md":"1rem","space-lg":"1.5rem","margin-mobile":"1rem","space-xs":"0.25rem","margin":"2rem","space-xl":"2.5rem","gutter-mobile":"1rem","space-sm":"0.5rem"},"fontFamily":{"body-lg":["Inter"],"body-md":["Inter"],"label-md":["Inter"],"label-sm":["Inter"],"headline-lg-mobile":["Inter"],"body-sm":["Inter"],"headline-sm":["Inter"],"headline-md":["Inter"],"label-lg":["Inter"],"display-lg":["Inter"],"headline-lg":["Inter"]},"fontSize":{"body-lg":["1.125rem",{"lineHeight":"1.75rem","fontWeight":"400"}],"body-md":["1rem",{"lineHeight":"1.5rem","fontWeight":"400"}],"label-md":["0.75rem",{"lineHeight":"1rem","letterSpacing":"0.02em","fontWeight":"600"}],"label-sm":["0.6875rem",{"lineHeight":"0.875rem","letterSpacing":"0.025em","fontWeight":"500"}],"headline-lg-mobile":["1.75rem",{"lineHeight":"2.25rem","letterSpacing":"-0.02em","fontWeight":"700"}],"body-sm":["0.875rem",{"lineHeight":"1.25rem","fontWeight":"400"}],"headline-sm":["1.25rem",{"lineHeight":"1.75rem","letterSpacing":"-0.01em","fontWeight":"600"}],"headline-md":["1.5rem",{"lineHeight":"2rem","letterSpacing":"-0.015em","fontWeight":"600"}],"label-lg":["0.875rem",{"lineHeight":"1.25rem","letterSpacing":"0.01em","fontWeight":"600"}],"display-lg":["3rem",{"lineHeight":"3.75rem","letterSpacing":"-0.025em","fontWeight":"700"}],"headline-lg":["2.25rem",{"lineHeight":"2.75rem","letterSpacing":"-0.02em","fontWeight":"700"}]}}}}</script></head><body class="bg-background font-body-md text-body-md text-on-surface min-h-screen"><header class="fixed top-0 left-0 right-0 z-50 bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="h-16 w-full max-w-[1440px] mx-auto px-margin flex items-center justify-between gap-space-lg"><div class="flex items-center gap-space-lg"><div class="flex items-center gap-space-sm"><img alt="EngClass Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/ALJJyrDQ1DPSkfhrh3Nowrd-tbvbKYoeWkOlmlkxGRGkDPdajM5z02m516wW8HqJFmhooroZkANnJvH1-cjH4xEq3M8gDxCybbh7Ri65XOTHk4F6Vbx2zn7XOTdim4N935hUtTSIHxB3BAyOwBzXPopNCbTr_U2UCLBLdlDh_bMMo_4mzK_DlE7OtUatfNrogQBFITtp_5Ta4ninYb3Jv0RNaEljd8_HtXW_agtqcEH5LMaGxA"/><span class="font-headline-sm text-headline-sm text-primary tracking-tight">EngClass</span></div><nav class="hidden xl:flex items-center gap-space-xs" data-active-classes="bg-primary-container text-on-primary font-label-lg text-label-lg rounded-xl shadow-[0_2px_8px_rgba(79,70,229,0.15)]"><a class="px-space-md py-space-sm rounded-xl font-label-lg text-label-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="lop-hoc" href="#">Lớp học</a><a class="px-space-md py-space-sm rounded-xl font-label-lg text-label-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="worksheet-tuong-tac" href="#">Worksheet tương tác</a><a class="px-space-md py-space-sm rounded-xl font-label-lg text-label-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="bai-giang-dien-tu" href="#">Bài giảng điện tử</a><a class="px-space-md py-space-sm rounded-xl font-label-lg text-label-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="bao-cao-thong-ke" href="#">Báo cáo & Thống kê</a></nav></div><div class="flex-1 max-w-md hidden md:block"><div class="relative flex items-center"><span class="material-symbols-outlined absolute left-space-md text-outline select-none pointer-events-none">search</span><input class="w-full pl-11 pr-space-md py-space-sm bg-surface-container-low rounded-xl font-body-sm text-body-sm text-on-surface placeholder:text-outline focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary transition-all" placeholder="Tìm kiếm học sinh, bài tập, lớp học..." type="text"/></div></div><div class="flex items-center gap-space-sm"><button class="w-10 h-10 flex items-center justify-center rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors relative" title="Thông báo" type="button"><span class="material-symbols-outlined">notifications</span><span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-secondary-container"></span></button><button class="w-10 h-10 flex items-center justify-center rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" title="Trợ giúp" type="button"><span class="material-symbols-outlined">help</span></button><div class="flex items-center gap-space-sm pl-space-sm"><div class="flex flex-col items-end text-right hidden lg:flex"><span class="font-label-lg text-label-lg text-on-surface">Cô Mai Phương</span><span class="font-label-sm text-label-sm text-on-surface-variant">Giáo viên tiếng Anh</span></div><img alt="Profile" class="w-8 h-8 rounded-full object-cover ring-2 ring-primary/20" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDsi3a9In1HFjiYLUj-tjVVZXK7XZx7VdSg01gH0zQzHYn864TpfkWZqzQGWRtYChExN6VfwlP1x2hTSyPj1kKZ5l6di3q6mS7YwP9CSlgyTmtbB9aunkpt9d2oV-Un4lgnQjALcRm4hwmdPciILQ5PWNpDgnbR9OD6WS3eHNMnfiWppG9jMY8QlWo4cB3eqSJWm3y6IqA9jWdh4zEaWI0-G7FQQtUe4mRDovmtwWd7"/></div></div></div></header><main class="w-full pt-16 bg-background"><div class="w-full max-w-[1440px] mx-auto px-margin py-space-lg"><div class="flex flex-col w-full gap-space-lg">
+<!-- 1. HEADER & ACTION SUITE -->
+<section class="flex flex-col gap-space-md">
+<!-- Breadcrumb -->
+<nav class="flex items-center gap-space-xs text-on-surface-variant font-label-md text-label-md">
+<span class="hover:text-primary transition-colors cursor-pointer">Lớp 12A1</span>
+<span class="material-symbols-outlined text-outline" style="font-size: 16px;">chevron_right</span>
+<span class="hover:text-primary transition-colors cursor-pointer">Worksheet tương tác</span>
+<span class="material-symbols-outlined text-outline" style="font-size: 16px;">chevron_right</span>
+<span class="text-on-surface font-semibold truncate max-w-xs md:max-w-md">Unit 7: The World of Work - Đề số 1</span>
+<span class="material-symbols-outlined text-outline" style="font-size: 16px;">chevron_right</span>
+<span class="text-primary font-semibold">Kết quả & Thống kê</span>
+</nav>
+<!-- Main Title & Operational Buttons -->
+<div class="flex flex-col xl:flex-row xl:items-center justify-between gap-space-md bg-surface-container-lowest p-space-lg rounded-2xl shadow-sm">
+<div class="space-y-1">
+<div class="flex items-center gap-space-sm flex-wrap">
+<span class="px-2.5 py-1 rounded-full font-label-sm text-label-sm bg-tertiary-container/15 text-tertiary font-bold tracking-wide uppercase">
+            Học kỳ I • Năm học 2024-2025
+          </span>
+<span class="px-2.5 py-1 rounded-full font-label-sm text-label-sm bg-surface-container text-on-surface-variant font-medium flex items-center gap-1">
+<span class="material-symbols-outlined" style="font-size: 14px;">assignment</span> 40 câu hỏi trắc nghiệm & điền từ
+          </span>
+</div>
+<h1 class="font-headline-md text-headline-md text-on-surface tracking-tight">
+          Báo cáo chi tiết kết quả bài tập: Unit 7 The World of Work
+        </h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+          Thời hạn nộp: 23:59, Thứ Ba 18/11/2024 • Đã khóa chỉnh sửa đáp án tự động
+        </p>
+</div>
+<!-- Action Buttons Grid -->
+<div class="flex flex-wrap items-center gap-space-xs">
+<button class="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl font-label-md text-label-md bg-surface-container text-on-surface hover:bg-surface-container-high transition-colors shadow-xs" type="button">
+<span class="material-symbols-outlined text-secondary-container" style="font-size: 18px;">table_view</span>
+          Xuất Excel điểm số
+        </button>
+<button class="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl font-label-md text-label-md bg-surface-container text-on-surface hover:bg-surface-container-high transition-colors shadow-xs" type="button">
+<span class="material-symbols-outlined text-primary" style="font-size: 18px;">autorenew</span>
+          Tự động chấm lại
+        </button>
+<button class="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl font-label-md text-label-md bg-surface-container text-on-surface hover:bg-surface-container-high transition-colors shadow-xs" type="button">
+<span class="material-symbols-outlined text-tertiary" style="font-size: 18px;">send</span>
+          Gửi nhận xét qua Zalo/Email
+        </button>
+<button class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-label-md text-label-md bg-secondary-container text-on-secondary-container font-semibold hover:opacity-90 transition-all shadow-sm" type="button">
+<span class="material-symbols-outlined text-on-secondary-container" style="font-size: 18px;">restart_alt</span>
+          Giao lại bài (< 5.0đ)
+        </button>
+</div>
+</div>
+</section>
+<!-- 2. OVERVIEW METRICS (4 ASYMMETRIC / HIGH IMPACT CARDS) -->
+<section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-space-md">
+<!-- Card 1: Sĩ số nộp bài -->
+<div class="bg-surface-container-lowest p-space-md rounded-2xl shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow relative overflow-hidden">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant font-medium">Sĩ số nộp bài</span>
+<div class="w-8 h-8 rounded-xl bg-primary-fixed/50 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" style="font-size: 20px;">groups</span>
+</div>
+</div>
+<div class="my-space-sm flex items-baseline gap-space-sm">
+<span class="font-headline-lg text-headline-lg text-on-surface font-bold tracking-tight">40/42</span>
+<span class="font-label-md text-label-md text-on-surface-variant">học sinh</span>
+</div>
+<div>
+<div class="flex justify-between items-center mb-1">
+<span class="font-label-sm text-label-sm text-tertiary font-bold">95.2% Hoàn thành</span>
+<span class="font-label-sm text-label-sm text-error font-medium">2 vắng</span>
+</div>
+<div class="w-full h-2 rounded-full bg-surface-container overflow-hidden">
+<div class="h-full bg-primary-container rounded-full" style="width: 95.2%;"></div>
+</div>
+</div>
+</div>
+<!-- Card 2: Điểm trung bình cả lớp -->
+<div class="bg-surface-container-lowest p-space-md rounded-2xl shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow relative overflow-hidden">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant font-medium">Điểm trung bình cả lớp</span>
+<div class="w-8 h-8 rounded-xl bg-tertiary-fixed/60 flex items-center justify-center text-tertiary-container">
+<span class="material-symbols-outlined" style="font-size: 20px;">analytics</span>
+</div>
+</div>
+<div class="my-space-sm flex items-baseline gap-space-sm">
+<span class="font-headline-lg text-headline-lg text-on-surface font-bold tracking-tight">7.8</span>
+<span class="font-body-md text-body-md text-on-surface-variant font-medium">/ 10</span>
+</div>
+<div class="flex items-center gap-1.5 font-label-sm text-label-sm text-tertiary font-semibold bg-tertiary-container/10 px-2.5 py-1 rounded-full w-fit">
+<span class="material-symbols-outlined" style="font-size: 16px;">trending_up</span>
+        Cao hơn đề trước +0.4 điểm
+      </div>
+</div>
+<!-- Card 3: Biên độ điểm số -->
+<div class="bg-surface-container-lowest p-space-md rounded-2xl shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant font-medium">Biên độ điểm số</span>
+<div class="w-8 h-8 rounded-xl bg-secondary-fixed flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" style="font-size: 20px;">leaderboard</span>
+</div>
+</div>
+<div class="my-space-sm flex items-center justify-between">
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant block">Cao nhất</span>
+<div class="flex items-baseline gap-1">
+<span class="font-headline-sm text-headline-sm text-tertiary font-bold">10.0</span>
+<span class="font-label-sm text-label-sm text-outline">(2 em)</span>
+</div>
+</div>
+<div class="w-px h-8 bg-outline-variant"></div>
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant block">Thấp nhất</span>
+<div class="flex items-baseline gap-1">
+<span class="font-headline-sm text-headline-sm text-error font-bold">4.5</span>
+<span class="font-label-sm text-label-sm text-outline">(1 em)</span>
+</div>
+</div>
+</div>
+<div class="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant">
+<span>Độ lệch chuẩn: 0.92</span>
+<span class="text-primary font-medium">Phân hóa rõ</span>
+</div>
+</div>
+<!-- Card 4: Phổ điểm phổ biến -->
+<div class="bg-surface-container-lowest p-space-md rounded-2xl shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant font-medium">Phổ điểm phổ biến</span>
+<div class="w-8 h-8 rounded-xl bg-surface-container-highest flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" style="font-size: 20px;">pie_chart</span>
+</div>
+</div>
+<div class="my-space-sm flex items-baseline gap-space-sm">
+<span class="font-headline-lg text-headline-lg text-primary font-bold tracking-tight">8.0 - 9.0</span>
+<span class="font-label-md text-label-md text-on-surface-variant">điểm</span>
+</div>
+<div class="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant">
+<span>Chiếm <strong class="text-on-surface">55.0%</strong> toàn lớp (22 em)</span>
+<span class="px-2 py-0.5 rounded-md bg-primary-container/10 text-primary font-bold">Xuất sắc</span>
+</div>
+</div>
+</section>
+<!-- 3. PER-QUESTION CORRECT RATE VISUALIZATION (40 QUESTIONS) -->
+<section class="bg-surface-container-lowest p-space-lg rounded-2xl shadow-sm flex flex-col gap-space-md">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-space-sm">
+<div class="space-y-0.5">
+<div class="flex items-center gap-2">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">
+            Thống kê tỉ lệ làm đúng theo từng câu hỏi (Câu 1 - Câu 40)
+          </h2>
+<span class="px-2 py-0.5 rounded-full bg-surface-container font-label-sm text-label-sm text-on-surface-variant font-semibold">
+            Chỉ số năng lực
+          </span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+          Giúp giáo viên xác định lỗ hổng kiến thức ngữ pháp hoặc từ vựng để sửa bài trên lớp.
+        </p>
+</div>
+<!-- Color Legend Chips -->
+<div class="flex flex-wrap items-center gap-space-xs font-label-sm text-label-sm">
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-container">
+<span class="w-3 h-3 rounded-full bg-tertiary"></span>
+<span class="text-on-surface">> 80% (Nắm vững)</span>
+</div>
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-container">
+<span class="w-3 h-3 rounded-full bg-secondary-container"></span>
+<span class="text-on-surface">50% - 80% (Cần củng cố)</span>
+</div>
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-container">
+<span class="w-3 h-3 rounded-full bg-error"></span>
+<span class="text-on-surface">< 50% (Báo động sai nhiều)</span>
+</div>
+</div>
+</div>
+<!-- Critical Alert Box for High Error Rate Question -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm p-space-md rounded-xl bg-error-container/40">
+<div class="flex items-start gap-space-sm">
+<span class="material-symbols-outlined text-error" style="font-size: 24px;">crisis_alert</span>
+<div>
+<div class="flex items-center gap-2 flex-wrap">
+<span class="font-label-lg text-label-lg text-error font-bold">CẢNH BÁO TRỌNG ĐIỂM: Câu 14 (Đảo ngữ điều kiện loại 3)</span>
+<span class="px-2 py-0.5 rounded-full bg-error text-on-error font-label-sm text-label-sm font-bold">Chỉ 32% làm đúng (13/40 em)</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
+            Lỗi sai phổ biến: Nhầm lẫn giữa "Had he known..." và "Should he know...". Cần 5 phút đầu giờ để giải thích lại cấu trúc.
+          </p>
+</div>
+</div>
+<button class="self-start sm:self-center shrink-0 px-3.5 py-2 rounded-xl font-label-md text-label-md bg-surface-container-lowest text-error font-bold shadow-xs hover:bg-error hover:text-on-error transition-all flex items-center gap-1" type="button">
+<span class="material-symbols-outlined" style="font-size: 16px;">psychology</span>
+        Phân tích chi tiết lỗi sai
+      </button>
+</div>
+<!-- Interactive 40-Bar Grid Chart -->
+<div class="pt-space-sm pb-space-xs overflow-x-auto">
+<div class="min-w-[840px] flex flex-col gap-space-xs">
+<!-- Bars Container: 40 Columns -->
+<div class="h-44 flex items-end justify-between gap-1.5 px-2 pt-6">
+<!-- 40 Question Bars (Generated with pedagogical variance) -->
+<!-- Q1 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 1: 95%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 95%;"></div>
+</div>
+<!-- Q2 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 2: 92%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 92%;"></div>
+</div>
+<!-- Q3 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 3: 88%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 88%;"></div>
+</div>
+<!-- Q4 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 4: 75%</div>
+<div class="w-full bg-secondary-container rounded-t-sm transition-all group-hover:brightness-110" style="height: 75%;"></div>
+</div>
+<!-- Q5 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 5: 85%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 85%;"></div>
+</div>
+<!-- Q6 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 6: 62%</div>
+<div class="w-full bg-secondary-container rounded-t-sm transition-all group-hover:brightness-110" style="height: 62%;"></div>
+</div>
+<!-- Q7 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 7: 90%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 90%;"></div>
+</div>
+<!-- Q8 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 8: 45% (Từ vựng bẫy)</div>
+<div class="w-full bg-error rounded-t-sm transition-all group-hover:brightness-110 animate-pulse" style="height: 45%;"></div>
+</div>
+<!-- Q9 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 9: 82%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 82%;"></div>
+</div>
+<!-- Q10 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 10: 78%</div>
+<div class="w-full bg-secondary-container rounded-t-sm transition-all group-hover:brightness-110" style="height: 78%;"></div>
+</div>
+<!-- Q11 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 11: 90%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 90%;"></div>
+</div>
+<!-- Q12 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 12: 85%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 85%;"></div>
+</div>
+<!-- Q13 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 13: 70%</div>
+<div class="w-full bg-secondary-container rounded-t-sm transition-all group-hover:brightness-110" style="height: 70%;"></div>
+</div>
+<!-- Q14 (Báo động đỏ) -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-100 bg-error text-on-error px-2 py-0.5 rounded text-label-sm font-bold whitespace-nowrap z-20 shadow-md">32%</div>
+<div class="w-full bg-error rounded-t-sm transition-all ring-2 ring-error/50" style="height: 32%;"></div>
+</div>
+<!-- Q15 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 15: 80%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 80%;"></div>
+</div>
+<!-- Q16 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 16: 95%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 95%;"></div>
+</div>
+<!-- Q17 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 17: 88%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 88%;"></div>
+</div>
+<!-- Q18 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 18: 68%</div>
+<div class="w-full bg-secondary-container rounded-t-sm transition-all group-hover:brightness-110" style="height: 68%;"></div>
+</div>
+<!-- Q19 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 19: 92%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 92%;"></div>
+</div>
+<!-- Q20 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 20: 85%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 85%;"></div>
+</div>
+<!-- Q21 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 21: 82%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 82%;"></div>
+</div>
+<!-- Q22 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 22: 48% (Cụm động từ)</div>
+<div class="w-full bg-error rounded-t-sm transition-all group-hover:brightness-110" style="height: 48%;"></div>
+</div>
+<!-- Q23 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 23: 90%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 90%;"></div>
+</div>
+<!-- Q24 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 24: 77%</div>
+<div class="w-full bg-secondary-container rounded-t-sm transition-all group-hover:brightness-110" style="height: 77%;"></div>
+</div>
+<!-- Q25 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 25: 88%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 88%;"></div>
+</div>
+<!-- Q26 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 26: 95%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 95%;"></div>
+</div>
+<!-- Q27 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 27: 85%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 85%;"></div>
+</div>
+<!-- Q28 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 28: 72%</div>
+<div class="w-full bg-secondary-container rounded-t-sm transition-all group-hover:brightness-110" style="height: 72%;"></div>
+</div>
+<!-- Q29 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 29: 90%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 90%;"></div>
+</div>
+<!-- Q30 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 30: 83%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 83%;"></div>
+</div>
+<!-- Q31 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 31: 79%</div>
+<div class="w-full bg-secondary-container rounded-t-sm transition-all group-hover:brightness-110" style="height: 79%;"></div>
+</div>
+<!-- Q32 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 32: 88%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 88%;"></div>
+</div>
+<!-- Q33 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 33: 92%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 92%;"></div>
+</div>
+<!-- Q34 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 34: 65%</div>
+<div class="w-full bg-secondary-container rounded-t-sm transition-all group-hover:brightness-110" style="height: 65%;"></div>
+</div>
+<!-- Q35 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 35: 86%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 86%;"></div>
+</div>
+<!-- Q36 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 36: 80%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 80%;"></div>
+</div>
+<!-- Q37 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 37: 94%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 94%;"></div>
+</div>
+<!-- Q38 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 38: 71%</div>
+<div class="w-full bg-secondary-container rounded-t-sm transition-all group-hover:brightness-110" style="height: 71%;"></div>
+</div>
+<!-- Q39 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 39: 90%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 90%;"></div>
+</div>
+<!-- Q40 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer">
+<div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-inverse-surface text-inverse-on-surface px-2 py-0.5 rounded text-label-sm whitespace-nowrap z-20 pointer-events-none shadow-sm">Câu 40: 88%</div>
+<div class="w-full bg-tertiary rounded-t-sm transition-all group-hover:brightness-110" style="height: 88%;"></div>
+</div>
+</div>
+<!-- Horizontal Baseline & Question Number Labels -->
+<div class="h-6 flex items-center justify-between gap-1.5 px-2 text-on-surface-variant font-label-sm text-label-sm">
+<span class="flex-1 text-center font-bold">1</span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold">5</span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold text-error">8</span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold">10</span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold text-error">14</span>
+<span class="flex-1 text-center font-bold">15</span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold">20</span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold text-error">22</span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold">25</span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold">30</span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold">35</span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold"></span>
+<span class="flex-1 text-center font-bold">40</span>
+</div>
+</div>
+</div>
+</section>
+<!-- 4. STUDENT SUBMISSIONS TABLE (RICH DATASET & FILTER BAR) -->
+<section class="bg-surface-container-lowest rounded-2xl shadow-sm flex flex-col overflow-hidden">
+<!-- Filter Bar & Search Tools -->
+<div class="p-space-md flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-space-md bg-surface-container-low">
+<!-- Search Input -->
+<div class="relative w-full lg:w-80">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline pointer-events-none" style="font-size: 18px;">search</span>
+<input class="w-full pl-9 pr-3 py-2 bg-surface-container-lowest rounded-xl font-body-sm text-body-sm text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary shadow-xs" placeholder="Tìm tên hoặc mã học sinh..." type="text"/>
+</div>
+<!-- Segmented Filters & Status Select -->
+<div class="flex flex-wrap items-center gap-space-xs">
+<!-- Grade Filter Group -->
+<div class="inline-flex p-1 bg-surface-container rounded-xl">
+<button class="px-3 py-1.5 rounded-lg font-label-sm text-label-sm bg-surface-container-lowest text-primary font-bold shadow-xs" type="button">
+            Tất cả (42)
+          </button>
+<button class="px-3 py-1.5 rounded-lg font-label-sm text-label-sm text-on-surface-variant hover:text-on-surface transition-colors" type="button">
+            Giỏi >8.5 (18)
+          </button>
+<button class="px-3 py-1.5 rounded-lg font-label-sm text-label-sm text-on-surface-variant hover:text-on-surface transition-colors" type="button">
+            Khá 6.5-8.4 (19)
+          </button>
+<button class="px-3 py-1.5 rounded-lg font-label-sm text-label-sm text-on-surface-variant hover:text-on-surface transition-colors" type="button">
+            TB / Yếu <6.5 (5)
+          </button>
+</div>
+<!-- Submission Status Dropdown Simulation -->
+<div class="relative">
+<button class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-container-lowest text-on-surface font-label-sm text-label-sm shadow-xs hover:bg-surface-container-high transition-colors" type="button">
+<span class="material-symbols-outlined text-outline" style="font-size: 16px;">filter_list</span>
+<span>Trạng thái: <strong>Tất cả</strong></span>
+<span class="material-symbols-outlined text-outline" style="font-size: 16px;">expand_more</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Data Table View -->
+<div class="overflow-x-auto">
+<table class="w-full text-left font-body-sm text-body-sm">
+<thead class="bg-surface-container text-on-surface-variant font-label-md text-label-md uppercase tracking-wider">
+<tr>
+<th class="py-3.5 px-space-md w-16 text-center">STT</th>
+<th class="py-3.5 px-space-md">Học sinh</th>
+<th class="py-3.5 px-space-md">Thời gian nộp</th>
+<th class="py-3.5 px-space-md text-center">Trạng thái</th>
+<th class="py-3.5 px-space-md text-center">Số câu đúng</th>
+<th class="py-3.5 px-space-md text-center">Điểm số</th>
+<th class="py-3.5 px-space-md text-right">Thao tác sư phạm</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-container text-on-surface">
+<!-- Student 1: High Achiever -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-3.5 px-space-md text-center font-label-md text-outline">01</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<img class="w-9 h-9 rounded-full object-cover shadow-xs" data-alt="Chân dung học sinh nam cấp 3 Việt Nam cười tươi trong trang phục áo trắng đồng phục, ánh sáng tự nhiên studio EdTech hiện đại phong cách tối giản." src="https://lh3.googleusercontent.com/aida-public/AB6AXuClvXeoUpfhHkiihon6jnHBUfYiDwnA7MhQqO9SjzGl6LoFOb8NJDx29o-wFY--Ady9Zde7VGRzBdW52PGeQC2vlzRd1Wszr-6OfI6O_94xjB3dx_ELMf1UlnaqN4h8bitEoMJyb5OB5WRE0wu7Bv-fXHjhXBr-GVS9_qgm1WeqCro_XrRdCYlFZSF9jDmdxyUkQXQtQ7C_Br5oM8f-F4N6aJqhlBjLmm5vbprwb5-I"/>
+<div>
+<div class="font-label-lg text-label-lg font-bold text-on-surface group-hover:text-primary transition-colors">Nguyễn Văn Minh</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">HS-12A1-024 • Tổ 1</div>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md">
+<div class="font-label-md text-label-md text-on-surface">14:20 18/11</div>
+<div class="font-label-sm text-label-sm text-outline">Làm trong 32 phút</div>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-label-sm text-label-sm bg-tertiary-container/15 text-tertiary font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span> Đúng giờ
+              </span>
+</td>
+<td class="py-3.5 px-space-md text-center font-medium">
+<span class="font-bold text-tertiary">36</span>/40 câu
+            </td>
+<td class="py-3.5 px-space-md text-center">
+<div class="inline-flex flex-col items-center">
+<span class="font-headline-sm text-headline-sm font-bold text-primary">9.0</span>
+<span class="px-2 py-0.2 rounded font-label-sm text-label-sm bg-primary-fixed text-on-primary-fixed font-bold">Giỏi</span>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-right">
+<div class="flex items-center justify-end gap-1">
+<button class="p-2 rounded-xl text-primary hover:bg-primary/10 transition-colors" title="Xem bài làm & Sửa bài" type="button">
+<span class="material-symbols-outlined" style="font-size: 20px;">edit_note</span>
+</button>
+<button class="p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" title="Thêm nhận xét giáo viên" type="button">
+<span class="material-symbols-outlined" style="font-size: 20px;">chat_bubble_outline</span>
+</button>
+<button class="p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" title="Tải PDF bài làm" type="button">
+<span class="material-symbols-outlined" style="font-size: 20px;">download</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Student 2: Perfect 10 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-3.5 px-space-md text-center font-label-md text-outline">02</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<img class="w-9 h-9 rounded-full object-cover shadow-xs" data-alt="Nữ sinh trung học phổ thông Việt Nam tóc ngang vai, đeo kính cận, nụ cười thông minh trí thức, ảnh chân dung sắc nét phong cách giáo dục hiện đại." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBAJmh7gWIukYJM4Ikd80TdkdmdNYHTZ08Izdj7IwhqH9gddQnSVpVR6bEHOMG9HPf035D0pWQfVoI4CkZmuPwTE-JNdkIPwDf2r0eP7alHDezS2o-7V_fnQEnOaQ0gLKAl-t2EsKiQec6QZRBxePhBjVi_c7AUCUhGDtQHVJI_-xuIRlNV4q4o_JRH8tjqi2hMk_Ynbxt7PcdDqX3-W-x0pOT8GRjqw9fYH0NbhbKh"/>
+<div>
+<div class="font-label-lg text-label-lg font-bold text-on-surface group-hover:text-primary transition-colors">Trần Thị Thu Hà</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">HS-12A1-011 • Lớp phó học tập</div>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md">
+<div class="font-label-md text-label-md text-on-surface">15:05 18/11</div>
+<div class="font-label-sm text-label-sm text-outline">Làm trong 28 phút</div>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-label-sm text-label-sm bg-tertiary-container/15 text-tertiary font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span> Đúng giờ
+              </span>
+</td>
+<td class="py-3.5 px-space-md text-center font-medium">
+<span class="font-bold text-tertiary">40</span>/40 câu
+            </td>
+<td class="py-3.5 px-space-md text-center">
+<div class="inline-flex flex-col items-center">
+<span class="font-headline-sm text-headline-sm font-bold text-tertiary">10.0</span>
+<span class="px-2 py-0.2 rounded font-label-sm text-label-sm bg-tertiary-fixed text-on-tertiary-fixed font-bold">Thủ khoa</span>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-right">
+<div class="flex items-center justify-end gap-1">
+<button class="p-2 rounded-xl text-primary hover:bg-primary/10 transition-colors" title="Xem bài làm & Sửa bài" type="button">
+<span class="material-symbols-outlined" style="font-size: 20px;">edit_note</span>
+</button>
+<button class="p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" title="Thêm nhận xét giáo viên" type="button">
+<span class="material-symbols-outlined" style="font-size: 20px;">chat_bubble_outline</span>
+</button>
+<button class="p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" title="Tải PDF bài làm" type="button">
+<span class="material-symbols-outlined" style="font-size: 20px;">download</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Student 3: Late Submission -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-3.5 px-space-md text-center font-label-md text-outline">03</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<img class="w-9 h-9 rounded-full object-cover shadow-xs" data-alt="Chân dung nam sinh lớp 12 Việt Nam phong cách năng động, áo khoác đồng phục thể thao, khuôn mặt vui tươi tự nhiên trên nền phòng học hiện đại." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD9S_dwETc6NoTp6d_3lhc-IXENj4WBmYqWtNxrAou5zj5DaY0aDLWAJ0EHY1YKfWwdFM3eYiu1IuIppOz3AnXh-tTHOvoIsnV2qT3E8wSWF-cpP462ibF02dbTt7vuTZzPjV-B-8WdOM7SCcqsBw34ky-Z93rz-bRwugA8y9ERaEQCshm_tDbGd8R5ruVd1H7csaVXI40_kIsxVo9TDivGlcpHCJWvpbl4RhwJYygX"/>
+<div>
+<div class="font-label-lg text-label-lg font-bold text-on-surface group-hover:text-primary transition-colors">Lê Hoàng Nam</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">HS-12A1-035 • Tổ 3</div>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md">
+<div class="font-label-md text-label-md text-on-surface">00:04 19/11</div>
+<div class="font-label-sm text-label-sm text-outline">Làm trong 41 phút</div>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-label-sm text-label-sm bg-secondary-fixed text-on-secondary-fixed font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary-container"></span> Nộp trễ 5p
+              </span>
+</td>
+<td class="py-3.5 px-space-md text-center font-medium">
+<span class="font-bold text-on-surface">31</span>/40 câu
+            </td>
+<td class="py-3.5 px-space-md text-center">
+<div class="inline-flex flex-col items-center">
+<span class="font-headline-sm text-headline-sm font-bold text-on-surface">7.8</span>
+<span class="px-2 py-0.2 rounded font-label-sm text-label-sm bg-surface-container text-on-surface-variant font-bold">Khá</span>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-right">
+<div class="flex items-center justify-end gap-1">
+<button class="p-2 rounded-xl text-primary hover:bg-primary/10 transition-colors" title="Xem bài làm & Sửa bài" type="button">
+<span class="material-symbols-outlined" style="font-size: 20px;">edit_note</span>
+</button>
+<button class="p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" title="Thêm nhận xét giáo viên" type="button">
+<span class="material-symbols-outlined" style="font-size: 20px;">chat_bubble_outline</span>
+</button>
+<button class="p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" title="Tải PDF bài làm" type="button">
+<span class="material-symbols-outlined" style="font-size: 20px;">download</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Student 4: Needs Support (<5.0) -->
+<tr class="hover:bg-surface-container-low transition-colors group bg-error-container/10">
+<td class="py-3.5 px-space-md text-center font-label-md text-outline">04</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<img class="w-9 h-9 rounded-full object-cover shadow-xs" data-alt="Chân dung học sinh nam Việt Nam trẻ trung, vẻ mặt suy tư cần mẫn, đồng phục học sinh nghiêm túc, ánh sáng ban ngày ấm áp dịu nhẹ." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCo263QfTP9ZgSqzKHBR59oeD7yPjBSufkoCfQzPMRdpUAKaGptUXqHQMoWgHh7I15bMT4i62jjnRoYg8WIE8cm3wswqB4CWLb9DzoZG6mcMrH8l8tsKJeGHRo26O1VjYQV5Mf7wOvgtS3CW_egBXaE2eRmKjUlEaOQrg3ie3NbBKCADex7yydOleKy7noql_RpaadailsZrliYYupotv_UbhGynatUSV5AW8Bn9uji"/>
+<div>
+<div class="font-label-lg text-label-lg font-bold text-on-surface group-hover:text-primary transition-colors">Vũ Tuấn Kiệt</div>
+<div class="font-label-sm text-label-sm text-error font-medium">HS-12A1-019 • Cần kèm thêm</div>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md">
+<div class="font-label-md text-label-md text-on-surface">22:15 18/11</div>
+<div class="font-label-sm text-label-sm text-outline">Làm trong 45 phút</div>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-label-sm text-label-sm bg-tertiary-container/15 text-tertiary font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span> Đúng giờ
+              </span>
+</td>
+<td class="py-3.5 px-space-md text-center font-medium">
+<span class="font-bold text-error">18</span>/40 câu
+            </td>
+<td class="py-3.5 px-space-md text-center">
+<div class="inline-flex flex-col items-center">
+<span class="font-headline-sm text-headline-sm font-bold text-error">4.5</span>
+<span class="px-2 py-0.2 rounded font-label-sm text-label-sm bg-error-container text-error font-bold">Yếu</span>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-right">
+<div class="flex items-center justify-end gap-1">
+<button class="p-2 rounded-xl text-primary hover:bg-primary/10 transition-colors" title="Xem bài làm & Sửa bài" type="button">
+<span class="material-symbols-outlined" style="font-size: 20px;">edit_note</span>
+</button>
+<button class="p-2 rounded-xl text-secondary-container hover:bg-secondary-fixed/50 transition-colors" title="Giao lại bài này ngay" type="button">
+<span class="material-symbols-outlined" style="font-size: 20px;">restart_alt</span>
+</button>
+<button class="p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" title="Tải PDF bài làm" type="button">
+<span class="material-symbols-outlined" style="font-size: 20px;">download</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Student 5: Good Student -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-3.5 px-space-md text-center font-label-md text-outline">05</td>
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<img class="w-9 h-9 rounded-full object-cover shadow-xs" data-alt="Chân dung nữ sinh Việt Nam tóc buộc cao năng động, đeo balo học sinh, ánh mắt rạng rỡ thân thiện, bối cảnh thư viện trường học hiện đại tinh tế." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqH4ANYCAzjfiPXmCqjRcZTUs3aY3Iwx71CVIFwN-NGLak1lgnN2MQW329cTSiyVvGAiykogJK0Nd7kzMBfYJ9uSPci1Bc7UnWdozxOzYiuqsv4tu4fISIJDgWotaJdkcn8-sqkSw7YrWfJlijk0h8PeJN7ovS0vu6QebvE4KSrcrtbC0lAlcuc9oFOhbpKxSZf37eRDDYMHJq1KIJK64hTM6KeZ14BY9MzQx2o79p"/>
+<div>
+<div class="font-label-lg text-label-lg font-bold text-on-surface group-hover:text-primary transition-colors">Phạm Hoàng Lan</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">HS-12A1-008 • Bí thư chi đoàn</div>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md">
+<div class="font-label-md text-label-md text-on-surface">19:40 18/11</div>
+<div class="font-label-sm text-label-sm text-outline">Làm trong 30 phút</div>
+</td>
+<td class="py-3.5 px-space-md text-center">
+<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-label-sm text-label-sm bg-tertiary-container/15 text-tertiary font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span> Đúng giờ
+              </span>
+</td>
+<td class="py-3.5 px-space-md text-center font-medium">
+<span class="font-bold text-tertiary">35</span>/40 câu
+            </td>
+<td class="py-3.5 px-space-md text-center">
+<div class="inline-flex flex-col items-center">
+<span class="font-headline-sm text-headline-sm font-bold text-primary">8.8</span>
+<span class="px-2 py-0.2 rounded font-label-sm text-label-sm bg-primary-fixed text-on-primary-fixed font-bold">Giỏi</span>
+</div>
+</td>
+<td class="py-3.5 px-space-md text-right">
+<div class="flex items-center justify-end gap-1">
+<button class="p-2 rounded-xl text-primary hover:bg-primary/10 transition-colors" title="Xem bài làm & Sửa bài" type="button">
+<span class="material-symbols-outlined" style="font-size: 20px;">edit_note</span>
+</button>
+<button class="p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" title="Thêm nhận xét giáo viên" type="button">
+<span class="material-symbols-outlined" style="font-size: 20px;">chat_bubble_outline</span>
+</button>
+<button class="p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" title="Tải PDF bài làm" type="button">
+<span class="material-symbols-outlined" style="font-size: 20px;">download</span>
+</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Table Pagination & Summary Bar -->
+<div class="p-space-md bg-surface-container-lowest flex flex-col sm:flex-row items-center justify-between gap-space-sm">
+<div class="font-body-sm text-body-sm text-on-surface-variant">
+        Hiển thị <strong>1 - 5</strong> trong tổng số <strong>40 học sinh</strong> đã nộp bài
+      </div>
+<div class="flex items-center gap-space-xs font-label-md text-label-md">
+<button class="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-surface-container transition-colors disabled:opacity-50" disabled="" type="button">
+<span class="material-symbols-outlined" style="font-size: 18px;">chevron_left</span>
+</button>
+<button class="w-8 h-8 rounded-lg flex items-center justify-center bg-primary-container text-on-primary font-bold" type="button">1</button>
+<button class="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface hover:bg-surface-container transition-colors" type="button">2</button>
+<button class="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface hover:bg-surface-container transition-colors" type="button">3</button>
+<span class="px-1 text-outline">...</span>
+<button class="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface hover:bg-surface-container transition-colors" type="button">8</button>
+<button class="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface hover:bg-surface-container transition-colors" type="button">
+<span class="material-symbols-outlined" style="font-size: 18px;">chevron_right</span>
+</button>
+</div>
+</div>
+</section>
+</div>
+<script>
+  // Micro-interaction: Interactive highlight indicator for table rows
+  document.addEventListener('DOMContentLoaded', () => {
+    const rows = document.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+      row.addEventListener('mouseenter', () => {
+        row.classList.add('transition-all');
+      });
+    });
+  });
+</script></div></main><footer class="w-full bg-surface-container-lowest mt-space-xl"><div class="w-full max-w-[1440px] mx-auto px-margin py-space-lg flex flex-col md:flex-row items-center justify-between gap-space-md"><div class="flex items-center gap-space-sm"><span class="font-label-lg text-label-lg text-primary">EngClass LMS</span><span class="text-outline">•</span><span class="font-body-sm text-body-sm text-on-surface-variant">Hệ sinh thái học tập và phiếu bài tập tương tác thông minh</span></div><div class="flex items-center gap-space-lg"><a class="font-body-sm text-body-sm text-on-surface-variant hover:text-primary transition-colors" href="#">Trung tâm hỗ trợ giáo viên</a><a class="font-body-sm text-body-sm text-on-surface-variant hover:text-primary transition-colors" href="#">Chính sách bảo mật</a><span class="font-body-sm text-body-sm text-outline">© 2025 EngClass Vietnam</span></div></div></footer></body></html>

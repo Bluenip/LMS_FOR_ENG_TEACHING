@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 231 100% 99%;
+    --foreground: 212 63% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 212 63% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 212 63% 11%;
+    --primary: 243 75% 59%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 221 100% 95%;
+    --secondary-foreground: 245 70% 47%;
+    --muted: 218 55% 96%;
+    --muted-foreground: 244 10% 35%;
+    --accent: 25 95% 53%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 75% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 218 28% 89%;
+    --input: 218 28% 87%;
+    --ring: 243 75% 59%;
+    --radius: 0.75rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-[#F8F9FF] text-[#0B1C30] antialiased selection:bg-indigo-100 selection:text-indigo-900;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.stitch-card {
+  @apply rounded-2xl border border-slate-200/80 bg-white shadow-card transition-shadow;
+}
+
+.stitch-card-hover {
+  @apply rounded-2xl border border-slate-200/80 bg-white shadow-card transition-all duration-200 hover:border-indigo-200 hover:shadow-card-hover;
+}
+
+/* Proctored exam in progress: hide the app navbar so students cannot navigate away silently */
+body[data-exam-mode="1"] [data-app-navbar] {
+  display: none;
+}
