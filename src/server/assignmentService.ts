@@ -10,6 +10,7 @@ import { createNotificationsBulk } from "./notificationService";
 import { canRevealResult } from "./submissionService";
 import { formatDateTime } from "@/lib/utils";
 import type { UpdateAssignmentInput } from "@/lib/validators";
+import { logAudit } from "@/server/auditService";
 
 export interface CreateAssignmentInput {
   worksheetId: string;
@@ -182,7 +183,11 @@ export async function getAssignmentSettings(id: string) {
  * Worksheet and class stay the same; existing submissions are kept. Students in the class are
  * notified when the change gives them more time or more attempts.
  */
-export async function updateAssignment(id: string, input: UpdateAssignmentInput) {
+export async function updateAssignment(
+  id: string,
+  input: UpdateAssignmentInput,
+  actorId?: string
+) {
   const before = await prisma.assignment.findUnique({
     where: { id },
     select: { maxAttempts: true, dueAt: true, classId: true, title: true },
@@ -258,6 +263,25 @@ export async function updateAssignment(id: string, input: UpdateAssignmentInput)
       }))
     );
   }
+  await logAudit({
+    actorId: actorId ?? null,
+    action: "ASSIGNMENT_UPDATED",
+    targetType: "ASSIGNMENT",
+    targetId: updated.id,
+    summary: `Cập nhật bài tập đã giao: ${updated.title}`,
+    meta: {
+      classId: updated.classId,
+      previousTitle: before.title,
+      title: updated.title,
+      previousMaxAttempts: before.maxAttempts,
+      maxAttempts: updated.maxAttempts,
+      previousDueAt: before.dueAt?.toISOString() ?? null,
+      dueAt: updated.dueAt?.toISOString() ?? null,
+      timeLimitMin: updated.timeLimitMin,
+      proctorMode: updated.proctorMode,
+    },
+  });
+
   return updated;
 }
 

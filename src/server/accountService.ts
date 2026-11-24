@@ -4,6 +4,7 @@ import type { Role } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { getStorageProvider } from "@/lib/storage";
+import { logAudit } from "@/server/auditService";
 
 /**
  * Account provisioning (public self-registration is disabled):
@@ -162,6 +163,20 @@ export async function createAccount(
     return created;
   });
 
+  await logAudit({
+    actorId: actor.id,
+    action: "USER_CREATED",
+    targetType: "USER",
+    targetId: user.id,
+    summary: `Tạo tài khoản ${user.role}: ${user.name} (${user.email})`,
+    meta: {
+      email: user.email,
+      role: user.role,
+      classId: input.classId ?? null,
+      generatedTemporaryPassword: temporaryPassword !== null,
+    },
+  });
+
   return { user, temporaryPassword, linkedExistingParent: false };
 }
 
@@ -204,6 +219,14 @@ export async function resetPasswordFor(actor: { id: string; role: Role }, target
       mustChangePassword: true,
       passwordChangedAt: new Date(),
     },
+  });
+  await logAudit({
+    actorId: actor.id,
+    action: "USER_PASSWORD_RESET",
+    targetType: "USER",
+    targetId: target.id,
+    summary: `Đặt lại mật khẩu cho ${target.name} (${target.email})`,
+    meta: { targetEmail: target.email, targetRole: target.role },
   });
   return { user: target, temporaryPassword };
 }
@@ -273,15 +296,36 @@ export async function deleteAccount(actor: { id: string; role: Role }, targetId:
     where: { id: target.id },
     data: { deletedAt: now, passwordChangedAt: now },
   });
+  await logAudit({
+    actorId: actor.id,
+    action: "USER_TRASHED",
+    targetType: "USER",
+    targetId: target.id,
+    summary: `Chuyển tài khoản vào thùng rác: ${target.email}`,
+    meta: { targetEmail: target.email, targetRole: target.role },
+  });
   return { ok: true, trashed: true };
 }
 
 /** Admin takes an account back out of the trash. */
 export async function restoreAccount(actor: { id: string; role: Role }, targetId: string) {
   if (actor.role !== "ADMIN") throw new AppError("Chỉ quản trị viên được khôi phục tài khoản.", 403, "FORBIDDEN");
-  const target = await prisma.user.findUnique({ where: { id: targetId }, select: { deletedAt: true } });
+  const target = await prisma.user.findUnique({
+    where: { id: targetId },
+    select: { id: true, name: true, email: true, role: true, deletedAt: true },
+  });
   if (!target) throw new AppError("Không tìm thấy người dùng.", 404, "NOT_FOUND");
   await prisma.user.update({ where: { id: targetId }, data: { deletedAt: null } });
+  if (target.deletedAt) {
+    await logAudit({
+      actorId: actor.id,
+      action: "USER_RESTORED",
+      targetType: "USER",
+      targetId: target.id,
+      summary: `Khôi phục tài khoản từ thùng rác: ${target.name} (${target.email})`,
+      meta: { targetEmail: target.email, targetRole: target.role },
+    });
+  }
   return { ok: true };
 }
 
@@ -297,6 +341,14 @@ export async function purgeAccount(actor: { id: string; role: Role }, targetId: 
     throw new AppError("Chỉ xoá vĩnh viễn được tài khoản đã nằm trong thùng rác.", 400, "NOT_IN_TRASH");
   }
   await hardDeleteUser(target.id, target.avatarUrl);
+  await logAudit({
+    actorId: actor.id,
+    action: "USER_PURGED",
+    targetType: "USER",
+    targetId: target.id,
+    summary: `Xoá vĩnh viễn tài khoản: ${target.email}`,
+    meta: { targetEmail: target.email, targetRole: target.role },
+  });
   return { ok: true };
 }
 

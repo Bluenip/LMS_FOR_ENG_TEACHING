@@ -1,6 +1,7 @@
 import type { Role } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { logAudit } from "@/server/auditService";
 
 export async function getAdminSystemStats() {
   const [
@@ -82,12 +83,13 @@ export async function adminUpdateUser(
   }
   const target = await prisma.user.findUnique({
     where: { id: targetUserId },
-    select: { role: true, isLocked: true },
+    select: { name: true, email: true, role: true, isLocked: true },
   });
   if (!target) {
     throw new AppError("Không tìm thấy người dùng.", 404, "NOT_FOUND");
   }
   const roleChanges = input.role !== undefined && input.role !== target.role;
+  const lockChanges = input.isLocked !== undefined && input.isLocked !== target.isLocked;
   // a teacher/admin who still owns classes or worksheets must not become a student/parent:
   // they would lose access to all of it (data stays, but nobody can manage those classes)
   if (
@@ -104,7 +106,8 @@ export async function adminUpdateUser(
       throw new AppError(
         `Không thể đổi vai trò: tài khoản này đang sở hữu ${classes} lớp học và ${worksheets} bài tập. Hãy xoá hoặc chuyển chúng trước.`,
         400,
-        "ROLE_HAS_CONTENT"
+        "ROLE_HAS_CONTENT",
+        { classes, worksheets }
       );
     }
   }
@@ -120,7 +123,7 @@ export async function adminUpdateUser(
       throw new AppError("Hệ thống phải còn ít nhất một quản trị viên đang hoạt động.", 400, "LAST_ADMIN");
     }
   }
-  return prisma.user.update({
+  const updated = await prisma.user.update({
     where: { id: targetUserId },
     data: {
       ...(input.role !== undefined ? { role: input.role } : {}),
@@ -136,6 +139,31 @@ export async function adminUpdateUser(
       isLocked: true,
     },
   });
+
+  if (roleChanges) {
+    await logAudit({
+      actorId: actorUserId,
+      action: "USER_ROLE_CHANGED",
+      targetType: "USER",
+      targetId: targetUserId,
+      summary: `Đổi vai trò ${target.name} (${target.email}): ${target.role} → ${updated.role}`,
+      meta: { targetEmail: target.email, previousRole: target.role, nextRole: updated.role },
+    });
+  }
+  if (lockChanges) {
+    await logAudit({
+      actorId: actorUserId,
+      action: updated.isLocked ? "USER_LOCKED" : "USER_UNLOCKED",
+      targetType: "USER",
+      targetId: targetUserId,
+      summary: updated.isLocked
+        ? `Khoá tài khoản ${target.name} (${target.email})`
+        : `Mở khoá tài khoản ${target.name} (${target.email})`,
+      meta: { targetEmail: target.email, isLocked: updated.isLocked },
+    });
+  }
+
+  return updated;
 }
 
 export async function listAllParentLinks() {

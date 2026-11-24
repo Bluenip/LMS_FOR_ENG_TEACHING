@@ -35,9 +35,9 @@ export async function GET(
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
-    await requireTeacherOfAssignment(id);
+    const { user } = await requireTeacherOfAssignment(id);
     const data = updateAssignmentSchema.parse(await req.json());
-    const assignment = await updateAssignment(id, data);
+    const assignment = await updateAssignment(id, data, user.id);
     return NextResponse.json({ assignment });
   } catch (error) {
     return handleApiError(error);

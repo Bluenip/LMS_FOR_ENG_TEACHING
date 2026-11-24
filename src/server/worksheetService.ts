@@ -6,6 +6,7 @@ import { getStorageProvider } from "@/lib/storage";
 import { parsePdfMetadata, validatePdfBuffer } from "@/lib/pdf/server-pdf";
 import { regradeWorksheetSubmissions } from "./regradeService";
 import { enqueueDriveTrashForKeys, getStorageLocationsForKeys } from "./driveService";
+import { logAudit } from "@/server/auditService";
 
 async function countWorksheetSubmissions(worksheetId: string): Promise<number> {
   return prisma.submission.count({ where: { assignment: { worksheetId } } });
@@ -96,10 +97,10 @@ export async function updateWorksheet(
   });
 }
 
-export async function deleteWorksheet(worksheetId: string) {
+export async function deleteWorksheet(worksheetId: string, actorId?: string) {
   const ws = await prisma.worksheet.findUnique({
     where: { id: worksheetId },
-    select: { pdfFileKey: true, audios: { select: { fileKey: true } } },
+    select: { title: true, ownerId: true, pdfFileKey: true, audios: { select: { fileKey: true } } },
   });
   if (!ws) {
     throw new AppError("Không tìm thấy phiếu bài tập.", 404, "NOT_FOUND");
@@ -119,6 +120,15 @@ export async function deleteWorksheet(worksheetId: string) {
   // Queue Drive files for asynchronous trash BEFORE deleting DB record (no Google call in DB tx)
   const queuedCount = await enqueueDriveTrashForKeys(keysToClean, "WORKSHEET_DELETED");
   await prisma.worksheet.delete({ where: { id: worksheetId } });
+
+  await logAudit({
+    actorId: actorId ?? null,
+    action: "WORKSHEET_DELETED",
+    targetType: "WORKSHEET",
+    targetId: worksheetId,
+    summary: `Xoá worksheet: ${ws.title}`,
+    meta: { title: ws.title, ownerId: ws.ownerId },
+  });
 
   if (queuedCount === 0) {
     const storage = getStorageProvider();

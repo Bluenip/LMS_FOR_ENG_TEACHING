@@ -43,8 +43,8 @@ export async function DELETE(
 ) {
   try {
     const { id } = await context.params;
-    await requireTeacherOfWorksheet(id);
-    await deleteWorksheet(id);
+    const { user } = await requireTeacherOfWorksheet(id);
+    await deleteWorksheet(id, user.id);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return handleApiError(error);

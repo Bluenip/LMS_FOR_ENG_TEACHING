@@ -45,6 +45,8 @@ export async function RoleShell({
       fallbackName = tr("Quản trị viên", "Administrator");
       links = [
         { href: "/admin", label: m.nav.adminOverview, exact: true },
+        { href: "/admin/audit", label: tr("Nhật ký hoạt động", "Audit log") },
+        { href: "/admin/errors", label: tr("Nhật ký lỗi", "Error log") },
         { href: "/teacher", label: tr("Giao diện Giáo viên", "Teacher view") },
       ];
       break;

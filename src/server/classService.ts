@@ -5,6 +5,7 @@ import { AppError } from "@/lib/errors";
 import { generateJoinCode } from "@/lib/utils";
 import { createNotification } from "./notificationService";
 import { enqueueDriveTrashByFileIds } from "./driveService";
+import { logAudit } from "@/server/auditService";
 
 async function generateUniqueJoinCode(): Promise<string> {
   for (let attempt = 0; attempt < 15; attempt++) {
@@ -88,9 +89,18 @@ export async function updateClass(
     description?: string | null;
     requireApproval?: boolean;
     archived?: boolean;
-  }
+  },
+  actorId?: string
 ) {
-  return prisma.class.update({
+  const before =
+    input.archived !== undefined
+      ? await prisma.class.findUnique({
+          where: { id: classId },
+          select: { name: true, archived: true },
+        })
+      : null;
+
+  const updated = await prisma.class.update({
     where: { id: classId },
     data: {
       ...(input.name !== undefined ? { name: input.name } : {}),
@@ -99,6 +109,21 @@ export async function updateClass(
       ...(input.archived !== undefined ? { archived: input.archived } : {}),
     },
   });
+
+  if (before && input.archived !== undefined && before.archived !== updated.archived) {
+    await logAudit({
+      actorId: actorId ?? null,
+      action: updated.archived ? "CLASS_ARCHIVED" : "CLASS_UNARCHIVED",
+      targetType: "CLASS",
+      targetId: updated.id,
+      summary: updated.archived
+        ? `Lưu trữ (đóng) lớp học: ${updated.name}`
+        : `Mở lại lớp học: ${updated.name}`,
+      meta: { className: updated.name, archived: updated.archived },
+    });
+  }
+
+  return updated;
 }
 
 export async function regenerateClassJoinCode(classId: string) {
@@ -109,7 +134,11 @@ export async function regenerateClassJoinCode(classId: string) {
   });
 }
 
-export async function deleteClass(classId: string) {
+export async function deleteClass(classId: string, actorId?: string) {
+  const cls = await prisma.class.findUnique({
+    where: { id: classId },
+    select: { id: true, name: true, teacherId: true },
+  });
   const driveFiles = await prisma.driveFile.findMany({
     where: { classId, trashedAt: null },
     select: { id: true },
@@ -120,7 +149,18 @@ export async function deleteClass(classId: string) {
       "CLASS_DELETED"
     );
   }
-  return prisma.class.delete({ where: { id: classId } });
+  const deleted = await prisma.class.delete({ where: { id: classId } });
+  if (cls) {
+    await logAudit({
+      actorId: actorId ?? null,
+      action: "CLASS_DELETED",
+      targetType: "CLASS",
+      targetId: cls.id,
+      summary: `Xoá lớp học: ${cls.name}`,
+      meta: { className: cls.name, teacherId: cls.teacherId },
+    });
+  }
+  return deleted;
 }
 
 export async function joinClassByCode(studentId: string, joinCode: string) {

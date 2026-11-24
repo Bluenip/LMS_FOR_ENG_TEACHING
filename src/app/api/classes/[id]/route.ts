@@ -43,10 +43,10 @@ export async function PATCH(
 ) {
   try {
     const { id } = await context.params;
-    await requireTeacherOfClass(id);
+    const { user } = await requireTeacherOfClass(id);
     const body = await req.json();
     const data = updateClassSchema.parse(body);
-    const updated = await updateClass(id, data);
+    const updated = await updateClass(id, data, user.id);
     return NextResponse.json({ class: updated });
   } catch (error) {
     return handleApiError(error);
@@ -59,8 +59,8 @@ export async function DELETE(
 ) {
   try {
     const { id } = await context.params;
-    await requireTeacherOfClass(id);
-    await deleteClass(id);
+    const { user } = await requireTeacherOfClass(id);
+    await deleteClass(id, user.id);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return handleApiError(error);
