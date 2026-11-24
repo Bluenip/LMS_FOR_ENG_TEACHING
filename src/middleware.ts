@@ -18,7 +18,9 @@ export default auth((req) => {
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
   const isProtected = isTeacherRoute || isStudentRoute || isParentRoute || isAdminRoute;
 
-  if (isAuthRoute && userRole) {
+  const allowStaleLogin = pathname === "/login" && nextUrl.searchParams.has("reason");
+
+  if (isAuthRoute && userRole && !allowStaleLogin) {
     return NextResponse.redirect(new URL(getHomeForRole(userRole), nextUrl));
   }
 

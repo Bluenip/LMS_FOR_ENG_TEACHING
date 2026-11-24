@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiFetchJson } from "@/lib/api-client";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -93,7 +94,11 @@ interface ReportPayload {
     correctCount: number;
     totalGraded: number;
     correctRate: number;
-    commonWrongAnswers: Array<{ answer: string; count: number }>;
+    commonWrongAnswers: Array<{
+      answer: string;
+      code?: "BLANK" | "TRUE" | "FALSE";
+      count: number;
+    }>;
   }>;
 }
 
@@ -167,14 +172,15 @@ function SubmissionReviewModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { m: vi, tr } = useI18n();
+  const { m: vi, tr, locale } = useI18n();
   const { data, isLoading } = useQuery<{ submission: ReviewSubmissionDetail }>({
     queryKey: ["submission-review", submissionId],
-    queryFn: async () => {
-      const res = await fetch(`/api/submissions/${submissionId}/grade`);
-      if (!res.ok) throw new Error(tr("Không tải được bài làm", "Could not load the submission"));
-      return res.json();
-    },
+    queryFn: () =>
+      apiFetchJson<{ submission: ReviewSubmissionDetail }>(
+        `/api/submissions/${submissionId}/grade`,
+        undefined,
+        tr("Không tải được bài làm", "Could not load the submission")
+      ),
   });
 
   const sub = data?.submission;
@@ -335,7 +341,7 @@ function SubmissionReviewModal({
                               {ev.durationMs ? ` (${Math.round(ev.durationMs / 1000)}s)` : ""}
                             </span>
                             <span className="tabular-nums text-[11px] opacity-80">
-                              {formatDateTime(ev.at)}
+                              {formatDateTime(ev.at, locale)}
                             </span>
                           </div>
                           {snapKey && (
@@ -399,9 +405,13 @@ function SubmissionReviewModal({
                         </span>
                         <p className="mt-0.5 whitespace-pre-wrap font-medium">
                           {ans?.value !== undefined && ans?.value !== null && ans?.value !== ""
-                            ? Array.isArray(ans.value)
-                              ? ans.value.join(", ")
-                              : String(ans.value)
+                            ? typeof ans.value === "boolean"
+                              ? ans.value
+                                ? tr("Đúng / Có", "True / Yes")
+                                : tr("Sai / Không", "False / No")
+                              : Array.isArray(ans.value)
+                                ? ans.value.join(", ")
+                                : String(ans.value)
                             : tr("(Bỏ trống)", "(Blank)")}
                         </p>
                         {f.type === "DICTATION" && ans?.gradeDetail && (
@@ -486,7 +496,7 @@ function SubmissionReviewModal({
 }
 
 export default function AssignmentGradingPage() {
-  const { m: vi, tr } = useI18n();
+  const { m: vi, tr, locale } = useI18n();
   const params = useParams<{ id: string }>();
   const assignmentId = params.id;
   const queryClient = useQueryClient();
@@ -495,13 +505,24 @@ export default function AssignmentGradingPage() {
   const [reviewingSubId, setReviewingSubId] = useState<string | null>(null);
 
   const { data: report, isLoading } = useQuery<ReportPayload>({
-    queryKey: ["assignment-report", assignmentId],
-    queryFn: async () => {
-      const res = await fetch(`/api/assignments/${assignmentId}/report`);
-      if (!res.ok) throw new Error(tr("Không thể tải báo cáo", "Could not load the report"));
-      return res.json();
-    },
+    queryKey: ["assignment-report", assignmentId, locale],
+    queryFn: () =>
+      apiFetchJson<ReportPayload>(
+        `/api/assignments/${assignmentId}/report`,
+        undefined,
+        tr("Không thể tải báo cáo", "Could not load the report")
+      ),
   });
+
+  const formatWrongAnswer = (w: {
+    answer: string;
+    code?: "BLANK" | "TRUE" | "FALSE";
+  }) => {
+    if (w.code === "BLANK") return tr("(Bỏ trống)", "(Blank)");
+    if (w.code === "TRUE") return tr("Đúng / Có", "True / Yes");
+    if (w.code === "FALSE") return tr("Sai / Không", "False / No");
+    return w.answer;
+  };
 
   if (isLoading || !report) {
     return (
@@ -542,7 +563,7 @@ export default function AssignmentGradingPage() {
             {report.assignment.title}
           </h1>
           <p className="mt-0.5 text-xs text-[#464555]">
-            {report.assignment.totalQuestions} {tr("câu hỏi • Điểm tối đa", "questions • Max score")} {report.assignment.maxScore} {tr("• Hạn nộp:", "• Due:")} {formatDateTime(report.assignment.dueAt)}
+            {report.assignment.totalQuestions} {tr("câu hỏi • Điểm tối đa", "questions • Max score")} {report.assignment.maxScore} {tr("• Hạn nộp:", "• Due:")} {formatDateTime(report.assignment.dueAt, locale)}
           </p>
         </div>
 
@@ -668,7 +689,7 @@ export default function AssignmentGradingPage() {
                     {" "}
                     {tr("Đáp án sai phổ biến:", "Most common wrong answer:")}{" "}
                     {lowestQuestion.commonWrongAnswers
-                      .map((w) => `"${w.answer}" (${w.count})`)
+                      .map((w) => `"${formatWrongAnswer(w)}" (${w.count})`)
                       .join(", ")}
                     .
                   </>
@@ -693,7 +714,7 @@ export default function AssignmentGradingPage() {
                 className="group relative flex min-w-[36px] flex-1 flex-col items-center gap-1.5"
                 title={`${tr("Câu", "Q")} ${q.label}: ${q.correctRate}% ${tr("đúng", "correct")} (${q.correctCount}/${q.totalGraded})${
                   q.commonWrongAnswers.length
-                    ? ` | ${tr("Sai phổ biến", "Common wrong")}: ${q.commonWrongAnswers.map((w) => `${w.answer} (${w.count})`).join(", ")}`
+                    ? ` | ${tr("Sai phổ biến", "Common wrong")}: ${q.commonWrongAnswers.map((w) => `${formatWrongAnswer(w)} (${w.count})`).join(", ")}`
                     : ""
                 }`}
               >
@@ -736,7 +757,13 @@ export default function AssignmentGradingPage() {
                   <td className="py-2 text-[#464555]">
                     {q.commonWrongAnswers.length > 0
                       ? q.commonWrongAnswers
-                          .map((w) => `${w.answer} (${w.count} em)`)
+                          .map(
+                            (w) =>
+                              `${formatWrongAnswer(w)} (${w.count} ${tr(
+                                "em",
+                                w.count === 1 ? "student" : "students"
+                              )})`
+                          )
                           .join(" • ")
                       : tr("Không có", "None")}
                   </td>
@@ -788,7 +815,7 @@ export default function AssignmentGradingPage() {
                     </div>
                   </td>
                   <td className="px-6 py-3.5 text-xs text-[#464555] tabular-nums">
-                    <div>{formatDateTime(row.submittedAt)}</div>
+                    <div>{formatDateTime(row.submittedAt, locale)}</div>
                     {row.durationMs !== null && (
                       <div className="text-[11px] text-slate-400">
                         {tr("Làm trong", "Took")} {formatDurationMs(row.durationMs)}

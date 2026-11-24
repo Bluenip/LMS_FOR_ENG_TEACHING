@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiFetchJson } from "@/lib/api-client";
 import { toast } from "sonner";
 import {
   BookOpen,
@@ -62,13 +63,15 @@ export default function AdminPortalPage() {
 
   const { data, isLoading } = useQuery<AdminOverview>({
     queryKey: ["admin-overview", search, roleFilter],
-    queryFn: async () => {
+    queryFn: () => {
       const params = new URLSearchParams();
       if (search.trim()) params.set("q", search.trim());
       if (roleFilter) params.set("role", roleFilter);
-      const res = await fetch(`/api/admin/overview?${params.toString()}`);
-      if (!res.ok) throw new Error(tr("Không tải được dữ liệu quản trị", "Could not load admin data"));
-      return res.json();
+      return apiFetchJson<AdminOverview>(
+        `/api/admin/overview?${params.toString()}`,
+        undefined,
+        tr("Không tải được dữ liệu quản trị", "Could not load admin data")
+      );
     },
   });
 

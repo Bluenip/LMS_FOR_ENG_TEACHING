@@ -71,6 +71,7 @@ export const en: Messages = {
     registerLink: "Sign up",
     loginLink: "Sign in",
     invalidCredentials: "Incorrect email or password.",
+    sessionExpired: "Your session has expired. Please sign in again.",
     accountLocked: "Your account has been locked. Please contact an administrator.",
     rateLimited: "Too many attempts. Please try again in a few minutes.",
     emailExists: "This email is already registered.",

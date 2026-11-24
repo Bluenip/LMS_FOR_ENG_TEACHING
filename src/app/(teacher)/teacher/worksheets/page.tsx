@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiFetchJson } from "@/lib/api-client";
 import { toast } from "sonner";
 import {
   Archive,
@@ -80,11 +81,15 @@ export default function TeacherWorksheetsPage() {
     sharedWorksheets?: WorksheetRow[];
   }>({
     queryKey: ["teacher-worksheets"],
-    queryFn: async () => {
-      const res = await fetch("/api/worksheets");
-      if (!res.ok) throw new Error(tr("Không thể tải danh sách worksheet", "Could not load worksheets"));
-      return res.json();
-    },
+    queryFn: () =>
+      apiFetchJson<{
+        worksheets: WorksheetRow[];
+        sharedWorksheets?: WorksheetRow[];
+      }>(
+        "/api/worksheets",
+        undefined,
+        tr("Không thể tải danh sách worksheet", "Could not load worksheets")
+      ),
   });
 
   const handleCreate = async (e: React.FormEvent) => {

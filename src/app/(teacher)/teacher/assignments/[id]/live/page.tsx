@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiFetchJson } from "@/lib/api-client";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -153,11 +154,12 @@ export default function TeacherLiveProctorPage() {
 
   const { data: snapshot, isLoading } = useQuery<LiveSnapshot>({
     queryKey: ["live-proctor", assignmentId],
-    queryFn: async () => {
-      const res = await fetch(`/api/assignments/${assignmentId}/live?mode=snapshot`);
-      if (!res.ok) throw new Error(tr("Không tải được phòng giám sát trực tiếp", "Could not load the live proctoring room"));
-      return res.json();
-    },
+    queryFn: () =>
+      apiFetchJson<LiveSnapshot>(
+        `/api/assignments/${assignmentId}/live?mode=snapshot`,
+        undefined,
+        tr("Không tải được phòng giám sát trực tiếp", "Could not load the live proctoring room")
+      ),
     refetchInterval: 8000,
   });
 

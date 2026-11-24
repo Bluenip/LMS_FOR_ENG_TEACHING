@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiFetchJson } from "@/lib/api-client";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -227,11 +228,12 @@ function ParentPortalContent() {
     children: ChildLinkSummary[];
   }>({
     queryKey: ["parent-children"],
-    queryFn: async () => {
-      const res = await fetch("/api/parent/children");
-      if (!res.ok) throw new Error(tr("Không tải được danh sách con", "Could not load your children"));
-      return res.json();
-    },
+    queryFn: () =>
+      apiFetchJson<{ children: ChildLinkSummary[] }>(
+        "/api/parent/children",
+        undefined,
+        tr("Không tải được danh sách con", "Could not load your children")
+      ),
   });
 
   const children = useMemo(() => childrenData?.children ?? [], [childrenData]);
@@ -245,11 +247,12 @@ function ParentPortalContent() {
   const { data: overview, isLoading: loadingOverview } = useQuery<ParentOverviewDTO>({
     queryKey: ["parent-overview", selectedChildId],
     enabled: Boolean(selectedChildId),
-    queryFn: async () => {
-      const res = await fetch(`/api/parent/children/${selectedChildId}/overview`);
-      if (!res.ok) throw new Error(tr("Không tải được báo cáo của con", "Could not load your child's report"));
-      return res.json();
-    },
+    queryFn: () =>
+      apiFetchJson<ParentOverviewDTO>(
+        `/api/parent/children/${selectedChildId}/overview`,
+        undefined,
+        tr("Không tải được báo cáo của con", "Could not load your child's report")
+      ),
   });
 
   const handleLinkChild = async (e: React.FormEvent) => {

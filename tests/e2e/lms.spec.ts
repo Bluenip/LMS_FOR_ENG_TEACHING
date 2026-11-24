@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { PrismaClient } from "@prisma/client";
 
 async function loginAs(page: Page, email: string, password = "password123") {
   await page.goto("/login");
@@ -697,5 +698,100 @@ test.describe("Phase 8: Anti-Cheat Proctoring (Rules, SSE Live, LOCK, RESTART, A
 
     await studentCtx.close();
     await teacherCtx.close();
+  });
+
+  test("Flow 10: Stale session redirects to login & grading page in EN has no Vietnamese labels", async ({
+    browser,
+  }) => {
+    const prisma = new PrismaClient();
+    const tempEmail = `stale-e2e-${Date.now()}@engclass.vn`;
+
+    try {
+      // 1. Server-side stale session check: register temp teacher, sign in, delete user in DB, reload /teacher/worksheets
+      const staleCtx = await browser.newContext();
+      const stalePage = await staleCtx.newPage();
+
+      const regRes = await stalePage.request.post("/api/auth/register", {
+        data: {
+          name: "Temp Stale Teacher",
+          email: tempEmail,
+          password: "password123",
+          role: "TEACHER",
+        },
+      });
+      expect(regRes.ok()).toBe(true);
+
+      await loginAs(stalePage, tempEmail, "password123");
+      await stalePage.goto("/teacher/worksheets");
+      await expect(stalePage).toHaveURL(/\/teacher\/worksheets/);
+
+      // Delete user from DB (simulates database re-seed while browser keeps old JWT cookie)
+      await prisma.user.delete({ where: { email: tempEmail } });
+
+      // Reloading a server-rendered protected route must clear cookie & redirect to /login?reason=session
+      await stalePage.goto("/teacher/worksheets");
+      await stalePage.waitForURL(/\/login\?reason=session/, { timeout: 15000 });
+      await expect(stalePage.getByTestId("session-notice")).toContainText(
+        /Phiên đăng nhập đã hết hạn|session has expired/i
+      );
+      await staleCtx.close();
+
+      // 2. Client-side QueryClient 401 UNAUTHORIZED -> triggers signOut to /login?reason=session
+      const clientCtx = await browser.newContext();
+      const clientPage = await clientCtx.newPage();
+      await loginAs(clientPage, "teacher1@engclass.vn");
+      await clientPage.route("**/api/worksheets", (route) =>
+        route.fulfill({
+          status: 401,
+          contentType: "application/json",
+          body: JSON.stringify({
+            error: "Tài khoản không tồn tại.",
+            code: "UNAUTHORIZED",
+          }),
+        })
+      );
+      await clientPage.goto("/teacher/worksheets");
+      await clientPage.waitForURL(/\/login\?reason=session/, { timeout: 15000 });
+      await expect(clientPage.getByTestId("session-notice")).toBeVisible();
+      await clientCtx.close();
+
+      // 3. Grading page in EN mode & English API error responses
+      const enCtx = await browser.newContext();
+      const enPage = await enCtx.newPage();
+      await enCtx.addCookies([
+        {
+          name: "lang",
+          value: "en",
+          url: "http://localhost:3000",
+        },
+      ]);
+      await loginAs(enPage, "teacher1@engclass.vn");
+
+      // API error must respond in English when lang=en cookie is set
+      const notFoundErr = await enPage.evaluate(async () => {
+        const r = await fetch("/api/worksheets/does-not-exist-phase11");
+        return r.json();
+      });
+      expect(notFoundErr.error).toBe("Worksheet not found.");
+
+      // Find seeded Unit 7 assignment and inspect its grading page in EN
+      const unit7Asg = await prisma.assignment.findFirstOrThrow({
+        where: { title: { contains: "Unit 7" } },
+      });
+      await enPage.goto(`/teacher/assignments/${unit7Asg.id}/grading`);
+      await expect(enPage.getByText("Correct rate per question")).toBeVisible({ timeout: 15000 });
+      await expect(enPage.getByText("Student submissions")).toBeVisible();
+
+      const bodyText = await enPage.locator("main").innerText();
+      expect(bodyText).not.toContain("(Bỏ trống)");
+      expect(bodyText).not.toContain("Đúng / Có");
+      expect(bodyText).not.toContain("Sai / Không");
+      expect(bodyText).not.toMatch(/\(\d+\s+em\)/);
+
+      await enCtx.close();
+    } finally {
+      await prisma.user.deleteMany({ where: { email: tempEmail } }).catch(() => {});
+      await prisma.$disconnect();
+    }
   });
 });

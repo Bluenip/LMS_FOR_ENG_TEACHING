@@ -68,6 +68,7 @@ export const vi = {
     registerLink: "Đăng ký",
     loginLink: "Đăng nhập",
     invalidCredentials: "Email hoặc mật khẩu không chính xác.",
+    sessionExpired: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
     accountLocked: "Tài khoản của bạn đã bị khoá. Vui lòng liên hệ quản trị viên.",
     rateLimited: "Bạn thao tác quá nhiều lần. Vui lòng thử lại sau ít phút.",
     emailExists: "Email này đã được đăng ký.",

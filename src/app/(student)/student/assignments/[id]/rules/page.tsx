@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { apiFetchJson } from "@/lib/api-client";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -119,14 +120,12 @@ export default function StudentAssignmentRulesPage() {
 
   const { data, isLoading, error } = useQuery<RulesPayload>({
     queryKey: ["assignment-rules", assignmentId],
-    queryFn: async () => {
-      const res = await fetch(`/api/assignments/${assignmentId}`);
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? tr("Không tải được thông tin bài thi", "Could not load the exam"));
-      }
-      return res.json();
-    },
+    queryFn: () =>
+      apiFetchJson<RulesPayload>(
+        `/api/assignments/${assignmentId}`,
+        undefined,
+        tr("Không tải được thông tin bài thi", "Could not load the exam")
+      ),
   });
 
   if (isLoading) {

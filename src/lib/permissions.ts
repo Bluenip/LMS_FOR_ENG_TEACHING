@@ -1,9 +1,13 @@
+import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import type { Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { getRequestLocale } from "@/lib/i18n/server";
+import { localizeApiError } from "@/lib/i18n/api-errors";
+import { getHomeForRole } from "@/lib/utils";
 
 export { AppError };
 
@@ -12,6 +16,40 @@ export interface SessionUser {
   email: string;
   name: string;
   role: Role;
+}
+
+/**
+ * Validates the current NextAuth session against the database for Server Component layouts/pages.
+ * Redirects stale/deleted or locked accounts through /api/auth/clear-session so cookies are cleared
+ * before landing on /login?reason=...
+ */
+export async function requireLayoutUser(allowedRoles?: Role[]): Promise<SessionUser> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    redirect("/login");
+  }
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true, email: true, name: true, role: true, isLocked: true },
+  });
+
+  if (!dbUser) {
+    redirect("/api/auth/clear-session?reason=session");
+  }
+  if (dbUser.isLocked) {
+    redirect("/api/auth/clear-session?reason=locked");
+  }
+  if (allowedRoles && !allowedRoles.includes(dbUser.role)) {
+    redirect(getHomeForRole(dbUser.role));
+  }
+
+  return {
+    id: dbUser.id,
+    email: dbUser.email,
+    name: dbUser.name,
+    role: dbUser.role,
+  };
 }
 
 export async function requireAuth(): Promise<SessionUser> {
@@ -196,18 +234,25 @@ export async function requireSubmissionAccess(submissionId: string) {
   return { user, submission, isTeacher, isParent, isOwnerStudent };
 }
 
-export function handleApiError(error: unknown): NextResponse {
+export async function handleApiError(error: unknown): Promise<NextResponse> {
+  const locale = await getRequestLocale();
+
   if (error instanceof AppError) {
     return NextResponse.json(
-      { error: error.message, code: error.code },
+      {
+        error: localizeApiError(error.message, error.code, locale),
+        code: error.code,
+        ...(error.params ? { params: error.params } : {}),
+      },
       { status: error.statusCode }
     );
   }
   if (error instanceof ZodError) {
     const firstIssue = error.issues[0];
+    const rawMsg = firstIssue?.message ?? "Dữ liệu đầu vào không hợp lệ.";
     return NextResponse.json(
       {
-        error: firstIssue?.message ?? "Dữ liệu đầu vào không hợp lệ.",
+        error: localizeApiError(rawMsg, "VALIDATION_ERROR", locale),
         code: "VALIDATION_ERROR",
         issues: error.issues,
       },
@@ -216,7 +261,14 @@ export function handleApiError(error: unknown): NextResponse {
   }
   console.error("[API Error]", error);
   return NextResponse.json(
-    { error: "Đã có lỗi máy chủ. Vui lòng thử lại sau.", code: "INTERNAL_ERROR" },
+    {
+      error: localizeApiError(
+        "Đã có lỗi máy chủ. Vui lòng thử lại sau.",
+        "INTERNAL_ERROR",
+        locale
+      ),
+      code: "INTERNAL_ERROR",
+    },
     { status: 500 }
   );
 }

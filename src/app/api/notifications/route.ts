@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { handleApiError, requireAuth } from "@/lib/permissions";
+import { getRequestLocale } from "@/lib/i18n/server";
+import { localizeNotification } from "@/lib/i18n/api-errors";
 import {
   listUserNotifications,
   markAllNotificationsRead,
@@ -15,8 +17,14 @@ const patchNotifSchema = z.object({
 export async function GET() {
   try {
     const user = await requireAuth();
-    const data = await listUserNotifications(user.id);
-    return NextResponse.json(data);
+    const [data, locale] = await Promise.all([
+      listUserNotifications(user.id),
+      getRequestLocale(),
+    ]);
+    return NextResponse.json({
+      items: data.items.map((item) => localizeNotification(item, locale)),
+      unreadCount: data.unreadCount,
+    });
   } catch (error) {
     return handleApiError(error);
   }

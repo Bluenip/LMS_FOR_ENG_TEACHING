@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { apiFetchJson } from "@/lib/api-client";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -60,11 +61,14 @@ function NewAssignmentForm() {
     sharedWorksheets?: WorksheetOption[];
   }>({
     queryKey: ["teacher-worksheets"],
-    queryFn: async () => (await fetch("/api/worksheets")).json(),
+    queryFn: () =>
+      apiFetchJson<{ worksheets: WorksheetOption[]; sharedWorksheets?: WorksheetOption[] }>(
+        "/api/worksheets"
+      ),
   });
   const { data: clsData } = useQuery<{ classes: ClassOption[] }>({
     queryKey: ["teacher-classes"],
-    queryFn: async () => (await fetch("/api/classes")).json(),
+    queryFn: () => apiFetchJson<{ classes: ClassOption[] }>("/api/classes"),
   });
 
   const ownWorksheets = useMemo(() => wsData?.worksheets ?? [], [wsData]);

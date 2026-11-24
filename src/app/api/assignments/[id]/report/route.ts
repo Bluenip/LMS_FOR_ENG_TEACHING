@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { handleApiError, requireTeacherOfAssignment } from "@/lib/permissions";
+import { getRequestLocale } from "@/lib/i18n/server";
 import { getAssignmentReport } from "@/server/reportService";
 
 export async function GET(
@@ -9,7 +10,8 @@ export async function GET(
   try {
     const { id } = await context.params;
     await requireTeacherOfAssignment(id);
-    const report = await getAssignmentReport(id);
+    const locale = await getRequestLocale();
+    const report = await getAssignmentReport(id, locale);
     return NextResponse.json(report);
   } catch (error) {
     return handleApiError(error);

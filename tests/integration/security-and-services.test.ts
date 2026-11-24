@@ -19,6 +19,7 @@ import {
   exportWorksheetAsZip,
   importWorksheetFile,
 } from "@/server/worksheetTransferService";
+import { getAssignmentReport } from "@/server/reportService";
 
 describe("Security, Privacy & Proctoring Integration Tests", () => {
   it("NEVER leaks answerKey or gradingOpts to student assignment payload", async () => {
@@ -460,6 +461,47 @@ describe("Security, Privacy & Proctoring Integration Tests", () => {
       expect(restored.fields[0]?.audioId).not.toBe(dictWs.audios[0]?.id);
     } finally {
       await prisma.worksheet.delete({ where: { id: restoredId } });
+    }
+  });
+
+  it("Returns structured wrong-answer codes and localized report labels for EN and VI", async () => {
+    const cls = await prisma.class.findUniqueOrThrow({ where: { joinCode: "ENG12A" } });
+    const student = await prisma.user.findUniqueOrThrow({
+      where: { email: "student1@engclass.vn" },
+    });
+    const ws = await prisma.worksheet.findFirstOrThrow({
+      where: { title: { contains: "Unit 6" } },
+      include: { fields: true },
+    });
+
+    const asg = await prisma.assignment.create({
+      data: {
+        classId: cls.id,
+        worksheetId: ws.id,
+        title: "[TEST] Report i18n",
+        showResult: "AFTER_SUBMIT",
+      },
+    });
+
+    try {
+      const { submission } = await startOrResumeSubmission(asg.id, student.id, {});
+      // Submit blank answers so commonWrongAnswers contains BLANK
+      await submitByStudent(submission.id, student.id, { answers: [] });
+
+      const reportVi = await getAssignmentReport(asg.id, "vi");
+      const reportEn = await getAssignmentReport(asg.id, "en");
+
+      const firstWrongVi = reportVi.questionAnalytics
+        .flatMap((q) => q.commonWrongAnswers)
+        .find((w) => w.code === "BLANK");
+      const firstWrongEn = reportEn.questionAnalytics
+        .flatMap((q) => q.commonWrongAnswers)
+        .find((w) => w.code === "BLANK");
+
+      expect(firstWrongVi?.answer).toBe("(Bỏ trống)");
+      expect(firstWrongEn?.answer).toBe("(Blank)");
+    } finally {
+      await prisma.assignment.delete({ where: { id: asg.id } });
     }
   });
 });

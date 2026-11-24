@@ -1,26 +1,21 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
 import { getAppName } from "@/lib/utils";
 import { AppNavbar } from "@/components/layout/AppNavbar";
 import { getI18n } from "@/lib/i18n/server";
+import { requireLayoutUser } from "@/lib/permissions";
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const { m: vi, tr } = await getI18n();
-  const session = await auth();
-  if (!session?.user) redirect("/login");
-  if (session.user.role !== "STUDENT") {
-    redirect("/");
-  }
+  const user = await requireLayoutUser(["STUDENT"]);
 
   return (
     <div className="flex min-h-screen flex-col bg-[#F8F9FF]">
       <AppNavbar
         appName={getAppName()}
         user={{
-          id: session.user.id,
-          name: session.user.name ?? tr("Học sinh", "Student"),
-          email: session.user.email ?? "",
-          role: session.user.role,
+          id: user.id,
+          name: user.name || tr("Học sinh", "Student"),
+          email: user.email,
+          role: user.role,
         }}
         links={[
           { href: "/student", label: vi.nav.dashboard, exact: true },

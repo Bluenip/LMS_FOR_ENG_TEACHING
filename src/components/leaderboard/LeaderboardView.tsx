@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { apiFetchJson } from "@/lib/api-client";
 import {
   ArrowDown,
   ArrowUp,
@@ -65,12 +66,17 @@ export function LeaderboardView({
       } else if (mode === "CLASS") {
         params.set("missingZero", String(missingZero));
       }
-      const res = await fetch(`/api/classes/${classId}/leaderboard?${params.toString()}`);
-      if (!res.ok) throw new Error(tr("Không thể tải bảng xếp hạng", "Could not load the leaderboard"));
-      const json = await res.json();
+      const json = await apiFetchJson<{
+        leaderboard: AssignmentLeaderboardResponse | ClassLeaderboardResponse;
+        assignments: AssignmentOption[];
+      }>(
+        `/api/classes/${classId}/leaderboard?${params.toString()}`,
+        undefined,
+        tr("Không thể tải bảng xếp hạng", "Could not load the leaderboard")
+      );
       // Auto-select first assignment if in ASSIGNMENT mode with none selected yet
       if (mode === "ASSIGNMENT" && !selectedAssignmentId && json.assignments?.length > 0) {
-        setSelectedAssignmentId(json.assignments[0].id);
+        setSelectedAssignmentId(json.assignments[0]!.id);
       }
       return json;
     },

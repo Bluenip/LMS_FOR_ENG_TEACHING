@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { BookOpen, CheckCircle2, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { toast } from "sonner";
@@ -23,9 +23,11 @@ const DEMO_ACCOUNTS = [
   { role: "ADMIN", email: "admin@engclass.vn", desc: "" },
 ] as const;
 
-export default function LoginPage() {
+function LoginPageContent() {
   const { m: vi, tr } = useI18n();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const reason = searchParams.get("reason");
   const appName = process.env.NEXT_PUBLIC_APP_NAME || vi.app.defaultName;
 
   const [email, setEmail] = useState("");
@@ -33,6 +35,13 @@ export default function LoginPage() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const sessionNotice =
+    reason === "session"
+      ? vi.auth.sessionExpired
+      : reason === "locked"
+        ? vi.auth.accountLocked
+        : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,6 +168,20 @@ export default function LoginPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {!error && sessionNotice && (
+                <div
+                  role="status"
+                  data-testid="session-notice"
+                  className={
+                    reason === "locked"
+                      ? "rounded-xl border border-red-200 bg-[#FEF2F2] px-3.5 py-2.5 text-sm font-medium text-[#BA1A1A]"
+                      : "rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm font-medium text-amber-800"
+                  }
+                >
+                  {sessionNotice}
+                </div>
+              )}
+
               {error && (
                 <div
                   role="alert"
@@ -255,5 +278,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#F8F9FF]" />}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

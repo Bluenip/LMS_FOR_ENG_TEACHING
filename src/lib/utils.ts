@@ -41,11 +41,14 @@ export function generateParentInviteCode(): string {
   return generateJoinCode(8);
 }
 
-export function formatDateTime(date: Date | string | null | undefined): string {
+export function formatDateTime(
+  date: Date | string | null | undefined,
+  locale: "vi" | "en" = "vi"
+): string {
   if (!date) return "—";
   const d = typeof date === "string" ? new Date(date) : date;
   if (Number.isNaN(d.getTime())) return "—";
-  return new Intl.DateTimeFormat("vi-VN", {
+  return new Intl.DateTimeFormat(locale === "en" ? "en-US" : "vi-VN", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",

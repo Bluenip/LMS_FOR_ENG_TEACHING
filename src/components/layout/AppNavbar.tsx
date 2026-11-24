@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiFetchJson } from "@/lib/api-client";
 import {
   Bell,
   BookOpen,
@@ -51,7 +52,7 @@ interface AppNavbarProps {
 }
 
 export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
-  const { m: vi, tr } = useI18n();
+  const { m: vi, tr, locale } = useI18n();
   const pathname = usePathname();
   const [notifOpen, setNotifOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -61,12 +62,9 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
     items: NotificationItem[];
     unreadCount: number;
   }>({
-    queryKey: ["notifications"],
-    queryFn: async () => {
-      const res = await fetch("/api/notifications");
-      if (!res.ok) return { items: [], unreadCount: 0 };
-      return res.json();
-    },
+    queryKey: ["notifications", locale],
+    queryFn: () =>
+      apiFetchJson<{ items: NotificationItem[]; unreadCount: number }>("/api/notifications"),
     refetchInterval: 30_000,
   });
 

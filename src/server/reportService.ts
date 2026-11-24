@@ -1,18 +1,44 @@
 import ExcelJS from "exceljs";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { compareQuestionLabels } from "@/lib/utils";
-import { formatDateTime } from "@/lib/utils";
+import type { Locale } from "@/lib/i18n/config";
+import { compareQuestionLabels, formatDateTime } from "@/lib/utils";
 
-function formatAnswerDisplay(value: unknown): string {
-  if (value === null || value === undefined) return "(Bỏ trống)";
-  if (typeof value === "boolean") return value ? "Đúng / Có" : "Sai / Không";
-  if (Array.isArray(value)) return value.length > 0 ? value.join(", ") : "(Bỏ trống)";
-  const str = String(value).trim();
-  return str.length > 0 ? str : "(Bỏ trống)";
+export type WrongAnswerCode = "BLANK" | "TRUE" | "FALSE";
+
+export interface CommonWrongAnswer {
+  answer: string;
+  code?: WrongAnswerCode;
+  count: number;
 }
 
-export async function getAssignmentReport(assignmentId: string) {
+const CODE_KEY_PREFIX = "__CODE__:";
+
+function formatWrongAnswerKey(value: unknown): string {
+  if (value === null || value === undefined) return `${CODE_KEY_PREFIX}BLANK`;
+  if (typeof value === "boolean") return `${CODE_KEY_PREFIX}${value ? "TRUE" : "FALSE"}`;
+  if (Array.isArray(value)) {
+    return value.length > 0 ? value.join(", ") : `${CODE_KEY_PREFIX}BLANK`;
+  }
+  const str = String(value).trim();
+  return str.length > 0 ? str : `${CODE_KEY_PREFIX}BLANK`;
+}
+
+function wrongAnswerLabel(code: WrongAnswerCode, locale: Locale): string {
+  if (code === "BLANK") return locale === "en" ? "(Blank)" : "(Bỏ trống)";
+  if (code === "TRUE") return locale === "en" ? "True / Yes" : "Đúng / Có";
+  return locale === "en" ? "False / No" : "Sai / Không";
+}
+
+function hydrateWrongAnswer(rawKey: string, count: number, locale: Locale): CommonWrongAnswer {
+  if (rawKey.startsWith(CODE_KEY_PREFIX)) {
+    const code = rawKey.slice(CODE_KEY_PREFIX.length) as WrongAnswerCode;
+    return { code, answer: wrongAnswerLabel(code, locale), count };
+  }
+  return { answer: rawKey, count };
+}
+
+export async function getAssignmentReport(assignmentId: string, locale: Locale = "vi") {
   const assignment = await prisma.assignment.findUnique({
     where: { id: assignmentId },
     include: {
@@ -144,7 +170,8 @@ export async function getAssignmentReport(assignmentId: string) {
       if (!ans) {
         if (field.type !== "ESSAY") {
           graded++;
-          wrongFreq.set("(Bỏ trống)", (wrongFreq.get("(Bỏ trống)") ?? 0) + 1);
+          const blankKey = `${CODE_KEY_PREFIX}BLANK`;
+          wrongFreq.set(blankKey, (wrongFreq.get(blankKey) ?? 0) + 1);
         }
         continue;
       }
@@ -153,8 +180,8 @@ export async function getAssignmentReport(assignmentId: string) {
         graded++;
       } else if (ans.isCorrect === false) {
         graded++;
-        const display = formatAnswerDisplay(ans.value);
-        wrongFreq.set(display, (wrongFreq.get(display) ?? 0) + 1);
+        const displayKey = formatWrongAnswerKey(ans.value);
+        wrongFreq.set(displayKey, (wrongFreq.get(displayKey) ?? 0) + 1);
       }
     }
 
@@ -162,7 +189,7 @@ export async function getAssignmentReport(assignmentId: string) {
     const commonWrongAnswers = Array.from(wrongFreq.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3)
-      .map(([answer, count]) => ({ answer, count }));
+      .map(([rawKey, count]) => hydrateWrongAnswer(rawKey, count, locale));
 
     return {
       fieldId: field.id,
@@ -204,28 +231,32 @@ export async function getAssignmentReport(assignmentId: string) {
   };
 }
 
-export async function generateAssignmentGradebookExcel(assignmentId: string): Promise<{
+export async function generateAssignmentGradebookExcel(
+  assignmentId: string,
+  locale: Locale = "vi"
+): Promise<{
   buffer: Buffer;
   filename: string;
 }> {
-  const report = await getAssignmentReport(assignmentId);
+  const report = await getAssignmentReport(assignmentId, locale);
+  const isEn = locale === "en";
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "EngClass LMS";
   workbook.created = new Date();
 
-  const sheet = workbook.addWorksheet("Bảng điểm");
+  const sheet = workbook.addWorksheet(isEn ? "Gradebook" : "Bảng điểm");
   sheet.columns = [
-    { header: "STT", key: "stt", width: 6 },
-    { header: "Họ và tên", key: "name", width: 28 },
+    { header: isEn ? "#" : "STT", key: "stt", width: 6 },
+    { header: isEn ? "Full name" : "Họ và tên", key: "name", width: 28 },
     { header: "Email", key: "email", width: 30 },
-    { header: "Trạng thái", key: "status", width: 18 },
-    { header: "Nộp trễ", key: "isLate", width: 12 },
-    { header: "Số câu đúng", key: "correct", width: 14 },
-    { header: "Điểm", key: "score", width: 12 },
-    { header: "Điểm tối đa", key: "maxScore", width: 14 },
-    { header: "Quy đổi thang 10", key: "scale10", width: 18 },
-    { header: "Vi phạm thi", key: "violations", width: 14 },
-    { header: "Thời gian nộp", key: "submittedAt", width: 22 },
+    { header: isEn ? "Status" : "Trạng thái", key: "status", width: 18 },
+    { header: isEn ? "Late" : "Nộp trễ", key: "isLate", width: 12 },
+    { header: isEn ? "Correct" : "Số câu đúng", key: "correct", width: 14 },
+    { header: isEn ? "Score" : "Điểm", key: "score", width: 12 },
+    { header: isEn ? "Max score" : "Điểm tối đa", key: "maxScore", width: 14 },
+    { header: isEn ? "Scale 10" : "Quy đổi thang 10", key: "scale10", width: 18 },
+    { header: isEn ? "Violations" : "Vi phạm thi", key: "violations", width: 14 },
+    { header: isEn ? "Submitted at" : "Thời gian nộp", key: "submittedAt", width: 22 },
   ];
 
   // Style header row
@@ -237,12 +268,19 @@ export async function generateAssignmentGradebookExcel(assignmentId: string): Pr
     fgColor: { argb: "FF4F46E5" },
   };
 
-  const statusLabels: Record<string, string> = {
-    NOT_STARTED: "Chưa làm",
-    IN_PROGRESS: "Đang làm",
-    SUBMITTED: "Chờ chấm tự luận",
-    GRADED: "Đã chấm",
-  };
+  const statusLabels: Record<string, string> = isEn
+    ? {
+        NOT_STARTED: "Not started",
+        IN_PROGRESS: "In progress",
+        SUBMITTED: "Awaiting essay grading",
+        GRADED: "Graded",
+      }
+    : {
+        NOT_STARTED: "Chưa làm",
+        IN_PROGRESS: "Đang làm",
+        SUBMITTED: "Chờ chấm tự luận",
+        GRADED: "Đã chấm",
+      };
 
   report.studentRows.forEach((row, idx) => {
     sheet.addRow({
@@ -250,27 +288,27 @@ export async function generateAssignmentGradebookExcel(assignmentId: string): Pr
       name: row.studentName,
       email: row.studentEmail,
       status: statusLabels[row.status] ?? row.status,
-      isLate: row.isLate ? "Trễ hạn" : "",
+      isLate: row.isLate ? (isEn ? "Late" : "Trễ hạn") : "",
       correct: `${row.correctCount}/${row.totalQuestions}`,
       score: row.score ?? "",
       maxScore: row.maxScore,
       scale10: row.scoreScale10 ?? "",
       violations: row.violationCount,
-      submittedAt: formatDateTime(row.submittedAt),
+      submittedAt: formatDateTime(row.submittedAt, locale),
     });
   });
 
   // Second sheet: Question Analytics
-  const qSheet = workbook.addWorksheet("Thống kê từng câu");
+  const qSheet = workbook.addWorksheet(isEn ? "Question Analytics" : "Thống kê từng câu");
   qSheet.columns = [
-    { header: "Câu", key: "label", width: 12 },
-    { header: "Loại", key: "type", width: 18 },
-    { header: "Kỹ năng", key: "skill", width: 15 },
-    { header: "Điểm", key: "points", width: 10 },
-    { header: "Số HS đúng", key: "correctCount", width: 14 },
-    { header: "Tổng bài", key: "totalGraded", width: 12 },
-    { header: "Tỉ lệ đúng (%)", key: "correctRate", width: 16 },
-    { header: "Đáp án sai phổ biến", key: "wrong", width: 40 },
+    { header: isEn ? "Question" : "Câu", key: "label", width: 12 },
+    { header: isEn ? "Type" : "Loại", key: "type", width: 18 },
+    { header: isEn ? "Skill" : "Kỹ năng", key: "skill", width: 15 },
+    { header: isEn ? "Points" : "Điểm", key: "points", width: 10 },
+    { header: isEn ? "Correct count" : "Số HS đúng", key: "correctCount", width: 14 },
+    { header: isEn ? "Total graded" : "Tổng bài", key: "totalGraded", width: 12 },
+    { header: isEn ? "Correct rate (%)" : "Tỉ lệ đúng (%)", key: "correctRate", width: 16 },
+    { header: isEn ? "Common wrong answers" : "Đáp án sai phổ biến", key: "wrong", width: 40 },
   ];
   const qHeader = qSheet.getRow(1);
   qHeader.font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -301,6 +339,6 @@ export async function generateAssignmentGradebookExcel(assignmentId: string): Pr
 
   return {
     buffer: Buffer.from(arrayBuffer),
-    filename: `Bang_diem_${safeName || assignmentId}.xlsx`,
+    filename: `${isEn ? "Gradebook" : "Bang_diem"}_${safeName || assignmentId}.xlsx`,
   };
 }
