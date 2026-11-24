@@ -128,6 +128,28 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
     "One or more selected classes or worksheets do not belong to the source account.",
   "Không có lớp học hoặc worksheet nào được chọn để chuyển.":
     "No classes or worksheets were selected for transfer.",
+  "File không phải định dạng Excel (.xlsx) hợp lệ.":
+    "File is not a valid Excel (.xlsx) spreadsheet.",
+  "Không tìm thấy dữ liệu tài khoản nào trong file Excel.":
+    "No account rows were found in the Excel file.",
+  "Không có dòng hợp lệ nào để tạo tài khoản.":
+    "There are no valid rows to create accounts.",
+  "Chỉ quản trị viên được nhập tài khoản hàng loạt.":
+    "Only administrators can bulk import accounts.",
+  "Chỉ quản trị viên được tải file mật khẩu tạm.":
+    "Only administrators can download temporary password files.",
+  "Không tìm thấy file mật khẩu tạm.": "Temporary password file not found.",
+  "Bạn không có quyền tải file mật khẩu tạm này.":
+    "You do not have permission to download this temporary password file.",
+  "File mật khẩu tạm đã được tải trước đó hoặc đã hết hạn.":
+    "The temporary password file has already been downloaded or expired.",
+  "Chưa cấu hình khoá mã hoá (TOTP_ENCRYPTION_KEY hoặc AUTH_SECRET).":
+    "Encryption key is not configured (TOTP_ENCRYPTION_KEY or AUTH_SECRET).",
+  "Không tìm thấy khoá mã hoá phù hợp để giải mã dữ liệu bảo mật.":
+    "No matching encryption key found to decrypt secure data.",
+  "Dữ liệu mã hoá không hợp lệ.": "Invalid encrypted payload.",
+  "Không giải mã được dữ liệu bảo mật. Khoá mã hoá có thể đã thay đổi.":
+    "Could not decrypt secure data. The encryption key may have changed.",
   "Email này đã được đăng ký.": "This email is already registered.",
   "Số điện thoại này đã được đăng ký.": "This phone number is already registered.",
   "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.":
@@ -298,6 +320,10 @@ const PATTERN_EN_RULES: Array<[RegExp, (...args: string[]) => string]> = [
     /^Không thể đổi vai trò: tài khoản này đang sở hữu (\d+) lớp học và (\d+) bài tập\. Hãy xoá hoặc chuyển chúng trước\.$/,
     (_m, c, w) =>
       `Cannot change the role: this account still owns ${c} class(es) and ${w} worksheet(s). Delete or transfer them first.`,
+  ],
+  [
+    /^Mỗi lần chỉ nhập tối đa (\d+) tài khoản\.$/,
+    (_m, max) => `At most ${max} accounts can be imported at once.`,
   ],
   [
     /^Không thể đổi loại câu (.+) vì đã có học sinh trả lời\.$/,

@@ -47,6 +47,7 @@ import {
   TransferOwnershipDialog,
   type TransferOwnershipTarget,
 } from "@/components/admin/TransferOwnershipDialog";
+import { BulkImportUsersCard } from "@/components/admin/BulkImportUsersCard";
 
 interface AdminOverview {
   stats: {
@@ -302,6 +303,11 @@ export default function AdminPortalPage() {
           )}
         />
       </section>
+
+      {/* Bulk Excel Account Import */}
+      <BulkImportUsersCard
+        onImported={() => queryClient.invalidateQueries({ queryKey: ["admin-overview"] })}
+      />
 
       {/* User Management Table */}
       <section className="stitch-card overflow-hidden">
