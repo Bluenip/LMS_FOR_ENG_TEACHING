@@ -77,6 +77,16 @@ Tên hiển thị sản phẩm đổi được qua biến môi trường `NEXT_P
 - Cổng Phụ huynh liên kết qua mã 8 ký tự dùng một lần (không bao giờ lộ dữ liệu học sinh khác).
 - Quản trị Admin: thống kê hệ thống, quản lý tài khoản (đổi vai trò, khoá/mở), liên kết phụ huynh thủ công.
 
+### 6. Lưu bài tập trên Google Drive (tuỳ chọn)
+- Admin kết nối **Drive dùng chung** ở `/admin`; mỗi giáo viên có thể kết nối **Drive riêng** ở `/teacher/settings`. Thứ tự ưu tiên khi lưu file: Drive riêng → Drive dùng chung → máy chủ (`local` / `s3`).
+- PDF đề, file nghe, file Word gốc, bản backup `.engclass.zip` và file học sinh nộp được xếp theo thư mục `EngClass/<Tên GV>/Worksheets | Backups | Lớp …`. Mọi file **riêng tư**; học sinh chỉ xem qua app (có kiểm tra quyền, hỗ trợ tua audio/video).
+- Nút **Lưu lên Drive**, **Sao lưu tất cả lên Drive**, **Nhập từ Drive** (Google Picker) ở `/teacher/worksheets`; tuỳ chọn tự động sao lưu hằng ngày lúc 02:00 (giữ 14 bản).
+- Cấu hình Google Cloud (OAuth client, redirect URI, biến môi trường): xem [`docs/GOOGLE_DRIVE.md`](docs/GOOGLE_DRIVE.md).
+
+### 7. Bài tập tạo từ Word không cần PDF
+- Bài tạo từ Word chỉ dùng **Phiếu trả lời**: mỗi thẻ câu hiện **nội dung câu hỏi** (sửa trực tiếp trên thẻ) và **đáp án**; câu có nhiều chỗ trống được tách `3a`, `3b` và chỗ trống đang hỏi được tô nổi bật.
+- Khi bài không có PDF, học sinh làm trên phiếu trả lời rộng giữa màn hình (không bị dồn vào cột phải).
+
 ---
 
 ## Tech Stack
@@ -173,12 +183,14 @@ Mật khẩu chung cho tất cả tài khoản mẫu: **`password123`**
 
 ```bash
 pnpm dev                     # Chạy development server (Turbopack)
-pnpm build                   # Build production
+pnpm build                   # Build production (KHÔNG chạy khi `pnpm dev` đang chạy: dùng chung thư mục .next)
+pnpm build:check             # Kiểm tra build production vào .next-build, chạy song song với `pnpm dev` được
 pnpm start                   # Chạy bản production sau khi build
+pnpm drive:prune             # Dọn file Google Drive mồ côi (cũng tự chạy mỗi giờ)
 
 pnpm db:migrate              # Chạy Prisma migration (dev)
 pnpm db:push                 # Đồng bộ schema trực tiếp
-pnpm db:seed                 # Nạp lại dữ liệu mẫu (idempotent)
+pnpm db:seed                 # XOÁ dữ liệu hiện có và nạp lại dữ liệu mẫu
 
 pnpm proctor:purge-snapshots # Xoá ảnh camera cũ hơn PROCTOR_SNAPSHOT_RETENTION_DAYS ngày (nên chạy cron hằng ngày)
 
@@ -187,3 +199,24 @@ pnpm typecheck               # Kiểm tra TypeScript strict (tsc --noEmit)
 pnpm test                    # Chạy toàn bộ Vitest unit & integration tests
 pnpm test:e2e                # Chạy Playwright E2E tests (cần Chromium: pnpm exec playwright install chromium)
 ```
+
+> Khi database được seed lại trong lúc trình duyệt còn đăng nhập, phiên cũ sẽ tự bị xoá và người dùng được đưa về `/login` kèm thông báo "Phiên đăng nhập đã hết hạn".
+
+---
+
+## Deploy production (Docker + Cloudflare Tunnel)
+
+Dự án có sẵn `Dockerfile` và `compose.production.yml` (PostgreSQL 16 + app, chỉ mở cổng `127.0.0.1:${APP_PORT}`; Cloudflare Tunnel nối vào cổng này nên không cần mở port ra Internet).
+
+```bash
+git clone https://github.com/Bluenip/LMS_FOR_ENG_TEACHING.git engclass && cd engclass
+cp .env.production.example .env.production   # điền NEXT_PUBLIC_APP_URL, APP_URL, POSTGRES_PASSWORD, AUTH_SECRET…
+docker compose -f compose.production.yml --env-file .env.production up -d --build
+```
+
+- Container tự chạy `prisma migrate deploy` mỗi lần khởi động. Nạp dữ liệu mẫu **một lần** (lệnh này xoá dữ liệu cũ):
+  `docker compose -f compose.production.yml --env-file .env.production exec app node_modules/.bin/tsx prisma/seed.ts`
+- File upload nằm trong volume `uploads`, database trong volume `postgres_data`. Sao lưu DB: `docker compose -f compose.production.yml exec postgres pg_dump -U engclass engclass > backup.sql`.
+- Cập nhật phiên bản: `git pull && docker compose -f compose.production.yml --env-file .env.production up -d --build`.
+- Cloudflare Tunnel: trong Zero Trust → Networks → Tunnels, thêm *Public hostname* (ví dụ `lms.<tên-miền>`) trỏ tới `http://localhost:${APP_PORT}`.
+- **Bảo mật:** `NEXT_PUBLIC_SHOW_DEMO_ACCOUNTS=false` trên bản public. Tài khoản mẫu dùng mật khẩu `password123` — đổi mật khẩu hoặc khoá các tài khoản mẫu trước khi cho người thật dùng.

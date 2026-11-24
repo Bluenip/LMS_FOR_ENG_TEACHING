@@ -14,6 +14,7 @@ import {
 } from "./types";
 import { LimitedAudioPlayer } from "./LimitedAudioPlayer";
 import { DictationDiffView } from "./DictationDiffView";
+import { PromptText } from "./PromptText";
 
 interface AnswerSheetPanelProps {
   allFields: StudentFieldDTO[];
@@ -31,6 +32,8 @@ interface AnswerSheetPanelProps {
   audioBlockPause?: boolean;
   audioBlockSeek?: boolean;
   audioPreviewMode?: boolean;
+  /** Worksheet without PDF: show the sheet inline at full width (no sidebar / bottom sheet). */
+  wide?: boolean;
   onAudioPlayCountChange?: (audioId: string, nextPlaysUsed: number) => void;
   gradeByFieldId?: Record<
     string,
@@ -59,6 +62,7 @@ export function AnswerSheetPanel({
   audioBlockPause = false,
   audioBlockSeek = false,
   audioPreviewMode = false,
+  wide = false,
   onAudioPlayCountChange,
   gradeByFieldId = {},
 }: AnswerSheetPanelProps) {
@@ -254,7 +258,7 @@ export function AnswerSheetPanel({
 
                 {field.prompt && (
                   <p className="mt-2 text-xs font-medium leading-relaxed text-[#0B1C30]">
-                    {field.prompt}
+                    <PromptText text={field.prompt} />
                   </p>
                 )}
 
@@ -539,6 +543,17 @@ export function AnswerSheetPanel({
       </div>
     </div>
   );
+
+  if (wide) {
+    return (
+      <section
+        data-testid="answer-sheet-wide"
+        className="flex w-full min-w-0 flex-col rounded-2xl border border-slate-200/80 bg-white shadow-card"
+      >
+        {panelContent}
+      </section>
+    );
+  }
 
   return (
     <>

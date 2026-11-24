@@ -980,7 +980,9 @@ export default function StudentDoAssignmentPage() {
           "transition",
           assignment.oneQuestionPerPage
             ? "space-y-5"
-            : "flex flex-col gap-6 lg:flex-row lg:items-start",
+            : assignment.worksheet.pages.length > 0
+              ? "flex flex-col gap-6 lg:flex-row lg:items-start"
+              : "mx-auto flex max-w-3xl flex-col gap-5",
           blurContent && "pointer-events-none select-none blur-md opacity-40"
         )}
       >
@@ -1113,14 +1115,11 @@ export default function StudentDoAssignmentPage() {
                     }
                   </PdfCanvasPage>
                 ))
-              ) : (
-                <div className="stitch-card p-10 text-center text-sm text-slate-500">
-                  {tr("Bài tập này chỉ sử dụng Phiếu trả lời ở bảng bên phải.", "This assignment only uses the answer sheet on the right.")}
-                </div>
-              )}
+              ) : null}
             </div>
 
             <AnswerSheetPanel
+              wide={assignment.worksheet.pages.length === 0}
               allFields={allFields}
               answers={answers}
               onChange={handleAnswerChange}

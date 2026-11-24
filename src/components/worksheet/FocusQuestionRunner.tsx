@@ -23,6 +23,7 @@ import {
 } from "./types";
 import { LimitedAudioPlayer } from "./LimitedAudioPlayer";
 import { DictationDiffView } from "./DictationDiffView";
+import { PromptText } from "./PromptText";
 
 interface FocusQuestionGroup {
   key: string;
@@ -369,7 +370,7 @@ export function FocusQuestionRunner({
           <div className="space-y-4">
             {singleField.prompt && (
               <p className="text-base sm:text-lg font-semibold leading-relaxed text-[#0B1C30]">
-                {singleField.prompt}
+                <PromptText text={singleField.prompt} />
               </p>
             )}
 

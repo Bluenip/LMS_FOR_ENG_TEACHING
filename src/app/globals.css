@@ -291,3 +291,52 @@ html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
 html.dark .divide-y > :not([hidden]) ~ :not([hidden]) {
   border-color: #1e293b;
 }
+
+/* Dark mode: opacity variants and hovers added 24/11/2026 (Overlay tints on the white PDF page stay light on purpose) */
+html.dark .bg-\[\#EFF4FF\]\/60,
+html.dark .bg-\[\#F8F9FF\]\/60 {
+  background-color: #0c1424;
+}
+html.dark .bg-\[\#EEF2FF\]\/50 {
+  background-color: rgba(99, 102, 241, 0.12);
+}
+html.dark .bg-emerald-50\/50,
+html.dark .bg-emerald-50\/40,
+html.dark .bg-emerald-50\/70 {
+  background-color: rgba(16, 185, 129, 0.12);
+}
+html.dark .bg-red-50\/50,
+html.dark .bg-red-50\/40,
+html.dark .bg-red-50\/30,
+html.dark .bg-\[\#FEF2F2\]\/70 {
+  background-color: rgba(239, 68, 68, 0.12);
+}
+html.dark .hover\:bg-white:hover,
+html.dark .hover\:bg-slate-50\/60:hover,
+html.dark .hover\:bg-\[\#DCE9FF\]:hover {
+  background-color: #1a2540;
+}
+html.dark .hover\:bg-orange-100:hover {
+  background-color: rgba(249, 115, 22, 0.22);
+}
+html.dark .text-emerald-800,
+html.dark .text-emerald-900 {
+  color: #34d399;
+}
+html.dark .text-red-800 {
+  color: #f87171;
+}
+html.dark .hover\:text-slate-700:hover,
+html.dark .hover\:text-slate-600:hover {
+  color: #cbd5e1;
+}
+html.dark .border-indigo-200\/80,
+html.dark .border-indigo-100\/70 {
+  border-color: #3730a3;
+}
+html.dark .hover\:border-slate-300:hover {
+  border-color: #475569;
+}
+html.dark .hover\:border-orange-200:hover {
+  border-color: rgba(249, 115, 22, 0.45);
+}

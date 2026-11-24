@@ -15,3 +15,4 @@
 *.tsbuildinfo
 next-env.d.ts
 stitch_engclass_learning_management_system.zip
+/.env.production

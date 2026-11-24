@@ -91,6 +91,16 @@ const TOOL_COLORS: Record<FieldType, { border: string; bg: string; badge: string
 
 const SKILL_VALUES: SkillTag[] = ["GRAMMAR", "VOCABULARY", "READING", "LISTENING", "WRITING", "SPEAKING"];
 
+/** Next free question number: highest leading number among labels ("3a" counts as 3) + 1. */
+function nextQuestionNumber(list: Array<{ label: string }>): number {
+  let max = 0;
+  for (const f of list) {
+    const n = parseInt(f.label, 10);
+    if (Number.isFinite(n) && n > max) max = n;
+  }
+  return max + 1;
+}
+
 function createDefaultFieldPayload(
   type: FieldType,
   label: string,
@@ -264,7 +274,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
   // Mode B Quick-add + Bulk key state
   const [quickCount, setQuickCount] = useState(5);
   const [quickType, setQuickType] = useState<FieldType>("MULTIPLE_CHOICE");
-  const [quickStart, setQuickStart] = useState(() => initialWorksheet.fields.length + 1);
+  const [quickStart, setQuickStart] = useState(() => nextQuestionNumber(initialWorksheet.fields));
   const [bulkKeyInput, setBulkKeyInput] = useState("");
 
   // Student Preview Mode
@@ -297,6 +307,12 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
     () => fields.filter((f) => f.placement === "OVERLAY"),
     [fields]
   );
+  const fieldCount = fields.length;
+  useEffect(() => {
+    setQuickStart(nextQuestionNumber(fields));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fieldCount]);
+
   const sheetFields = useMemo(
     () => fields.filter((f) => f.placement === "ANSWER_SHEET"),
     [fields]
@@ -916,7 +932,13 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
           </div>
         )}
 
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        <div
+          className={cn(
+            "flex flex-col gap-6",
+            pages.length > 0 ? "lg:flex-row lg:items-start" : "mx-auto max-w-3xl pb-16"
+          )}
+        >
+          {pages.length > 0 && (
           <div className="min-w-0 flex-1 space-y-5 overflow-x-auto pb-16">
             {pages.length > 0 ? (
               pages.map((p) => (
@@ -955,13 +977,13 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                 </PdfCanvasPage>
               ))
             ) : (
-              <div className="stitch-card p-10 text-center text-sm text-slate-500">
-                {tr("Worksheet không có PDF — học sinh sẽ làm trực tiếp trên Phiếu trả lời bên phải.", "This worksheet has no PDF — students answer directly on the answer sheet on the right.")}
-              </div>
+              null
             )}
           </div>
+          )}
 
           <AnswerSheetPanel
+            wide={pages.length === 0}
             allFields={previewFields}
             answers={previewAnswers}
             onChange={(fieldId, val) =>
@@ -1433,7 +1455,12 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
 
         {/* CENTER: PDF Canvas + Draw + React-Rnd Overlays */}
         <section className="lg:col-span-7">
-          <div className="rounded-2xl border border-slate-200/80 bg-[#EFF4FF]/60 p-4 overflow-x-auto min-h-[540px]">
+          <div
+            className={cn(
+              "rounded-2xl border border-slate-200/80 bg-[#EFF4FF]/60 p-4 overflow-x-auto",
+              pdfFileKey && pages.length > 0 && "min-h-[540px]"
+            )}
+          >
             {pdfError && (
               <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                 {pdfError}
@@ -1441,10 +1468,20 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
             )}
 
             {!pdfFileKey || pages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-indigo-200 bg-white px-6 py-20 text-center">
-                <Upload className="h-10 w-10 text-[#4F46E5]" />
+              <div
+                className={cn(
+                  "flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-indigo-200 bg-white px-6 text-center",
+                  sheetFields.length > 0 ? "py-6" : "py-20"
+                )}
+              >
+                <Upload className={cn("text-[#4F46E5]", sheetFields.length > 0 ? "h-7 w-7" : "h-10 w-10")} />
                 <h3 className="mt-3 text-base font-bold text-[#0B1C30]">
-                  {tr("Tải file PDF đề bài lên để vẽ ô tương tác", "Upload the test PDF to draw interactive boxes")}
+                  {sheetFields.length > 0
+                    ? tr(
+                        `Bài này dùng Phiếu trả lời (${sheetFields.length} câu, xem và sửa ngay bên dưới)`,
+                        `This worksheet uses the answer sheet (${sheetFields.length} questions, view and edit them below)`
+                      )
+                    : tr("Tải file PDF đề bài lên để vẽ ô tương tác", "Upload the test PDF to draw interactive boxes")}
                 </h3>
                 <p className="mt-1 max-w-md text-xs text-[#464555]">
                   {vi.worksheets.pdfRequirements} {tr("Bạn cũng có thể tạo câu hỏi trực tiếp ở mục “Phiếu trả lời” bên dưới mà không cần PDF.", "You can also create questions directly in the “Answer sheet” section below without a PDF.")}
@@ -1812,11 +1849,12 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                 {selectedField.placement === "ANSWER_SHEET" && (
                   <div className="space-y-1">
                     <Label className="text-xs">{vi.worksheets.editor.prompt}</Label>
-                    <Input
+                    <Textarea
                       value={selectedField.prompt ?? ""}
                       onChange={(e) => updateField(selectedField.id, { prompt: e.target.value })}
                       placeholder={tr("Nhập đề câu hỏi nếu muốn…", "Enter the question text if you like…")}
-                      className="h-9 text-xs"
+                      rows={4}
+                      className="text-xs leading-relaxed"
                     />
                   </div>
                 )}
@@ -2411,8 +2449,28 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                     </div>
                   </div>
 
-                  {/* Quick inline answer editor */}
+                  {/* Question text (from Word or typed): visible and editable right on the card */}
                   <div className="mt-2.5" onClick={(e) => e.stopPropagation()}>
+                    <Label className="text-[10px] font-bold uppercase text-slate-400">
+                      {tr("Câu hỏi", "Question")}
+                    </Label>
+                    <Textarea
+                      value={field.prompt ?? ""}
+                      onChange={(e) => updateField(field.id, { prompt: e.target.value })}
+                      onFocus={() => setSelectedIds([field.id])}
+                      placeholder={tr("Nhập nội dung câu hỏi…", "Type the question…")}
+                      rows={2}
+                      className="mt-1 min-h-[52px] text-xs leading-relaxed"
+                    />
+                    <Label className="mt-2 block text-[10px] font-bold uppercase text-slate-400">
+                      {field.type === "ESSAY"
+                        ? tr("Hướng dẫn chấm", "Rubric")
+                        : tr("Đáp án", "Answer")}
+                    </Label>
+                  </div>
+
+                  {/* Quick inline answer editor */}
+                  <div className="mt-1" onClick={(e) => e.stopPropagation()}>
                     {field.type === "MULTIPLE_CHOICE" && (
                       <div className="flex gap-1.5">
                         {(field.options ?? []).map((opt) => (
@@ -2439,7 +2497,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                       <div className="flex gap-1.5">
                         {[
                           { v: true, label: tr("Đúng", "True") },
-                          { v: false, label: "Sai" },
+                          { v: false, label: tr("Sai", "False") },
                         ].map((o) => (
                           <button
                             key={String(o.v)}

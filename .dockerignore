@@ -1,0 +1,15 @@
+node_modules
+.next
+.next-build
+.git
+uploads
+test-results
+playwright-report
+.env
+.env*.local
+*.tsbuildinfo
+stitch_engclass_learning_management_system.zip
+file word test
+design
+public/mediapipe
+public/pdf.worker.min.mjs

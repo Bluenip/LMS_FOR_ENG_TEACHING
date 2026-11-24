@@ -43,6 +43,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { ParsedFillBlankField } from "@/lib/worksheet/fill-blank-parser";
+import { PromptText } from "@/components/worksheet/PromptText";
 
 interface WorksheetRow {
   id: string;
@@ -581,7 +582,7 @@ export default function TeacherWorksheetsPage() {
                       className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-[#F8F9FF] px-2 py-1 font-semibold text-[#464555] hover:bg-slate-100"
                       title={tr("Xuất file Word có đáp án (__đáp án__)", "Export Word .docx with answers")}
                     >
-                      <FileDown className="h-3 w-3" /> Word (ĐA)
+                      <FileDown className="h-3 w-3" /> {tr("Word (ĐA)", "Word (key)")}
                     </a>
                     <a
                       href={`/api/worksheets/${ws.id}/export?format=docx-student`}
@@ -589,7 +590,7 @@ export default function TeacherWorksheetsPage() {
                       className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-[#F8F9FF] px-2 py-1 font-semibold text-[#464555] hover:bg-slate-100"
                       title={tr("Xuất file Word bản đề cho học sinh (không kèm đáp án)", "Export student Word .docx handout")}
                     >
-                      <FileDown className="h-3 w-3" /> Word (HS)
+                      <FileDown className="h-3 w-3" /> {tr("Word (HS)", "Word (student)")}
                     </a>
                     <button
                       type="button"
@@ -879,12 +880,13 @@ export default function TeacherWorksheetsPage() {
                       <div className="flex items-start justify-between gap-2">
                         <span className="font-semibold text-[#0B1C30]">
                           <span className="mr-1.5 inline-block rounded bg-[#EEF2FF] px-1.5 py-0.5 text-[10px] font-bold text-[#3525CD]">
-                            Câu {f.label}
+                            {tr("Câu", "Q")} {f.label}
                           </span>
-                          {f.prompt}
+                          <PromptText text={f.prompt} />
                         </span>
                         <span className="shrink-0 text-[10px] font-bold text-slate-400">
-                          {f.points}đ
+                          {f.points}
+                          {tr("đ", "pt")}
                         </span>
                       </div>
                       <div className="flex flex-wrap gap-1">

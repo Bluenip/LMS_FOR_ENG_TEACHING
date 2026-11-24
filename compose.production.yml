@@ -1,0 +1,43 @@
+# Production stack: `docker compose -f compose.production.yml --env-file .env.production up -d --build`
+name: engclass
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-engclass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.production}
+      POSTGRES_DB: ${POSTGRES_DB:-engclass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-engclass} -d ${POSTGRES_DB:-engclass}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-EngClass}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:?set NEXT_PUBLIC_APP_URL}
+        NEXT_PUBLIC_SHOW_DEMO_ACCOUNTS: ${NEXT_PUBLIC_SHOW_DEMO_ACCOUNTS:-false}
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+        NEXT_PUBLIC_GOOGLE_PICKER_API_KEY: ${NEXT_PUBLIC_GOOGLE_PICKER_API_KEY:-}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env.production
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-engclass}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-engclass}?schema=public
+    volumes:
+      - uploads:/app/uploads
+    # Only reachable from the host (Cloudflare Tunnel connects to it); never exposed publicly
+    ports:
+      - "127.0.0.1:${APP_PORT:-3100}:3000"
+
+volumes:
+  postgres_data:
+  uploads:
