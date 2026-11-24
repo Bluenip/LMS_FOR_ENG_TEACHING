@@ -105,6 +105,15 @@ export const changePasswordSchema = z.object({
   newPassword: z.string().min(8, "Mật khẩu mới tối thiểu 8 ký tự").max(100),
 });
 
+export const totpEnableSchema = z.object({
+  code: z.string().trim().min(6, "Nhập mã xác thực 6 số").max(20),
+});
+
+export const totpConfirmWithPasswordSchema = z.object({
+  password: z.string().min(1, "Nhập mật khẩu hiện tại"),
+  code: z.string().trim().min(6, "Nhập mã xác thực 6 số hoặc mã dự phòng").max(20),
+});
+
 // ===== Class =====
 export const createClassSchema = z.object({
   name: z.string().trim().min(2, "Tên lớp tối thiểu 2 ký tự").max(120),

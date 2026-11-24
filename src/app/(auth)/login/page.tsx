@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { BookOpen, CheckCircle2, Eye, EyeOff, Lock, Mail } from "lucide-react";
+import { BookOpen, CheckCircle2, Eye, EyeOff, Lock, Mail, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,8 @@ function LoginPageContent() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [totpStep, setTotpStep] = useState(false);
+  const [totpCode, setTotpCode] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,13 +62,31 @@ function LoginPageContent() {
       const res = await signIn("credentials", {
         email: email.trim().toLowerCase(),
         password,
+        ...(totpStep ? { totpCode: totpCode.trim() } : {}),
         redirect: false,
       });
 
       if (res?.error) {
-        if (res.code === "ACCOUNT_LOCKED" || res.error.includes("ACCOUNT_LOCKED")) {
+        const code = res.code ?? "";
+        if (code === "TOTP_REQUIRED" || res.error.includes("TOTP_REQUIRED")) {
+          setTotpStep(true);
+          setTotpCode("");
+          setError(null);
+          return;
+        }
+        if (code === "TOTP_INVALID" || res.error.includes("TOTP_INVALID")) {
+          setTotpStep(true);
+          setError(
+            tr(
+              "Mã xác thực 2 bước không đúng hoặc đã hết hạn.",
+              "Two-factor verification code is incorrect or expired."
+            )
+          );
+          return;
+        }
+        if (code === "ACCOUNT_LOCKED" || res.error.includes("ACCOUNT_LOCKED")) {
           setError(vi.auth.accountLocked);
-        } else if (res.error.includes("RATE_LIMITED")) {
+        } else if (code === "RATE_LIMITED" || res.error.includes("RATE_LIMITED")) {
           setError(vi.auth.rateLimited);
         } else {
           setError(vi.auth.invalidCredentials);
@@ -200,50 +220,103 @@ function LoginPageContent() {
                 </div>
               )}
 
-              <div className="space-y-1.5">
-                <Label htmlFor="email">{vi.auth.email}</Label>
-                <div className="relative">
-                  <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="name@engclass.vn"
-                    className="pl-10"
-                  />
-                </div>
-              </div>
+              {!totpStep ? (
+                <>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="email">{vi.auth.email}</Label>
+                    <div className="relative">
+                      <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="name@engclass.vn"
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="password">{vi.auth.password}</Label>
-                <div className="relative">
-                  <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <Input
-                    id="password"
-                    name="password"
-                    type={showPass ? "text" : "password"}
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="pl-10 pr-10"
-                  />
+                  <div className="space-y-1.5">
+                    <Label htmlFor="password">{vi.auth.password}</Label>
+                    <div className="relative">
+                      <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <Input
+                        id="password"
+                        name="password"
+                        type={showPass ? "text" : "password"}
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="pl-10 pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPass((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        aria-label={tr("Hiện/ẩn mật khẩu", "Show/hide password")}
+                      >
+                        {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-3 rounded-2xl border border-indigo-200 bg-[#EEF2FF]/60 p-4">
+                  <div className="flex items-start gap-2.5">
+                    <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#4F46E5]" />
+                    <div className="text-xs">
+                      <p className="font-bold text-[#0B1C30]">
+                        {tr("Xác thực 2 bước (2FA)", "Two-factor verification")}
+                      </p>
+                      <p className="mt-0.5 text-[#464555]">
+                        {tr(
+                          `Nhập mã 6 số từ ứng dụng xác thực (hoặc mã dự phòng) cho ${email}.`,
+                          `Enter the 6-digit code from your authenticator app (or a backup code) for ${email}.`
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="totpCode">
+                      {tr("Mã xác thực 2 bước", "2FA code")}
+                    </Label>
+                    <Input
+                      id="totpCode"
+                      name="totpCode"
+                      data-testid="login-totp-input"
+                      autoFocus
+                      autoComplete="one-time-code"
+                      required
+                      value={totpCode}
+                      onChange={(e) => setTotpCode(e.target.value)}
+                      placeholder="000000"
+                      className="font-mono tracking-widest"
+                    />
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setShowPass((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    aria-label={tr("Hiện/ẩn mật khẩu", "Show/hide password")}
+                    className="text-xs font-semibold text-[#4F46E5] hover:underline"
+                    onClick={() => {
+                      setTotpStep(false);
+                      setTotpCode("");
+                      setError(null);
+                    }}
                   >
-                    {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    ← {tr("Quay lại nhập email / mật khẩu", "Back to email / password")}
                   </button>
                 </div>
-              </div>
+              )}
 
               <Button type="submit" className="h-11 w-full text-base" disabled={loading}>
-                {loading ? vi.common.loading : vi.auth.loginButton}
+                {loading
+                  ? vi.common.loading
+                  : totpStep
+                    ? tr("Xác nhận & Đăng nhập", "Verify & Sign in")
+                    : vi.auth.loginButton}
               </Button>
             </form>
 

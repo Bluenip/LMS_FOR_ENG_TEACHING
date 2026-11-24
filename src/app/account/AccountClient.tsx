@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { AdminTotpSection } from "@/components/accounts/AdminTotpSection";
 
 export function AccountClient({
   initialUser,
@@ -94,8 +95,21 @@ export function AccountClient({
       false
     );
     if (ok) {
+      if (me.totpEnabled) {
+        // Admin with 2FA enabled must sign in again with the new password + 2FA code
+        window.location.href = "/api/auth/clear-session?reason=session";
+        return;
+      }
       // other devices are signed out; renew this device's session with the latest email & new password
-      await signIn("credentials", { email: me.email, password: next, redirect: false });
+      const signInRes = await signIn("credentials", {
+        email: me.email,
+        password: next,
+        redirect: false,
+      });
+      if (signInRes?.error) {
+        window.location.href = "/api/auth/clear-session?reason=session";
+        return;
+      }
       window.location.href = homeHref;
     }
   };
@@ -354,6 +368,13 @@ export function AccountClient({
             </div>
           </form>
         </section>
+
+        {me.role === "ADMIN" && (
+          <AdminTotpSection
+            initialEnabled={me.totpEnabled}
+            onStatusChange={(enabled) => setMe((prev) => ({ ...prev, totpEnabled: enabled }))}
+          />
+        )}
     </div>
   );
 }

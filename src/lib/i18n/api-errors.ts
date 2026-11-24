@@ -150,6 +150,19 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
   "Dữ liệu mã hoá không hợp lệ.": "Invalid encrypted payload.",
   "Không giải mã được dữ liệu bảo mật. Khoá mã hoá có thể đã thay đổi.":
     "Could not decrypt secure data. The encryption key may have changed.",
+  "Xác thực 2 bước (2FA) chỉ áp dụng cho tài khoản quản trị viên.":
+    "Two-factor authentication (2FA) is only available for administrator accounts.",
+  "Xác thực 2 bước đã được bật trên tài khoản này.":
+    "Two-factor authentication is already enabled on this account.",
+  "Vui lòng tạo mã QR thiết lập 2FA trước khi xác nhận.":
+    "Please generate the 2FA setup QR code before verifying.",
+  "Mã xác thực 6 số không đúng hoặc đã hết hạn.":
+    "The 6-digit verification code is incorrect or expired.",
+  "Xác thực 2 bước hiện chưa được bật.":
+    "Two-factor authentication is not currently enabled.",
+  "Nhập mã xác thực 6 số": "Enter the 6-digit verification code.",
+  "Nhập mã xác thực 6 số hoặc mã dự phòng":
+    "Enter a 6-digit verification code or backup code.",
   "Email này đã được đăng ký.": "This email is already registered.",
   "Số điện thoại này đã được đăng ký.": "This phone number is already registered.",
   "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.":

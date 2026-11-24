@@ -396,6 +396,7 @@ export interface OwnProfileDto {
   role: Role;
   avatarUrl: string | null;
   mustChangePassword: boolean;
+  totpEnabled: boolean;
   createdAt: string;
 }
 
@@ -410,6 +411,7 @@ const PROFILE_SELECT = {
   role: true,
   avatarUrl: true,
   mustChangePassword: true,
+  totpEnabled: true,
   createdAt: true,
 } as const;
 
@@ -424,6 +426,7 @@ function serializeOwnProfile(row: {
   role: Role;
   avatarUrl: string | null;
   mustChangePassword: boolean;
+  totpEnabled: boolean;
   createdAt: Date;
 }): OwnProfileDto {
   return {
@@ -437,6 +440,7 @@ function serializeOwnProfile(row: {
     role: row.role,
     avatarUrl: row.avatarUrl,
     mustChangePassword: row.mustChangePassword,
+    totpEnabled: row.totpEnabled,
     createdAt: row.createdAt.toISOString(),
   };
 }
