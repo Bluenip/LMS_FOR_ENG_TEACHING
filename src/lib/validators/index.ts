@@ -46,15 +46,58 @@ export const createAccountSchema = z.object({
 
 export const deleteAccountSchema = z.object({ confirmEmail: z.string().trim().min(3) });
 
+const dateOfBirthSchema = z
+  .union([z.string().trim(), z.null()])
+  .optional()
+  .superRefine((val, ctx) => {
+    if (val === undefined || val === null || val === "") return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Ngày sinh không hợp lệ" });
+      return;
+    }
+    const [y, m, d] = val.split("-").map(Number) as [number, number, number];
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    if (
+      y < 1900 ||
+      dt.getUTCFullYear() !== y ||
+      dt.getUTCMonth() !== m - 1 ||
+      dt.getUTCDate() !== d
+    ) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Ngày sinh không hợp lệ" });
+      return;
+    }
+    const maxYmd = new Date(Date.now() + 12 * 3600 * 1000).toISOString().slice(0, 10);
+    if (val > maxYmd) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Ngày sinh không được ở tương lai" });
+    }
+  })
+  .transform((v) => (v === undefined ? undefined : v && v.length > 0 ? v : null));
+
+const genderSchema = z
+  .union([z.enum(["", "MALE", "FEMALE", "OTHER"]), z.null()])
+  .optional()
+  .transform((v) => (v === undefined ? undefined : v && v.length > 0 ? v : null));
+
 export const updateProfileSchema = z.object({
   name: z.string().trim().min(2, "Họ tên tối thiểu 2 ký tự").max(100).optional(),
+  email: z.string().trim().toLowerCase().email("Email không hợp lệ").max(160).optional(),
   phone: z
-    .string()
-    .trim()
-    .max(20)
-    .regex(/^[0-9+ ()-]*$/, "Số điện thoại không hợp lệ")
+    .union([
+      z
+        .string()
+        .trim()
+        .max(20)
+        .regex(/^[0-9+ ()-]*$/, "Số điện thoại không hợp lệ"),
+      z.null(),
+    ])
     .optional()
-    .transform((v) => (v === undefined ? undefined : v.length > 0 ? v : null)),
+    .transform((v) => (v === undefined ? undefined : v && v.length > 0 ? v : null)),
+  dateOfBirth: dateOfBirthSchema,
+  gender: genderSchema,
+  bio: z
+    .union([z.string().trim().max(300, "Giới thiệu tối đa 300 ký tự"), z.null()])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v && v.length > 0 ? v : null)),
 });
 
 export const changePasswordSchema = z.object({

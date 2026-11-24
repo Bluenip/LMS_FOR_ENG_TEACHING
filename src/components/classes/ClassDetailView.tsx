@@ -53,6 +53,10 @@ import {
 import { PdfCanvasPage, usePdfDocument } from "@/components/worksheet/PdfCanvasPage";
 import type { LessonItemType, ProctorMode, ViolationAction } from "@prisma/client";
 import { CreateAccountForm } from "@/components/accounts/CreateAccountForm";
+import {
+  ResetPasswordDialog,
+  type ResetPasswordTarget,
+} from "@/components/accounts/ResetPasswordDialog";
 
 export interface ClassDetailData {
   id: string;
@@ -66,7 +70,17 @@ export interface ClassDetailData {
     id: string;
     status: "ACTIVE" | "PENDING";
     joinedAt: string;
-    student: { id: string; name: string; email?: string };
+    student: {
+      id: string;
+      name: string;
+      email?: string;
+      avatarUrl?: string | null;
+      parentLinksAsChild?: Array<{
+        id: string;
+        relation: string | null;
+        parent: { id: string; name: string; email: string };
+      }>;
+    };
   }>;
   posts: Array<{
     id: string;
@@ -209,6 +223,7 @@ export function ClassDetailView({
     studentName: string;
     code: string;
   } | null>(null);
+  const [resetTarget, setResetTarget] = useState<ResetPasswordTarget | null>(null);
 
   const refreshClass = async () => {
     const res = await fetch(`/api/classes/${cls.id}`);
@@ -1006,44 +1021,103 @@ export function ClassDetailView({
             </div>
             <div className="divide-y divide-slate-100">
               {activeStudents.map((e) => (
-                <div
-                  key={e.id}
-                  className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#EEF2FF] text-xs font-bold text-[#3525CD]">
-                      {getInitials(e.student.name)}
-                    </span>
-                    <div>
-                      <p className="text-sm font-semibold text-[#0B1C30]">{e.student.name}</p>
-                      {e.student.email && (
-                        <p className="text-xs text-slate-400">{e.student.email}</p>
+                <div key={e.id} className="px-5 py-3 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      {e.student.avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={e.student.avatarUrl}
+                          alt={e.student.name}
+                          className="h-9 w-9 rounded-full object-cover ring-2 ring-white"
+                        />
+                      ) : (
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#EEF2FF] text-xs font-bold text-[#3525CD]">
+                          {getInitials(e.student.name)}
+                        </span>
                       )}
+                      <div>
+                        <p className="text-sm font-semibold text-[#0B1C30]">{e.student.name}</p>
+                        {e.student.email && (
+                          <p className="text-xs text-slate-400">{e.student.email}</p>
+                        )}
+                      </div>
                     </div>
+                    {isTeacher && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            setResetTarget({
+                              id: e.student.id,
+                              name: e.student.name,
+                              email: e.student.email,
+                              roleLabel: vi.roles.STUDENT,
+                            })
+                          }
+                        >
+                          <KeyRound className="h-3.5 w-3.5" />
+                          {tr("Đặt lại mật khẩu", "Reset password")}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() =>
+                            void handleCreateParentCode(e.student.id, e.student.name)
+                          }
+                        >
+                          <KeyRound className="h-3.5 w-3.5" />
+                          {vi.classes.roster.createParentCode}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-red-600 hover:bg-red-50"
+                          onClick={() => void handleRemoveEnrollment(e.id)}
+                        >
+                          <UserMinus className="h-3.5 w-3.5" />
+                          {tr("Xoá", "Remove")}
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  {isTeacher && (
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() =>
-                          void handleCreateParentCode(e.student.id, e.student.name)
-                        }
-                      >
-                        <KeyRound className="h-3.5 w-3.5" />
-                        {vi.classes.roster.createParentCode}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-red-600 hover:bg-red-50"
-                        onClick={() => void handleRemoveEnrollment(e.id)}
-                      >
-                        <UserMinus className="h-3.5 w-3.5" />
-                        {tr("Xoá", "Remove")}
-                      </Button>
-                    </div>
-                  )}
+                  {isTeacher &&
+                    e.student.parentLinksAsChild &&
+                    e.student.parentLinksAsChild.length > 0 && (
+                      <div className="ml-12 space-y-1.5">
+                        {e.student.parentLinksAsChild.map((link) => (
+                          <div
+                            key={link.id}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#F8F9FF] px-3 py-1.5 text-xs"
+                          >
+                            <div className="text-[#464555]">
+                              <span className="font-semibold text-[#0B1C30]">
+                                {link.parent.name}
+                              </span>{" "}
+                              ({link.relation ?? vi.roles.PARENT}) ·{" "}
+                              <span className="text-slate-400">{link.parent.email}</span>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2.5 text-[11px]"
+                              onClick={() =>
+                                setResetTarget({
+                                  id: link.parent.id,
+                                  name: link.parent.name,
+                                  email: link.parent.email,
+                                  roleLabel: link.relation ?? vi.roles.PARENT,
+                                })
+                              }
+                            >
+                              <KeyRound className="h-3 w-3" />
+                              {tr("Đặt lại MK", "Reset password")}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                 </div>
               ))}
             </div>
@@ -1225,6 +1299,12 @@ export function ClassDetailView({
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Teacher Reset Student / Parent Password Dialog */}
+      <ResetPasswordDialog
+        target={resetTarget}
+        onClose={() => setResetTarget(null)}
+      />
 
       {/* Lesson PDF Built-in Canvas Viewer Modal */}
       {viewingPdf && (

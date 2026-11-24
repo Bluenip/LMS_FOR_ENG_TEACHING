@@ -17,6 +17,7 @@ services:
       retries: 10
 
   app:
+    image: ${ENGCLASS_IMAGE:-engclass-app:local}
     build:
       context: .
       args:

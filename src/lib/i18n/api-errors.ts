@@ -121,6 +121,37 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
   "Tài khoản học sinh không hợp lệ.": "Invalid student account.",
   "Email này đã được đăng ký.": "This email is already registered.",
   "Số điện thoại này đã được đăng ký.": "This phone number is already registered.",
+  "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.":
+    "Your session has expired. Please sign in again.",
+  "Bạn không có quyền tạo tài khoản.": "You do not have permission to create accounts.",
+  "Giáo viên chỉ được tạo tài khoản Học sinh hoặc Phụ huynh.":
+    "Teachers can only create Student or Parent accounts.",
+  "Vui lòng chọn lớp học.": "Please select a class.",
+  "Vui lòng chọn học sinh để liên kết với phụ huynh.":
+    "Please select a student to link with this parent.",
+  "Học sinh không thuộc lớp này.": "This student is not enrolled in this class.",
+  "Không tìm thấy học sinh để liên kết.": "Student to link was not found.",
+  "Bạn chỉ đặt lại được mật khẩu cho học sinh / phụ huynh trong lớp của mình.":
+    "You can only reset passwords for students and parents in your own classes.",
+  "Bạn không có quyền đặt lại mật khẩu.": "You do not have permission to reset passwords.",
+  "Chỉ quản trị viên được xoá tài khoản.": "Only administrators can delete accounts.",
+  "Không thể tự xoá tài khoản của chính bạn.": "You cannot delete your own account.",
+  "Email xác nhận không khớp.": "Confirmation email does not match.",
+  "Mật khẩu hiện tại không đúng.": "Current password is incorrect.",
+  "Mật khẩu mới phải khác mật khẩu hiện tại.":
+    "New password must differ from your current password.",
+  "Ảnh đại diện tối đa 2MB.": "Profile picture must not exceed 2MB.",
+  "Chỉ nhận ảnh JPG, PNG hoặc WebP.": "Only JPG, PNG, or WebP images are accepted.",
+  "Vui lòng chọn ảnh.": "Please choose an image.",
+  "Bạn thử quá nhiều lần. Vui lòng thử lại sau.":
+    "Too many attempts. Please try again later.",
+  "Số điện thoại không hợp lệ": "Invalid phone number.",
+  "Ngày sinh không hợp lệ": "Invalid date of birth.",
+  "Ngày sinh không được ở tương lai": "Date of birth cannot be in the future.",
+  "Giới tính không hợp lệ": "Invalid gender option.",
+  "Giới thiệu tối đa 300 ký tự": "Bio must not exceed 300 characters.",
+  "Nhập mật khẩu hiện tại": "Please enter your current password.",
+  "Mật khẩu mới tối thiểu 8 ký tự": "New password must be at least 8 characters.",
 
   // Submission & proctoring
   "Không tìm thấy bài làm.": "Submission not found.",

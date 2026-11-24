@@ -30,7 +30,13 @@ export default async function TeacherClassDetailPage({
         id: e.id,
         status: e.status,
         joinedAt: e.joinedAt.toISOString(),
-        student: { id: e.student.id, name: e.student.name, email: e.student.email },
+        student: {
+          id: e.student.id,
+          name: e.student.name,
+          email: e.student.email,
+          avatarUrl: e.student.avatarUrl,
+          parentLinksAsChild: e.student.parentLinksAsChild,
+        },
       })),
       posts: cls.posts.map((p) => ({
         id: p.id,

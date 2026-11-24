@@ -9,6 +9,7 @@ import {
   BookOpen,
   FileText,
   GraduationCap,
+  KeyRound,
   Link2,
   Lock,
   Shield,
@@ -24,6 +25,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { CreateAccountForm } from "@/components/accounts/CreateAccountForm";
+import {
+  ResetPasswordDialog,
+  type ResetPasswordTarget,
+} from "@/components/accounts/ResetPasswordDialog";
+import {
+  DeleteAccountDialog,
+  type DeleteAccountTarget,
+} from "@/components/accounts/DeleteAccountDialog";
 
 interface AdminOverview {
   stats: {
@@ -58,39 +67,13 @@ export default function AdminPortalPage() {
   const { m: vi, tr } = useI18n();
   const queryClient = useQueryClient();
 
-  const handleResetPassword = async (id: string, email: string) => {
-    if (!window.confirm(tr(`Đặt lại mật khẩu cho ${email}? Người này sẽ bị đăng xuất khỏi mọi thiết bị.`, `Reset the password of ${email}? They will be signed out everywhere.`))) return;
-    const res = await fetch(`/api/users/${id}/reset-password`, { method: "POST" });
-    const json = await res.json();
-    if (!res.ok) return toast.error(json.error ?? vi.common.errorGeneric);
-    window.prompt(tr("Mật khẩu tạm (chỉ hiện một lần, hãy sao chép):", "Temporary password (shown once, copy it):"), json.temporaryPassword);
-  };
-
-  const handleDelete = async (id: string, email: string) => {
-    const impact = await fetch(`/api/admin/users/${id}/impact`).then((r) => r.json());
-    const c = impact.user?._count ?? {};
-    const typed = window.prompt(
-      tr(
-        `XOÁ VĨNH VIỄN ${email}? Sẽ mất theo: ${c.classesTaught ?? 0} lớp dạy, ${c.worksheets ?? 0} worksheet, ${c.submissions ?? 0} bài nộp, ${(c.parentLinksAsParent ?? 0) + (c.parentLinksAsChild ?? 0)} liên kết phụ huynh. Gõ lại email để xác nhận:`,
-        `PERMANENTLY delete ${email}? Also removes: ${c.classesTaught ?? 0} classes, ${c.worksheets ?? 0} worksheets, ${c.submissions ?? 0} submissions, ${(c.parentLinksAsParent ?? 0) + (c.parentLinksAsChild ?? 0)} parent links. Type the email to confirm:`
-      )
-    );
-    if (!typed) return;
-    const res = await fetch(`/api/admin/users/${id}`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ confirmEmail: typed }),
-    });
-    const json = await res.json();
-    if (!res.ok) return toast.error(json.error ?? vi.common.errorGeneric);
-    toast.success(tr("Đã xoá tài khoản.", "Account deleted."));
-    queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
-  };
+  const [resetTarget, setResetTarget] = useState<ResetPasswordTarget | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteAccountTarget | null>(null);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("");
   const [selectedParentId, setSelectedParentId] = useState("");
   const [selectedStudentId, setSelectedStudentId] = useState("");
-  const [relation, setRelation] = useState(tr("Phụ huynh", "Parent"));
+  const [relation, setRelation] = useState("");
 
   const { data, isLoading } = useQuery<AdminOverview>({
     queryKey: ["admin-overview", search, roleFilter],
@@ -133,7 +116,7 @@ export default function AdminPortalPage() {
       body: JSON.stringify({
         parentId: selectedParentId,
         studentId: selectedStudentId,
-        relation,
+        relation: relation.trim() || tr("Phụ huynh", "Parent"),
       }),
     });
     const json = await res.json();
@@ -323,27 +306,47 @@ export default function AdminPortalPage() {
                     {formatDateTime(u.createdAt)}
                   </td>
                   <td className="px-6 py-3.5 text-right">
-                    <Button
-                      size="sm"
-                      variant={u.isLocked ? "secondary" : "outline"}
-                      onClick={() => void handleUpdateUser(u.id, { isLocked: !u.isLocked })}
-                    >
-                      {u.isLocked ? (
-                        <>
-                          <Unlock className="h-3.5 w-3.5" /> {vi.admin.users.unlock}
-                        </>
-                      ) : (
-                        <>
-                          <Lock className="h-3.5 w-3.5 text-red-500" /> {vi.admin.users.lock}
-                        </>
-                      )}
-                    </Button>
-                    <Button size="sm" variant="outline" className="ml-1.5" onClick={() => void handleResetPassword(u.id, u.email)}>
-                      {tr("Đặt lại MK", "Reset password")}
-                    </Button>
-                    <Button size="sm" variant="outline" className="ml-1.5 text-red-600" onClick={() => void handleDelete(u.id, u.email)}>
-                      <Trash2 className="h-3.5 w-3.5" /> {vi.common.delete}
-                    </Button>
+                    <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                      <Button
+                        size="sm"
+                        variant={u.isLocked ? "secondary" : "outline"}
+                        onClick={() => void handleUpdateUser(u.id, { isLocked: !u.isLocked })}
+                      >
+                        {u.isLocked ? (
+                          <>
+                            <Unlock className="h-3.5 w-3.5" /> {vi.admin.users.unlock}
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="h-3.5 w-3.5 text-red-500" /> {vi.admin.users.lock}
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          setResetTarget({
+                            id: u.id,
+                            name: u.name,
+                            email: u.email,
+                            roleLabel: vi.roles[u.role],
+                          })
+                        }
+                      >
+                        <KeyRound className="h-3.5 w-3.5" /> {tr("Đặt lại MK", "Reset password")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-red-600 hover:bg-red-50"
+                        onClick={() =>
+                          setDeleteTarget({ id: u.id, name: u.name, email: u.email })
+                        }
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> {vi.common.delete}
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -399,6 +402,7 @@ export default function AdminPortalPage() {
             <Input
               value={relation}
               onChange={(e) => setRelation(e.target.value)}
+              placeholder={tr("Phụ huynh", "Parent")}
               className="h-9 text-xs"
             />
           </div>
@@ -425,6 +429,16 @@ export default function AdminPortalPage() {
           ))}
         </div>
       </section>
+
+      <ResetPasswordDialog
+        target={resetTarget}
+        onClose={() => setResetTarget(null)}
+      />
+      <DeleteAccountDialog
+        target={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onDeleted={() => queryClient.invalidateQueries({ queryKey: ["admin-overview"] })}
+      />
     </div>
   );
 }

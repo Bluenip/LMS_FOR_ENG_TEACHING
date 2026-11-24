@@ -17,3 +17,5 @@ public/pdf.worker.min.mjs
 .env.*
 !.env.example
 !.env.production.example
+.deploy
+set-google-oauth.sh

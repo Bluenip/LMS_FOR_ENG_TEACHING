@@ -249,19 +249,112 @@ export async function deleteAccount(actor: { id: string; role: Role }, targetId:
   return { ok: true };
 }
 
-export async function updateOwnProfile(userId: string, input: { name?: string; phone?: string | null }) {
+export interface OwnProfileDto {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  dateOfBirth: string | null;
+  gender: string | null;
+  bio: string | null;
+  role: Role;
+  avatarUrl: string | null;
+  mustChangePassword: boolean;
+  createdAt: string;
+}
+
+const PROFILE_SELECT = {
+  id: true,
+  name: true,
+  email: true,
+  phone: true,
+  dateOfBirth: true,
+  gender: true,
+  bio: true,
+  role: true,
+  avatarUrl: true,
+  mustChangePassword: true,
+  createdAt: true,
+} as const;
+
+function serializeOwnProfile(row: {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  dateOfBirth: Date | null;
+  gender: string | null;
+  bio: string | null;
+  role: Role;
+  avatarUrl: string | null;
+  mustChangePassword: boolean;
+  createdAt: Date;
+}): OwnProfileDto {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    phone: row.phone,
+    dateOfBirth: row.dateOfBirth ? row.dateOfBirth.toISOString().slice(0, 10) : null,
+    gender: row.gender,
+    bio: row.bio,
+    role: row.role,
+    avatarUrl: row.avatarUrl,
+    mustChangePassword: row.mustChangePassword,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+export async function getOwnProfile(userId: string): Promise<OwnProfileDto> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: PROFILE_SELECT,
+  });
+  if (!user) throw new AppError("Không tìm thấy người dùng.", 404, "NOT_FOUND");
+  return serializeOwnProfile(user);
+}
+
+export async function updateOwnProfile(
+  userId: string,
+  input: {
+    name?: string;
+    email?: string;
+    phone?: string | null;
+    dateOfBirth?: string | null;
+    gender?: string | null;
+    bio?: string | null;
+  }
+): Promise<OwnProfileDto> {
+  const normalizedEmail = input.email !== undefined ? input.email.trim().toLowerCase() : undefined;
+  if (normalizedEmail) {
+    const emailUsed = await prisma.user.findFirst({
+      where: { email: normalizedEmail, NOT: { id: userId } },
+      select: { id: true },
+    });
+    if (emailUsed) throw new AppError("Email này đã được đăng ký.", 409, "EMAIL_EXISTS");
+  }
   if (input.phone) {
-    const used = await prisma.user.findFirst({ where: { phone: input.phone, NOT: { id: userId } }, select: { id: true } });
+    const used = await prisma.user.findFirst({
+      where: { phone: input.phone, NOT: { id: userId } },
+      select: { id: true },
+    });
     if (used) throw new AppError("Số điện thoại này đã được đăng ký.", 409, "PHONE_EXISTS");
   }
-  return prisma.user.update({
+  const updated = await prisma.user.update({
     where: { id: userId },
     data: {
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+      ...(normalizedEmail !== undefined ? { email: normalizedEmail } : {}),
       ...(input.phone !== undefined ? { phone: input.phone || null } : {}),
+      ...(input.dateOfBirth !== undefined
+        ? { dateOfBirth: input.dateOfBirth ? new Date(`${input.dateOfBirth}T00:00:00.000Z`) : null }
+        : {}),
+      ...(input.gender !== undefined ? { gender: input.gender || null } : {}),
+      ...(input.bio !== undefined ? { bio: input.bio || null } : {}),
     },
-    select: { id: true, name: true, email: true, phone: true, role: true, avatarUrl: true },
+    select: PROFILE_SELECT,
   });
+  return serializeOwnProfile(updated);
 }
 
 export async function changeOwnPassword(userId: string, currentPassword: string, newPassword: string) {

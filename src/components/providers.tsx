@@ -16,7 +16,7 @@ import { getSessionExpiryReason } from "@/lib/api-client";
 
 function ThemedToaster() {
   const { resolved } = useTheme();
-  return <Toaster richColors position="top-right" closeButton theme={resolved} />;
+  return <Toaster richColors position="bottom-right" closeButton theme={resolved} />;
 }
 
 export function Providers({ children, locale }: { children: ReactNode; locale: Locale }) {

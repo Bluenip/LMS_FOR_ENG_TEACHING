@@ -170,7 +170,21 @@ export async function getClassDetail(classId: string) {
       enrollments: {
         include: {
           student: {
-            select: { id: true, name: true, email: true, phone: true, avatarUrl: true },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              avatarUrl: true,
+              parentLinksAsChild: {
+                where: { verifiedAt: { not: null } },
+                select: {
+                  id: true,
+                  relation: true,
+                  parent: { select: { id: true, name: true, email: true } },
+                },
+              },
+            },
           },
         },
         orderBy: [{ status: "asc" }, { joinedAt: "asc" }],
