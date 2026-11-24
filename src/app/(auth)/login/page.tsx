@@ -246,7 +246,10 @@ function LoginPageContent() {
               {tr(
                 "Chưa có tài khoản? Liên hệ giáo viên hoặc quản trị viên để được cấp.",
                 "No account yet? Ask your teacher or the administrator to create one."
-              )}
+              )}{" "}
+              <a href="/privacy" className="font-semibold text-[#4F46E5] hover:underline">
+                {tr("Quyền riêng tư", "Privacy")}
+              </a>
             </p>
 
             {/* Quick demo account pills: never shown on a public deployment unless explicitly enabled */}
