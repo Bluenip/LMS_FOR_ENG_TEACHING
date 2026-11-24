@@ -44,6 +44,24 @@ export const createAccountSchema = z.object({
   relation: optionalTrimmed,
 });
 
+export const deleteAccountSchema = z.object({ confirmEmail: z.string().trim().min(3) });
+
+export const updateProfileSchema = z.object({
+  name: z.string().trim().min(2, "Họ tên tối thiểu 2 ký tự").max(100).optional(),
+  phone: z
+    .string()
+    .trim()
+    .max(20)
+    .regex(/^[0-9+ ()-]*$/, "Số điện thoại không hợp lệ")
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v.length > 0 ? v : null)),
+});
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Nhập mật khẩu hiện tại"),
+  newPassword: z.string().min(8, "Mật khẩu mới tối thiểu 8 ký tự").max(100),
+});
+
 // ===== Class =====
 export const createClassSchema = z.object({
   name: z.string().trim().min(2, "Tên lớp tối thiểu 2 ký tự").max(120),

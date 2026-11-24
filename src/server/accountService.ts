@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import type { Role } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { getStorageProvider } from "@/lib/storage";
 
 /**
  * Account provisioning (public self-registration is disabled):
@@ -119,7 +120,15 @@ export async function createAccount(
 
   const user = await prisma.$transaction(async (tx) => {
     const created = await tx.user.create({
-      data: { name, email, phone: input.phone ?? null, passwordHash, role: input.role },
+      data: {
+        name,
+        email,
+        phone: input.phone ?? null,
+        passwordHash,
+        role: input.role,
+        // a system-generated password must be replaced at first sign-in
+        mustChangePassword: temporaryPassword !== null,
+      },
       select: { id: true, name: true, email: true, role: true },
     });
     if (actor.role === "TEACHER" && input.role === "STUDENT") {
@@ -145,4 +154,178 @@ export async function createAccount(
   });
 
   return { user, temporaryPassword, linkedExistingParent: false };
+}
+
+// ===================== Password reset, deletion, own profile =====================
+
+/**
+ * Reset someone's password to a generated temporary one (shown once to the actor).
+ *  - ADMIN: any account.
+ *  - TEACHER: students of their own classes and parents linked to those students.
+ * Existing sessions of the target are signed out and they must choose a new password.
+ */
+export async function resetPasswordFor(actor: { id: string; role: Role }, targetId: string) {
+  const target = await prisma.user.findUnique({
+    where: { id: targetId },
+    select: { id: true, name: true, email: true, role: true },
+  });
+  if (!target) throw new AppError("Không tìm thấy người dùng.", 404, "NOT_FOUND");
+
+  if (actor.role === "TEACHER") {
+    const studentScope = { status: "ACTIVE" as const, class: { teacherId: actor.id } };
+    const allowed =
+      (target.role === "STUDENT" &&
+        (await prisma.enrollment.count({ where: { studentId: target.id, ...studentScope } })) > 0) ||
+      (target.role === "PARENT" &&
+        (await prisma.parentLink.count({
+          where: { parentId: target.id, student: { enrollments: { some: studentScope } } },
+        })) > 0);
+    if (!allowed) {
+      throw new AppError("Bạn chỉ đặt lại được mật khẩu cho học sinh / phụ huynh trong lớp của mình.", 403, "FORBIDDEN");
+    }
+  } else if (actor.role !== "ADMIN") {
+    throw new AppError("Bạn không có quyền đặt lại mật khẩu.", 403, "FORBIDDEN");
+  }
+
+  const temporaryPassword = generateTemporaryPassword();
+  await prisma.user.update({
+    where: { id: target.id },
+    data: {
+      passwordHash: await bcrypt.hash(temporaryPassword, 10),
+      mustChangePassword: true,
+      passwordChangedAt: new Date(),
+    },
+  });
+  return { user: target, temporaryPassword };
+}
+
+/** What would be removed together with an account (shown before deletion). */
+export async function getDeletionImpact(targetId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: targetId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      _count: {
+        select: {
+          classesTaught: true,
+          worksheets: true,
+          submissions: true,
+          enrollments: true,
+          parentLinksAsParent: true,
+          parentLinksAsChild: true,
+        },
+      },
+    },
+  });
+  if (!user) throw new AppError("Không tìm thấy người dùng.", 404, "NOT_FOUND");
+  return user;
+}
+
+/** Admin deletes an account. Requires typing the email again; never self, never the last active admin. */
+export async function deleteAccount(actor: { id: string; role: Role }, targetId: string, confirmEmail: string) {
+  if (actor.role !== "ADMIN") throw new AppError("Chỉ quản trị viên được xoá tài khoản.", 403, "FORBIDDEN");
+  if (actor.id === targetId) {
+    throw new AppError("Không thể tự xoá tài khoản của chính bạn.", 400, "SELF_DELETE");
+  }
+  const target = await prisma.user.findUnique({
+    where: { id: targetId },
+    select: { id: true, email: true, role: true, isLocked: true, avatarUrl: true },
+  });
+  if (!target) throw new AppError("Không tìm thấy người dùng.", 404, "NOT_FOUND");
+  if (confirmEmail.trim().toLowerCase() !== target.email) {
+    throw new AppError("Email xác nhận không khớp.", 400, "CONFIRM_MISMATCH");
+  }
+  if (target.role === "ADMIN" && !target.isLocked) {
+    const activeAdmins = await prisma.user.count({ where: { role: "ADMIN", isLocked: false } });
+    if (activeAdmins <= 1) {
+      throw new AppError("Hệ thống phải còn ít nhất một quản trị viên đang hoạt động.", 400, "LAST_ADMIN");
+    }
+  }
+  await prisma.user.delete({ where: { id: target.id } });
+  await removeAvatarFile(target.avatarUrl);
+  return { ok: true };
+}
+
+export async function updateOwnProfile(userId: string, input: { name?: string; phone?: string | null }) {
+  if (input.phone) {
+    const used = await prisma.user.findFirst({ where: { phone: input.phone, NOT: { id: userId } }, select: { id: true } });
+    if (used) throw new AppError("Số điện thoại này đã được đăng ký.", 409, "PHONE_EXISTS");
+  }
+  return prisma.user.update({
+    where: { id: userId },
+    data: {
+      ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+      ...(input.phone !== undefined ? { phone: input.phone || null } : {}),
+    },
+    select: { id: true, name: true, email: true, phone: true, role: true, avatarUrl: true },
+  });
+}
+
+export async function changeOwnPassword(userId: string, currentPassword: string, newPassword: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { passwordHash: true } });
+  if (!user) throw new AppError("Không tìm thấy người dùng.", 404, "NOT_FOUND");
+  if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
+    throw new AppError("Mật khẩu hiện tại không đúng.", 400, "WRONG_PASSWORD");
+  }
+  if (await bcrypt.compare(newPassword, user.passwordHash)) {
+    throw new AppError("Mật khẩu mới phải khác mật khẩu hiện tại.", 400, "SAME_PASSWORD");
+  }
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      passwordHash: await bcrypt.hash(newPassword, 10),
+      mustChangePassword: false,
+      passwordChangedAt: new Date(), // signs out the account's other devices
+    },
+  });
+  return { ok: true };
+}
+
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+
+function detectImageType(buf: Buffer): { ext: string; mime: string } | null {
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return { ext: "jpg", mime: "image/jpeg" };
+  if (buf.length >= 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])))
+    return { ext: "png", mime: "image/png" };
+  if (buf.length >= 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP")
+    return { ext: "webp", mime: "image/webp" };
+  return null;
+}
+
+async function removeAvatarFile(avatarUrl: string | null) {
+  const prefix = "/api/files/";
+  if (!avatarUrl?.startsWith(prefix)) return;
+  try {
+    await getStorageProvider().delete(decodeURIComponent(avatarUrl.slice(prefix.length)));
+  } catch {
+    // orphaned avatar files are harmless
+  }
+}
+
+export async function setOwnAvatar(userId: string, buffer: Buffer) {
+  if (buffer.length === 0 || buffer.length > AVATAR_MAX_BYTES) {
+    throw new AppError("Ảnh đại diện tối đa 2MB.", 400, "AVATAR_TOO_LARGE");
+  }
+  const type = detectImageType(buffer);
+  if (!type) throw new AppError("Chỉ nhận ảnh JPG, PNG hoặc WebP.", 400, "AVATAR_INVALID_TYPE");
+  const current = await prisma.user.findUnique({ where: { id: userId }, select: { avatarUrl: true } });
+  const key = `avatars/${userId}/${crypto.randomUUID()}.${type.ext}`;
+  await getStorageProvider().put(key, buffer, type.mime);
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: { avatarUrl: `/api/files/${key}` },
+    select: { avatarUrl: true },
+  });
+  await removeAvatarFile(current?.avatarUrl ?? null);
+  return user;
+}
+
+export async function removeOwnAvatar(userId: string) {
+  const current = await prisma.user.findUnique({ where: { id: userId }, select: { avatarUrl: true } });
+  await prisma.user.update({ where: { id: userId }, data: { avatarUrl: null } });
+  await removeAvatarFile(current?.avatarUrl ?? null);
+  return { avatarUrl: null };
 }

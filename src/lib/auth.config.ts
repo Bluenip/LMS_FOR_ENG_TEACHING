@@ -21,6 +21,8 @@ export const authConfig = {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as Role;
+        // when this JWT was issued (seconds): compared with User.passwordChangedAt on the server
+        session.user.issuedAt = typeof token.iat === "number" ? token.iat : undefined;
       }
       return session;
     },

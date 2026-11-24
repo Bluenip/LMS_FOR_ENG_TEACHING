@@ -29,10 +29,18 @@ async function main() {
   if (existing) {
     await prisma.user.update({
       where: { id: existing.id },
-      data: { passwordHash, role: "ADMIN", isLocked: false },
+      data: {
+        passwordHash,
+        role: "ADMIN",
+        isLocked: false,
+        mustChangePassword: !process.env.ADMIN_PASSWORD,
+        passwordChangedAt: new Date(),
+      },
     });
   } else {
-    await prisma.user.create({ data: { email, name, passwordHash, role: "ADMIN" } });
+    await prisma.user.create({
+      data: { email, name, passwordHash, role: "ADMIN", mustChangePassword: !process.env.ADMIN_PASSWORD },
+    });
   }
   console.log(`Admin ready: ${email}`);
   if (!process.env.ADMIN_PASSWORD) console.log(`Generated password (shown once): ${password}`);

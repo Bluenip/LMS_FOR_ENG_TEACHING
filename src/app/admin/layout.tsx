@@ -16,6 +16,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           name: user.name || tr("Quản trị viên", "Administrator"),
           email: user.email,
           role: user.role,
+          avatarUrl: user.avatarUrl,
         }}
         links={[
           { href: "/admin", label: vi.nav.adminOverview, exact: true },

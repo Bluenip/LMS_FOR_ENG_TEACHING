@@ -17,6 +17,7 @@ export default async function ParentLayout({ children }: { children: React.React
           name: user.name || tr("Phụ huynh", "Parent"),
           email: user.email,
           role: user.role,
+          avatarUrl: user.avatarUrl,
         }}
         topBanner={
           <div className="flex items-center justify-center gap-2 bg-[#EFF4FF] px-4 py-1.5 text-xs font-medium text-[#3525CD]">

@@ -16,6 +16,7 @@ export default async function TeacherLayout({ children }: { children: React.Reac
           name: user.name || tr("Giáo viên", "Teacher"),
           email: user.email,
           role: user.role,
+          avatarUrl: user.avatarUrl,
         }}
         links={[
           ...(user.role === "ADMIN"

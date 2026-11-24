@@ -46,6 +46,7 @@ interface AppNavbarProps {
     name: string;
     email: string;
     role: Role;
+    avatarUrl?: string | null;
   };
   links: NavLinkItem[];
   topBanner?: React.ReactNode;
@@ -244,15 +245,28 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
           </div>
 
           {/* User pill */}
-          <div className="hidden items-center gap-2.5 sm:flex">
-            <div className="text-right leading-tight">
+          <Link
+            href="/account"
+            title={tr("Tài khoản của tôi", "My account")}
+            className="flex items-center gap-2.5 rounded-full p-0.5 transition hover:bg-[#EFF4FF] sm:pl-3"
+          >
+            <div className="hidden text-right leading-tight sm:block">
               <p className="text-sm font-semibold text-[#0B1C30]">{user.name}</p>
               <p className="text-xs text-[#464555]">{vi.roles[user.role]}</p>
             </div>
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#3525CD] text-xs font-bold text-white">
-              {getInitials(user.name)}
-            </div>
-          </div>
+            {user.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={user.avatarUrl}
+                alt={user.name}
+                className="h-9 w-9 rounded-full object-cover ring-2 ring-white"
+              />
+            ) : (
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#3525CD] text-xs font-bold text-white">
+                {getInitials(user.name)}
+              </div>
+            )}
+          </Link>
 
           <Button
             variant="ghost"

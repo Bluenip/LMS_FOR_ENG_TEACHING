@@ -57,6 +57,35 @@ interface AdminOverview {
 export default function AdminPortalPage() {
   const { m: vi, tr } = useI18n();
   const queryClient = useQueryClient();
+
+  const handleResetPassword = async (id: string, email: string) => {
+    if (!window.confirm(tr(`Đặt lại mật khẩu cho ${email}? Người này sẽ bị đăng xuất khỏi mọi thiết bị.`, `Reset the password of ${email}? They will be signed out everywhere.`))) return;
+    const res = await fetch(`/api/users/${id}/reset-password`, { method: "POST" });
+    const json = await res.json();
+    if (!res.ok) return toast.error(json.error ?? vi.common.errorGeneric);
+    window.prompt(tr("Mật khẩu tạm (chỉ hiện một lần, hãy sao chép):", "Temporary password (shown once, copy it):"), json.temporaryPassword);
+  };
+
+  const handleDelete = async (id: string, email: string) => {
+    const impact = await fetch(`/api/admin/users/${id}/impact`).then((r) => r.json());
+    const c = impact.user?._count ?? {};
+    const typed = window.prompt(
+      tr(
+        `XOÁ VĨNH VIỄN ${email}? Sẽ mất theo: ${c.classesTaught ?? 0} lớp dạy, ${c.worksheets ?? 0} worksheet, ${c.submissions ?? 0} bài nộp, ${(c.parentLinksAsParent ?? 0) + (c.parentLinksAsChild ?? 0)} liên kết phụ huynh. Gõ lại email để xác nhận:`,
+        `PERMANENTLY delete ${email}? Also removes: ${c.classesTaught ?? 0} classes, ${c.worksheets ?? 0} worksheets, ${c.submissions ?? 0} submissions, ${(c.parentLinksAsParent ?? 0) + (c.parentLinksAsChild ?? 0)} parent links. Type the email to confirm:`
+      )
+    );
+    if (!typed) return;
+    const res = await fetch(`/api/admin/users/${id}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmEmail: typed }),
+    });
+    const json = await res.json();
+    if (!res.ok) return toast.error(json.error ?? vi.common.errorGeneric);
+    toast.success(tr("Đã xoá tài khoản.", "Account deleted."));
+    queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
+  };
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("");
   const [selectedParentId, setSelectedParentId] = useState("");
@@ -308,6 +337,12 @@ export default function AdminPortalPage() {
                           <Lock className="h-3.5 w-3.5 text-red-500" /> {vi.admin.users.lock}
                         </>
                       )}
+                    </Button>
+                    <Button size="sm" variant="outline" className="ml-1.5" onClick={() => void handleResetPassword(u.id, u.email)}>
+                      {tr("Đặt lại MK", "Reset password")}
+                    </Button>
+                    <Button size="sm" variant="outline" className="ml-1.5 text-red-600" onClick={() => void handleDelete(u.id, u.email)}>
+                      <Trash2 className="h-3.5 w-3.5" /> {vi.common.delete}
                     </Button>
                   </td>
                 </tr>

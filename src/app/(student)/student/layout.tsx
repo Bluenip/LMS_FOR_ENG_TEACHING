@@ -16,6 +16,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
           name: user.name || tr("Học sinh", "Student"),
           email: user.email,
           role: user.role,
+          avatarUrl: user.avatarUrl,
         }}
         links={[
           { href: "/student", label: vi.nav.dashboard, exact: true },

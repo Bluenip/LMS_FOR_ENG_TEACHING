@@ -18,12 +18,28 @@ export interface SessionUser {
   role: Role;
 }
 
+export interface LayoutUser extends SessionUser {
+  avatarUrl: string | null;
+}
+
+/** A session issued before the last password change/reset is no longer valid (signs out other devices). */
+function isSessionOlderThanPasswordChange(
+  issuedAtSec: number | undefined,
+  passwordChangedAt: Date | null
+): boolean {
+  if (!passwordChangedAt || !issuedAtSec) return false;
+  return issuedAtSec * 1000 < passwordChangedAt.getTime() - 2000;
+}
+
 /**
  * Validates the current NextAuth session against the database for Server Component layouts/pages.
  * Redirects stale/deleted or locked accounts through /api/auth/clear-session so cookies are cleared
  * before landing on /login?reason=...
  */
-export async function requireLayoutUser(allowedRoles?: Role[]): Promise<SessionUser> {
+export async function requireLayoutUser(
+  allowedRoles?: Role[],
+  opts?: { allowPendingPasswordChange?: boolean }
+): Promise<LayoutUser> {
   const session = await auth();
   if (!session?.user?.id) {
     redirect("/login");
@@ -31,7 +47,16 @@ export async function requireLayoutUser(allowedRoles?: Role[]): Promise<SessionU
 
   const dbUser = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { id: true, email: true, name: true, role: true, isLocked: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      isLocked: true,
+      avatarUrl: true,
+      mustChangePassword: true,
+      passwordChangedAt: true,
+    },
   });
 
   if (!dbUser) {
@@ -39,6 +64,12 @@ export async function requireLayoutUser(allowedRoles?: Role[]): Promise<SessionU
   }
   if (dbUser.isLocked) {
     redirect("/api/auth/clear-session?reason=locked");
+  }
+  if (isSessionOlderThanPasswordChange(session.user.issuedAt, dbUser.passwordChangedAt)) {
+    redirect("/api/auth/clear-session?reason=session");
+  }
+  if (dbUser.mustChangePassword && !opts?.allowPendingPasswordChange) {
+    redirect("/account?force=1");
   }
   if (allowedRoles && !allowedRoles.includes(dbUser.role)) {
     redirect(getHomeForRole(dbUser.role));
@@ -49,6 +80,7 @@ export async function requireLayoutUser(allowedRoles?: Role[]): Promise<SessionU
     email: dbUser.email,
     name: dbUser.name,
     role: dbUser.role,
+    avatarUrl: dbUser.avatarUrl,
   };
 }
 
@@ -60,7 +92,7 @@ export async function requireAuth(): Promise<SessionUser> {
 
   const dbUser = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { id: true, email: true, name: true, role: true, isLocked: true },
+    select: { id: true, email: true, name: true, role: true, isLocked: true, passwordChangedAt: true },
   });
 
   if (!dbUser) {
@@ -68,6 +100,9 @@ export async function requireAuth(): Promise<SessionUser> {
   }
   if (dbUser.isLocked) {
     throw new AppError("Tài khoản của bạn đã bị khoá.", 403, "ACCOUNT_LOCKED");
+  }
+  if (isSessionOlderThanPasswordChange(session.user.issuedAt, dbUser.passwordChangedAt)) {
+    throw new AppError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.", 401, "UNAUTHORIZED");
   }
 
   return {

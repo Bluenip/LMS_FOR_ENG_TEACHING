@@ -360,6 +360,8 @@ export async function authorizeFileDownload(
   fileKey: string
 ): Promise<boolean> {
   if (role === "ADMIN") return true;
+  // profile pictures are visible to every signed-in user (class rosters, navbar, comments)
+  if (/^avatars\/[A-Za-z0-9_-]+\/[0-9a-f-]+\.(jpg|png|webp)$/.test(fileKey)) return true;
 
   // Check if worksheet PDF
   const worksheet = await prisma.worksheet.findFirst({
