@@ -211,6 +211,9 @@ async function main() {
   const passwordHash = await bcrypt.hash("password123", 10);
 
   // Clean existing data in dependency order for idempotent re-seeding
+  await prisma.oneTimeExport.deleteMany();
+  await prisma.errorLog.deleteMany();
+  await prisma.auditLog.deleteMany();
   await prisma.notification.deleteMany();
   await prisma.audioPlay.deleteMany();
   await prisma.proctorEvent.deleteMany();
@@ -1082,6 +1085,65 @@ async function main() {
         title: "Có 1 bài tự luận chờ chấm",
         body: "Lê Hoàng Long đã nộp bài Unit 7: The World of Work - Đề số 1.",
         link: `/teacher/assignments/${asgUnit7.id}/grading`,
+      },
+    ],
+  });
+
+  // Phase 13 seed: sample AuditLog & ErrorLog entries for /admin/audit and /admin/errors
+  await prisma.auditLog.createMany({
+    data: [
+      {
+        actorId: admin.id,
+        action: "USER_CREATED",
+        targetType: "USER",
+        targetId: teacher1.id,
+        summary: `Tạo tài khoản Giáo viên: ${teacher1.name} (${teacher1.email})`,
+        meta: { email: teacher1.email, role: "TEACHER" },
+        createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
+      },
+      {
+        actorId: admin.id,
+        action: "USER_CREATED",
+        targetType: "USER",
+        targetId: teacher2.id,
+        summary: `Tạo tài khoản Giáo viên: ${teacher2.name} (${teacher2.email})`,
+        meta: { email: teacher2.email, role: "TEACHER" },
+        createdAt: new Date(Date.now() - 36 * 60 * 60 * 1000),
+      },
+      {
+        actorId: teacher1.id,
+        action: "ASSIGNMENT_UPDATED",
+        targetType: "ASSIGNMENT",
+        targetId: asgUnit7.id,
+        summary: `Cập nhật cài đặt bài tập: ${asgUnit7.title}`,
+        meta: { classId: class1.id, maxAttempts: 2 },
+        createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000),
+      },
+    ],
+  });
+
+  await prisma.errorLog.createMany({
+    data: [
+      {
+        source: "SERVER",
+        level: "WARN",
+        message: "Mẫu cảnh báo hệ thống (seed): kết nối lưu trữ chậm bất thường",
+        path: "/api/worksheets",
+        method: "GET",
+        statusCode: 503,
+        userId: admin.id,
+        meta: { seeded: true },
+        createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000),
+      },
+      {
+        source: "CLIENT",
+        level: "ERROR",
+        message: "Mẫu lỗi trình duyệt (seed): TypeError: Failed to fetch",
+        path: "/student/assignments",
+        userId: students[0]!.id,
+        userAgent: "Mozilla/5.0 (Seeded Sample)",
+        meta: { seeded: true },
+        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
       },
     ],
   });
