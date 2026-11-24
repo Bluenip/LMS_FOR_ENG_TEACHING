@@ -234,7 +234,9 @@ export function TeacherDashboardClient({
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <h2 className="text-xl font-bold text-[#0B1C30]">{vi.classes.title}</h2>
+            <h2 className="text-xl font-bold text-[#0B1C30]">
+              {isAdmin ? tr("Tất cả lớp học", "All classes") : vi.classes.title}
+            </h2>
             <Badge variant="neutral">
               {classes.length} {tr("lớp", "class(es)")}
               {isAdmin && tr(" · toàn hệ thống", " · whole system")}
