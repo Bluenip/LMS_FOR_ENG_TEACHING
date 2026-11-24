@@ -9,20 +9,22 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { vi } from "@/messages/vi";
+import { useI18n } from "@/lib/i18n/client";
+import { ThemeLangToggle } from "@/components/layout/ThemeLangToggle";
 
 const SHOW_DEMO_ACCOUNTS =
   process.env.NODE_ENV !== "production" ||
   process.env.NEXT_PUBLIC_SHOW_DEMO_ACCOUNTS === "true";
 
 const DEMO_ACCOUNTS = [
-  { label: "Giáo viên", email: "teacher1@engclass.vn", desc: "Cô Mai Phương" },
-  { label: "Học sinh", email: "student1@engclass.vn", desc: "Nguyễn Văn Minh" },
-  { label: "Phụ huynh", email: "parent1@engclass.vn", desc: "Nguyễn Văn Hùng" },
-  { label: "Admin", email: "admin@engclass.vn", desc: "Quản trị viên" },
-];
+  { role: "TEACHER", email: "teacher1@engclass.vn", desc: "Cô Mai Phương" },
+  { role: "STUDENT", email: "student1@engclass.vn", desc: "Nguyễn Văn Minh" },
+  { role: "PARENT", email: "parent1@engclass.vn", desc: "Nguyễn Văn Hùng" },
+  { role: "ADMIN", email: "admin@engclass.vn", desc: "" },
+] as const;
 
 export default function LoginPage() {
+  const { m: vi, tr } = useI18n();
   const router = useRouter();
   const appName = process.env.NEXT_PUBLIC_APP_NAME || vi.app.defaultName;
 
@@ -54,7 +56,7 @@ export default function LoginPage() {
         return;
       }
 
-      toast.success("Đăng nhập thành công!");
+      toast.success(tr("Đăng nhập thành công!", "Signed in successfully!"));
       router.push("/");
       router.refresh();
     } catch {
@@ -65,7 +67,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F8F9FF] px-4 py-8">
+    <div className="relative flex min-h-screen items-center justify-center bg-[#F8F9FF] px-4 py-8">
+      <ThemeLangToggle className="absolute right-4 top-4" />
       <div className="grid w-full max-w-5xl grid-cols-1 items-center gap-8 lg:grid-cols-12">
         {/* Left Stitch Hero Preview */}
         <div className="hidden lg:col-span-7 lg:block">
@@ -81,7 +84,7 @@ export default function LoginPage() {
                     LMS
                   </span>
                 </div>
-                <p className="text-xs text-[#464555]">Nền tảng số hóa Worksheet tương tác</p>
+                <p className="text-xs text-[#464555]">{tr("Nền tảng số hóa Worksheet tương tác", "Interactive worksheet platform")}</p>
               </div>
             </div>
 
@@ -107,7 +110,7 @@ export default function LoginPage() {
                 <div className="rounded-xl bg-[#F8F9FF] p-3.5 border border-slate-100">
                   <div className="flex items-center justify-between text-xs font-semibold text-[#4F46E5]">
                     <span>Question 1</span>
-                    <span className="text-slate-400">1.0 điểm</span>
+                    <span className="text-slate-400">{tr("1.0 điểm", "1.0 pt")}</span>
                   </div>
                   <p className="mt-2 text-sm text-[#0B1C30] leading-loose">
                     She{" "}
@@ -122,7 +125,7 @@ export default function LoginPage() {
                 <div className="rounded-xl bg-[#F8F9FF] p-3.5 border border-slate-100">
                   <div className="flex items-center justify-between text-xs font-semibold text-[#4F46E5]">
                     <span>Question 2</span>
-                    <span className="text-slate-400">1.0 điểm</span>
+                    <span className="text-slate-400">{tr("1.0 điểm", "1.0 pt")}</span>
                   </div>
                   <p className="mt-1.5 text-sm text-[#0B1C30]">
                     Choose the correct option to complete the sentence:
@@ -200,7 +203,7 @@ export default function LoginPage() {
                     type="button"
                     onClick={() => setShowPass((v) => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    aria-label="Hiện/ẩn mật khẩu"
+                    aria-label={tr("Hiện/ẩn mật khẩu", "Show/hide password")}
                   >
                     {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -237,8 +240,12 @@ export default function LoginPage() {
                     }}
                     className="rounded-xl border border-slate-200 bg-[#F8F9FF] px-3 py-2 text-left transition hover:border-[#4F46E5] hover:bg-[#EEF2FF]"
                   >
-                    <p className="text-xs font-bold text-[#3525CD]">{acc.label}</p>
-                    <p className="truncate text-[11px] text-[#464555]">{acc.desc}</p>
+                    <p className="text-xs font-bold text-[#3525CD]">
+                      {acc.role === "ADMIN" ? "Admin" : vi.roles[acc.role]}
+                    </p>
+                    <p className="truncate text-[11px] text-[#464555]">
+                      {acc.desc || vi.roles.ADMIN}
+                    </p>
                   </button>
                 ))}
               </div>

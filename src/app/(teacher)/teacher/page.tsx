@@ -2,8 +2,10 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { TeacherDashboardClient } from "./TeacherDashboardClient";
+import { getI18n } from "@/lib/i18n/server";
 
 export default async function TeacherDashboardPage() {
+  const { tr } = await getI18n();
   const session = await auth();
   if (!session?.user) redirect("/login");
 
@@ -62,7 +64,7 @@ export default async function TeacherDashboardPage() {
 
   return (
     <TeacherDashboardClient
-      teacherName={session.user.name ?? "Giáo viên"}
+      teacherName={session.user.name ?? tr("Giáo viên", "Teacher")}
       stats={{
         totalStudents,
         activeClassCount: activeClasses.length,

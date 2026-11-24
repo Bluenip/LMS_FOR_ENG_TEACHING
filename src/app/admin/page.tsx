@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import type { Role } from "@prisma/client";
 import { formatDateTime } from "@/lib/utils";
-import { vi } from "@/messages/vi";
+import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,12 +52,13 @@ interface AdminOverview {
 }
 
 export default function AdminPortalPage() {
+  const { m: vi, tr } = useI18n();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("");
   const [selectedParentId, setSelectedParentId] = useState("");
   const [selectedStudentId, setSelectedStudentId] = useState("");
-  const [relation, setRelation] = useState("Phụ huynh");
+  const [relation, setRelation] = useState(tr("Phụ huynh", "Parent"));
 
   const { data, isLoading } = useQuery<AdminOverview>({
     queryKey: ["admin-overview", search, roleFilter],
@@ -66,7 +67,7 @@ export default function AdminPortalPage() {
       if (search.trim()) params.set("q", search.trim());
       if (roleFilter) params.set("role", roleFilter);
       const res = await fetch(`/api/admin/overview?${params.toString()}`);
-      if (!res.ok) throw new Error("Không tải được dữ liệu quản trị");
+      if (!res.ok) throw new Error(tr("Không tải được dữ liệu quản trị", "Could not load admin data"));
       return res.json();
     },
   });
@@ -82,10 +83,10 @@ export default function AdminPortalPage() {
     });
     const json = await res.json();
     if (!res.ok) {
-      toast.error(json.error ?? "Cập nhật thất bại");
+      toast.error(json.error ?? tr("Cập nhật thất bại", "Update failed"));
       return;
     }
-    toast.success("Đã cập nhật tài khoản!");
+    toast.success(tr("Đã cập nhật tài khoản!", "Account updated!"));
     queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
   };
 
@@ -103,10 +104,10 @@ export default function AdminPortalPage() {
     });
     const json = await res.json();
     if (!res.ok) {
-      toast.error(json.error ?? "Liên kết thất bại");
+      toast.error(json.error ?? tr("Liên kết thất bại", "Linking failed"));
       return;
     }
-    toast.success("Đã liên kết phụ huynh và học sinh!");
+    toast.success(tr("Đã liên kết phụ huynh và học sinh!", "Parent and student linked!"));
     setSelectedParentId("");
     setSelectedStudentId("");
     queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
@@ -119,7 +120,7 @@ export default function AdminPortalPage() {
       body: JSON.stringify({ linkId }),
     });
     if (res.ok) {
-      toast.success("Đã gỡ liên kết.");
+      toast.success(tr("Đã gỡ liên kết.", "Link removed."));
       queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
     }
   };
@@ -144,7 +145,7 @@ export default function AdminPortalPage() {
         <div>
           <h1 className="text-2xl font-bold text-[#0B1C30]">{vi.admin.title}</h1>
           <p className="text-sm text-[#464555]">
-            Quản lý tài khoản, phân quyền, khoá tài khoản và liên kết phụ huynh – học sinh.
+            {tr("Quản lý tài khoản, phân quyền, khoá tài khoản và liên kết phụ huynh – học sinh.", "Manage accounts, roles, account locks and parent – student links.")}
           </p>
         </div>
       </div>
@@ -189,7 +190,7 @@ export default function AdminPortalPage() {
         </div>
         <div className="stitch-card p-4">
           <p className="text-xs font-semibold text-slate-500 flex items-center gap-1">
-            <FileText className="h-3.5 w-3.5 text-[#F97316]" /> Worksheets / Bài nộp
+            <FileText className="h-3.5 w-3.5 text-[#F97316]" /> {tr("Worksheets / Bài nộp", "Worksheets / Submissions")}
           </p>
           <p className="mt-1.5 text-2xl font-bold text-[#0B1C30] tabular-nums">
             {data.stats.worksheets} / {data.stats.submissions}
@@ -207,7 +208,7 @@ export default function AdminPortalPage() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm tên hoặc email…"
+              placeholder={tr("Tìm tên hoặc email…", "Search name or email…")}
               className="h-9 w-56 text-xs"
             />
             <select
@@ -215,11 +216,11 @@ export default function AdminPortalPage() {
               onChange={(e) => setRoleFilter(e.target.value)}
               className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold outline-none"
             >
-              <option value="">Tất cả vai trò</option>
-              <option value="ADMIN">Quản trị viên</option>
-              <option value="TEACHER">Giáo viên</option>
-              <option value="STUDENT">Học sinh</option>
-              <option value="PARENT">Phụ huynh</option>
+              <option value="">{tr("Tất cả vai trò", "All roles")}</option>
+              <option value="ADMIN">{tr("Quản trị viên", "Administrator")}</option>
+              <option value="TEACHER">{tr("Giáo viên", "Teacher")}</option>
+              <option value="STUDENT">{tr("Học sinh", "Student")}</option>
+              <option value="PARENT">{tr("Phụ huynh", "Parent")}</option>
             </select>
           </div>
         </div>
@@ -228,11 +229,11 @@ export default function AdminPortalPage() {
           <table className="w-full text-left text-sm">
             <thead className="bg-[#F8F9FF] text-xs font-bold uppercase text-[#464555]">
               <tr>
-                <th className="px-6 py-3">Người dùng</th>
-                <th className="px-6 py-3">Vai trò</th>
-                <th className="px-6 py-3">Trạng thái</th>
-                <th className="px-6 py-3">Ngày tạo</th>
-                <th className="px-6 py-3 text-right">Thao tác</th>
+                <th className="px-6 py-3">{tr("Người dùng", "User")}</th>
+                <th className="px-6 py-3">{tr("Vai trò", "Role")}</th>
+                <th className="px-6 py-3">{tr("Trạng thái", "Status")}</th>
+                <th className="px-6 py-3">{tr("Ngày tạo", "Created")}</th>
+                <th className="px-6 py-3 text-right">{tr("Thao tác", "Actions")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -301,14 +302,14 @@ export default function AdminPortalPage() {
 
         <form onSubmit={handleCreateLink} className="grid grid-cols-1 gap-3 sm:grid-cols-4 items-end">
           <div className="space-y-1">
-            <Label className="text-xs">Phụ huynh</Label>
+            <Label className="text-xs">{tr("Phụ huynh", "Parent")}</Label>
             <select
               required
               value={selectedParentId}
               onChange={(e) => setSelectedParentId(e.target.value)}
               className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs outline-none"
             >
-              <option value="">— Chọn phụ huynh —</option>
+              <option value="">{tr("— Chọn phụ huynh —", "— Select parent —")}</option>
               {parents.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name} ({p.email})
@@ -317,14 +318,14 @@ export default function AdminPortalPage() {
             </select>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Học sinh</Label>
+            <Label className="text-xs">{tr("Học sinh", "Student")}</Label>
             <select
               required
               value={selectedStudentId}
               onChange={(e) => setSelectedStudentId(e.target.value)}
               className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs outline-none"
             >
-              <option value="">— Chọn học sinh —</option>
+              <option value="">{tr("— Chọn học sinh —", "— Select student —")}</option>
               {students.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name} ({s.email})
@@ -333,7 +334,7 @@ export default function AdminPortalPage() {
             </select>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Mối quan hệ</Label>
+            <Label className="text-xs">{tr("Mối quan hệ", "Relationship")}</Label>
             <Input
               value={relation}
               onChange={(e) => setRelation(e.target.value)}
@@ -349,7 +350,7 @@ export default function AdminPortalPage() {
           {data.parentLinks.map((l) => (
             <div key={l.id} className="flex items-center justify-between py-2.5 text-xs">
               <div>
-                <strong>{l.parent.name}</strong> ({l.relation ?? "Phụ huynh"}) ↔{" "}
+                <strong>{l.parent.name}</strong> ({l.relation ?? tr("Phụ huynh", "Parent")}) ↔{" "}
                 <strong className="text-[#3525CD]">{l.student.name}</strong> ({l.student.email})
               </div>
               <button

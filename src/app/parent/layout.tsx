@@ -3,9 +3,10 @@ import { Eye } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { getAppName } from "@/lib/utils";
 import { AppNavbar } from "@/components/layout/AppNavbar";
-import { vi } from "@/messages/vi";
+import { getI18n } from "@/lib/i18n/server";
 
 export default async function ParentLayout({ children }: { children: React.ReactNode }) {
+  const { m: vi, tr } = await getI18n();
   const session = await auth();
   if (!session?.user) redirect("/login");
   if (session.user.role !== "PARENT") {
@@ -18,7 +19,7 @@ export default async function ParentLayout({ children }: { children: React.React
         appName={getAppName()}
         user={{
           id: session.user.id,
-          name: session.user.name ?? "Phụ huynh",
+          name: session.user.name ?? tr("Phụ huynh", "Parent"),
           email: session.user.email ?? "",
           role: session.user.role,
         }}

@@ -19,7 +19,7 @@ import {
   Users,
 } from "lucide-react";
 import { cn, formatDateTime, formatDurationMs, getInitials } from "@/lib/utils";
-import { vi } from "@/messages/vi";
+import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -151,11 +151,12 @@ function SubmissionReviewModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { m: vi, tr } = useI18n();
   const { data, isLoading } = useQuery<{ submission: ReviewSubmissionDetail }>({
     queryKey: ["submission-review", submissionId],
     queryFn: async () => {
       const res = await fetch(`/api/submissions/${submissionId}/grade`);
-      if (!res.ok) throw new Error("Không tải được bài làm");
+      if (!res.ok) throw new Error(tr("Không tải được bài làm", "Could not load the submission"));
       return res.json();
     },
   });
@@ -199,8 +200,8 @@ function SubmissionReviewModal({
           grades,
         }),
       });
-      if (!res.ok) throw new Error("Lưu điểm thất bại");
-      toast.success("Đã lưu kết quả chấm bài!");
+      if (!res.ok) throw new Error(tr("Lưu điểm thất bại", "Saving grades failed"));
+      toast.success(tr("Đã lưu kết quả chấm bài!", "Grading saved!"));
       onSaved();
       onClose();
     } catch (err) {
@@ -215,7 +216,7 @@ function SubmissionReviewModal({
       <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            Chấm bài &amp; Xem chi tiết {sub ? `— ${sub.student.name}` : ""}
+            {tr("Chấm bài & Xem chi tiết", "Grade & review")} {sub ? `— ${sub.student.name}` : ""}
           </DialogTitle>
         </DialogHeader>
 
@@ -269,7 +270,7 @@ function SubmissionReviewModal({
                 ))
               ) : (
                 <div className="rounded-xl border border-slate-200 p-8 text-center text-xs text-slate-500">
-                  Worksheet không sử dụng PDF — xem đáp án từng câu ở bảng bên phải.
+                  {tr("Worksheet không sử dụng PDF — xem đáp án từng câu ở bảng bên phải.", "This worksheet has no PDF — see each answer in the panel on the right.")}
                 </div>
               )}
 
@@ -278,7 +279,7 @@ function SubmissionReviewModal({
                 <div className="rounded-xl border border-red-200 bg-[#FEF2F2]/70 p-4 space-y-2">
                   <p className="flex items-center gap-1.5 text-xs font-bold text-[#BA1A1A]">
                     <ShieldAlert className="h-4 w-4" />
-                    Nhật ký giám sát thi ({sub.violationCount} vi phạm)
+                    {tr("Nhật ký giám sát thi (", "Proctoring log (")}{sub.violationCount} {tr("vi phạm)", "violations)")}
                   </p>
                   <div className="max-h-40 space-y-1 overflow-y-auto text-xs">
                     {sub.proctorEvents.map((ev) => (
@@ -320,31 +321,31 @@ function SubmissionReviewModal({
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <Badge variant={f.type === "ESSAY" ? "orange" : "default"}>
-                            Câu {f.label}
+                            {tr("Câu", "Q")} {f.label}
                           </Badge>
                           <span className="font-semibold text-slate-600">
                             {vi.worksheets.tools[f.type]}
                           </span>
                         </div>
-                        <span className="font-bold text-slate-500">Tối đa {f.points}đ</span>
+                        <span className="font-bold text-slate-500">{tr("Tối đa", "Up to")} {f.points}{tr("đ", "pt")}</span>
                       </div>
 
                       <div className="rounded-lg bg-white p-2 text-[#0B1C30] border border-slate-100">
                         <span className="text-[10px] font-bold uppercase text-slate-400">
-                          Bài làm học sinh:
+                          {tr("Bài làm học sinh:", "Student's answer:")}
                         </span>
                         <p className="mt-0.5 whitespace-pre-wrap font-medium">
                           {ans?.value !== undefined && ans?.value !== null && ans?.value !== ""
                             ? Array.isArray(ans.value)
                               ? ans.value.join(", ")
                               : String(ans.value)
-                            : "(Bỏ trống)"}
+                            : tr("(Bỏ trống)", "(Blank)")}
                         </p>
                       </div>
 
                       <div className="grid grid-cols-3 gap-2">
                         <div>
-                          <Label className="text-[10px]">Điểm chấm</Label>
+                          <Label className="text-[10px]">{tr("Điểm chấm", "Score")}</Label>
                           <Input
                             type="number"
                             step="0.25"
@@ -361,13 +362,13 @@ function SubmissionReviewModal({
                           />
                         </div>
                         <div className="col-span-2">
-                          <Label className="text-[10px]">Nhận xét câu này</Label>
+                          <Label className="text-[10px]">{tr("Nhận xét câu này", "Note for this question")}</Label>
                           <Input
                             value={currentNote}
                             onChange={(e) =>
                               setNotes((prev) => ({ ...prev, [f.id]: e.target.value }))
                             }
-                            placeholder="Ghi chú…"
+                            placeholder={tr("Ghi chú…", "Note…")}
                             className="mt-0.5 h-8 text-xs"
                           />
                         </div>
@@ -384,7 +385,7 @@ function SubmissionReviewModal({
                     rows={3}
                     value={teacherComment !== null ? teacherComment : (sub.teacherComment ?? "")}
                     onChange={(e) => setTeacherComment(e.target.value)}
-                    placeholder="Nhận xét tổng thể (hiển thị cho học sinh & phụ huynh)…"
+                    placeholder={tr("Nhận xét tổng thể (hiển thị cho học sinh & phụ huynh)…", "Overall comment (visible to student & parent)…")}
                     className="text-xs"
                   />
                 </div>
@@ -392,7 +393,7 @@ function SubmissionReviewModal({
                 <label className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50/40 px-3 py-2">
                   <span className="flex items-center gap-1.5 text-xs font-semibold text-[#BA1A1A]">
                     <Flag className="h-3.5 w-3.5" />
-                    Đánh dấu nghi vấn (loại khỏi bảng xếp hạng)
+                    {tr("Đánh dấu nghi vấn (loại khỏi bảng xếp hạng)", "Flag as suspicious (excluded from leaderboard)")}
                   </span>
                   <Switch
                     checked={flagged !== null ? flagged : sub.flagged}
@@ -402,11 +403,11 @@ function SubmissionReviewModal({
 
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={onClose}>
-                    Đóng
+                    {tr("Đóng", "Close")}
                   </Button>
                   <Button onClick={handleSave} disabled={saving}>
                     <CheckCircle2 className="h-4 w-4" />
-                    {saving ? "Đang lưu…" : vi.assignments.grading.saveGrading}
+                    {saving ? tr("Đang lưu…", "Saving…") : vi.assignments.grading.saveGrading}
                   </Button>
                 </div>
               </div>
@@ -419,6 +420,7 @@ function SubmissionReviewModal({
 }
 
 export default function AssignmentGradingPage() {
+  const { m: vi, tr } = useI18n();
   const params = useParams<{ id: string }>();
   const assignmentId = params.id;
   const queryClient = useQueryClient();
@@ -430,7 +432,7 @@ export default function AssignmentGradingPage() {
     queryKey: ["assignment-report", assignmentId],
     queryFn: async () => {
       const res = await fetch(`/api/assignments/${assignmentId}/report`);
-      if (!res.ok) throw new Error("Không thể tải báo cáo");
+      if (!res.ok) throw new Error(tr("Không thể tải báo cáo", "Could not load the report"));
       return res.json();
     },
   });
@@ -474,8 +476,7 @@ export default function AssignmentGradingPage() {
             {report.assignment.title}
           </h1>
           <p className="mt-0.5 text-xs text-[#464555]">
-            {report.assignment.totalQuestions} câu hỏi • Điểm tối đa {report.assignment.maxScore} •
-            Hạn nộp: {formatDateTime(report.assignment.dueAt)}
+            {report.assignment.totalQuestions} {tr("câu hỏi • Điểm tối đa", "questions • Max score")} {report.assignment.maxScore} {tr("• Hạn nộp:", "• Due:")} {formatDateTime(report.assignment.dueAt)}
           </p>
         </div>
 
@@ -491,14 +492,14 @@ export default function AssignmentGradingPage() {
               href={`/teacher/classes/${report.assignment.classId}/leaderboard?assignmentId=${assignmentId}`}
             >
               <Trophy className="h-4 w-4 text-[#F97316]" />
-              Bảng xếp hạng
+              {tr("Bảng xếp hạng", "Leaderboard")}
             </Link>
           </Button>
           {report.assignment.proctorMode !== "OFF" && (
             <Button variant="secondary" size="sm" asChild>
               <Link href={`/teacher/assignments/${assignmentId}/live`}>
                 <Radio className="h-4 w-4 text-red-500" />
-                Giám sát Live
+                {tr("Giám sát Live", "Live proctoring")}
               </Link>
             </Button>
           )}
@@ -509,42 +510,42 @@ export default function AssignmentGradingPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="stitch-card p-5">
           <div className="flex items-center justify-between text-xs font-semibold text-[#464555]">
-            <span>Sĩ số nộp bài</span>
+            <span>{tr("Sĩ số nộp bài", "Submissions")}</span>
             <Users className="h-4 w-4 text-[#4F46E5]" />
           </div>
           <p className="mt-2 text-3xl font-bold text-[#0B1C30] tabular-nums">
             {report.summary.submittedCount}/{report.summary.totalStudents}
           </p>
           <p className="mt-1 text-xs font-semibold text-[#3525CD]">
-            {completionPct}% hoàn thành
+            {completionPct}{tr("% hoàn thành", "% completed")}
           </p>
         </div>
 
         <div className="stitch-card p-5">
           <div className="flex items-center justify-between text-xs font-semibold text-[#464555]">
-            <span>Điểm trung bình cả lớp</span>
+            <span>{tr("Điểm trung bình cả lớp", "Class average")}</span>
             <BarChart3 className="h-4 w-4 text-emerald-600" />
           </div>
           <p className="mt-2 text-3xl font-bold text-[#0B1C30] tabular-nums">
             {report.summary.avgScore10}
             <span className="text-base font-medium text-slate-400"> / 10</span>
           </p>
-          <p className="mt-1 text-xs text-slate-500">Độ lệch chuẩn: {report.summary.stdDev}</p>
+          <p className="mt-1 text-xs text-slate-500">{tr("Độ lệch chuẩn:", "Std. deviation:")} {report.summary.stdDev}</p>
         </div>
 
         <div className="stitch-card p-5">
           <div className="flex items-center justify-between text-xs font-semibold text-[#464555]">
-            <span>Biên độ điểm số</span>
+            <span>{tr("Biên độ điểm số", "Score range")}</span>
           </div>
           <div className="mt-2 flex items-baseline gap-5">
             <div>
-              <p className="text-[10px] text-slate-400">Cao nhất</p>
+              <p className="text-[10px] text-slate-400">{tr("Cao nhất", "Highest")}</p>
               <p className="text-xl font-bold text-emerald-700 tabular-nums">
                 {report.summary.highestScore10}
               </p>
             </div>
             <div>
-              <p className="text-[10px] text-slate-400">Thấp nhất</p>
+              <p className="text-[10px] text-slate-400">{tr("Thấp nhất", "Lowest")}</p>
               <p className="text-xl font-bold text-red-600 tabular-nums">
                 {report.summary.lowestScore10}
               </p>
@@ -554,13 +555,13 @@ export default function AssignmentGradingPage() {
 
         <div className="stitch-card p-5">
           <div className="flex items-center justify-between text-xs font-semibold text-[#464555]">
-            <span>Bài chờ chấm tự luận</span>
+            <span>{tr("Bài chờ chấm tự luận", "Essays to grade")}</span>
             <ClipboardEdit className="h-4 w-4 text-[#F97316]" />
           </div>
           <p className="mt-2 text-3xl font-bold text-[#EA580C] tabular-nums">
             {report.summary.pendingManualCount}
           </p>
-          <p className="mt-1 text-xs text-slate-500">Nhấn vào từng học sinh để chấm tay</p>
+          <p className="mt-1 text-xs text-slate-500">{tr("Nhấn vào từng học sinh để chấm tay", "Click a student to grade manually")}</p>
         </div>
       </div>
 
@@ -569,10 +570,10 @@ export default function AssignmentGradingPage() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-base font-bold text-[#0B1C30]">
-              Thống kê tỉ lệ làm đúng theo từng câu hỏi
+              {tr("Thống kê tỉ lệ làm đúng theo từng câu hỏi", "Correct rate per question")}
             </h2>
             <p className="text-xs text-[#464555]">
-              Giúp giáo viên phát hiện lỗ hổng kiến thức ngữ pháp hoặc từ vựng của cả lớp.
+              {tr("Giúp giáo viên phát hiện lỗ hổng kiến thức ngữ pháp hoặc từ vựng của cả lớp.", "Helps the teacher spot grammar or vocabulary gaps across the class.")}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold">
@@ -593,13 +594,13 @@ export default function AssignmentGradingPage() {
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 shrink-0 text-[#BA1A1A]" />
               <span>
-                <strong>CẢNH BÁO TRỌNG ĐIỂM — Câu {lowestQuestion.label}:</strong> Chỉ{" "}
-                <strong>{lowestQuestion.correctRate}%</strong> học sinh làm đúng (
+                <strong>{tr("CẢNH BÁO TRỌNG ĐIỂM — Câu", "KEY WARNING — Q")} {lowestQuestion.label}:</strong> {tr("Chỉ", "Only")}{" "}
+                <strong>{lowestQuestion.correctRate}%</strong> {tr("học sinh làm đúng (", "of students answered correctly (")}
                 {lowestQuestion.correctCount}/{lowestQuestion.totalGraded}).
                 {lowestQuestion.commonWrongAnswers.length > 0 && (
                   <>
                     {" "}
-                    Đáp án sai phổ biến:{" "}
+                    {tr("Đáp án sai phổ biến:", "Most common wrong answer:")}{" "}
                     {lowestQuestion.commonWrongAnswers
                       .map((w) => `"${w.answer}" (${w.count})`)
                       .join(", ")}
@@ -624,9 +625,9 @@ export default function AssignmentGradingPage() {
               <div
                 key={q.fieldId}
                 className="group relative flex min-w-[36px] flex-1 flex-col items-center gap-1.5"
-                title={`Câu ${q.label}: ${q.correctRate}% đúng (${q.correctCount}/${q.totalGraded})${
+                title={`${tr("Câu", "Q")} ${q.label}: ${q.correctRate}% ${tr("đúng", "correct")} (${q.correctCount}/${q.totalGraded})${
                   q.commonWrongAnswers.length
-                    ? ` | Sai phổ biến: ${q.commonWrongAnswers.map((w) => `${w.answer} (${w.count})`).join(", ")}`
+                    ? ` | ${tr("Sai phổ biến", "Common wrong")}: ${q.commonWrongAnswers.map((w) => `${w.answer} (${w.count})`).join(", ")}`
                     : ""
                 }`}
               >
@@ -650,16 +651,16 @@ export default function AssignmentGradingPage() {
           <table className="w-full text-left text-xs">
             <thead className="text-[11px] uppercase text-slate-400">
               <tr>
-                <th className="py-2 pr-4">Câu</th>
-                <th className="py-2 pr-4">Kỹ năng</th>
-                <th className="py-2 pr-4">Tỉ lệ đúng</th>
-                <th className="py-2">Đáp án sai phổ biến nhất</th>
+                <th className="py-2 pr-4">{tr("Câu", "Q")}</th>
+                <th className="py-2 pr-4">{tr("Kỹ năng", "Skill")}</th>
+                <th className="py-2 pr-4">{tr("Tỉ lệ đúng", "Correct rate")}</th>
+                <th className="py-2">{tr("Đáp án sai phổ biến nhất", "Most common wrong answer")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {report.questionAnalytics.map((q) => (
                 <tr key={q.fieldId}>
-                  <td className="py-2 pr-4 font-bold text-[#0B1C30]">Câu {q.label}</td>
+                  <td className="py-2 pr-4 font-bold text-[#0B1C30]">{tr("Câu", "Q")} {q.label}</td>
                   <td className="py-2 pr-4 text-slate-500">
                     {q.skillTag ? vi.skills[q.skillTag] : "—"}
                   </td>
@@ -671,7 +672,7 @@ export default function AssignmentGradingPage() {
                       ? q.commonWrongAnswers
                           .map((w) => `${w.answer} (${w.count} em)`)
                           .join(" • ")
-                      : "Không có"}
+                      : tr("Không có", "None")}
                   </td>
                 </tr>
               ))}
@@ -684,12 +685,12 @@ export default function AssignmentGradingPage() {
       <section className="stitch-card overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
           <h2 className="text-base font-bold text-[#0B1C30]">
-            Danh sách bài làm học sinh ({filteredStudents.length})
+            {tr("Danh sách bài làm học sinh (", "Student submissions (")}{filteredStudents.length})
           </h2>
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm tên hoặc email học sinh…"
+            placeholder={tr("Tìm tên hoặc email học sinh…", "Search student name or email…")}
             className="h-9 w-64 text-xs"
           />
         </div>
@@ -698,12 +699,12 @@ export default function AssignmentGradingPage() {
           <table className="w-full text-left text-sm">
             <thead className="bg-[#F8F9FF] text-xs font-bold uppercase text-[#464555]">
               <tr>
-                <th className="px-6 py-3">Học sinh</th>
-                <th className="px-6 py-3">Thời gian nộp</th>
-                <th className="px-6 py-3">Trạng thái</th>
-                <th className="px-6 py-3 text-center">Số câu đúng</th>
-                <th className="px-6 py-3 text-right">Điểm số</th>
-                <th className="px-6 py-3 text-right">Thao tác</th>
+                <th className="px-6 py-3">{tr("Học sinh", "Student")}</th>
+                <th className="px-6 py-3">{tr("Thời gian nộp", "Submitted at")}</th>
+                <th className="px-6 py-3">{tr("Trạng thái", "Status")}</th>
+                <th className="px-6 py-3 text-center">{tr("Số câu đúng", "Correct")}</th>
+                <th className="px-6 py-3 text-right">{tr("Điểm số", "Score")}</th>
+                <th className="px-6 py-3 text-right">{tr("Thao tác", "Actions")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -724,24 +725,24 @@ export default function AssignmentGradingPage() {
                     <div>{formatDateTime(row.submittedAt)}</div>
                     {row.durationMs !== null && (
                       <div className="text-[11px] text-slate-400">
-                        Làm trong {formatDurationMs(row.durationMs)}
+                        {tr("Làm trong", "Took")} {formatDurationMs(row.durationMs)}
                       </div>
                     )}
                   </td>
                   <td className="px-6 py-3.5">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      {row.status === "GRADED" && <Badge variant="mint">Đã chấm</Badge>}
+                      {row.status === "GRADED" && <Badge variant="mint">{tr("Đã chấm", "Graded")}</Badge>}
                       {row.status === "SUBMITTED" && (
-                        <Badge variant="orange">Chờ chấm tự luận</Badge>
+                        <Badge variant="orange">{tr("Chờ chấm tự luận", "Essay awaiting grading")}</Badge>
                       )}
-                      {row.status === "IN_PROGRESS" && <Badge variant="sky">Đang làm</Badge>}
+                      {row.status === "IN_PROGRESS" && <Badge variant="sky">{tr("Đang làm", "In progress")}</Badge>}
                       {row.status === "NOT_STARTED" && (
-                        <Badge variant="neutral">Chưa làm</Badge>
+                        <Badge variant="neutral">{tr("Chưa làm", "Not started")}</Badge>
                       )}
-                      {row.isLate && <Badge variant="danger">Nộp trễ</Badge>}
-                      {row.flagged && <Badge variant="danger">Nghi vấn</Badge>}
+                      {row.isLate && <Badge variant="danger">{tr("Nộp trễ", "Late")}</Badge>}
+                      {row.flagged && <Badge variant="danger">{tr("Nghi vấn", "Suspicious")}</Badge>}
                       {row.violationCount > 0 && (
-                        <Badge variant="danger">{row.violationCount} vi phạm</Badge>
+                        <Badge variant="danger">{row.violationCount} {tr("vi phạm", "violations")}</Badge>
                       )}
                     </div>
                   </td>
@@ -772,10 +773,10 @@ export default function AssignmentGradingPage() {
                         onClick={() => setReviewingSubId(row.submissionId)}
                       >
                         <ClipboardEdit className="h-3.5 w-3.5" />
-                        Chấm &amp; Xem
+                        {tr("Chấm & Xem", "Grade & view")}
                       </Button>
                     ) : (
-                      <span className="text-xs text-slate-400">Chưa có bài</span>
+                      <span className="text-xs text-slate-400">{tr("Chưa có bài", "No submission")}</span>
                     )}
                   </td>
                 </tr>

@@ -16,7 +16,7 @@ import {
   Radio,
   ShieldCheck,
 } from "lucide-react";
-import { vi } from "@/messages/vi";
+import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -42,6 +42,7 @@ interface RulesPayload {
 }
 
 export default function StudentAssignmentRulesPage() {
+  const { m: vi, tr } = useI18n();
   const params = useParams<{ id: string }>();
   const assignmentId = params.id;
   const router = useRouter();
@@ -55,7 +56,7 @@ export default function StudentAssignmentRulesPage() {
       const res = await fetch(`/api/assignments/${assignmentId}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? "Không tải được thông tin bài thi");
+        throw new Error(err.error ?? tr("Không tải được thông tin bài thi", "Could not load the exam"));
       }
       return res.json();
     },
@@ -73,10 +74,10 @@ export default function StudentAssignmentRulesPage() {
     return (
       <div className="stitch-card mx-auto max-w-2xl p-10 text-center space-y-3">
         <p className="text-sm font-semibold text-red-600">
-          {error instanceof Error ? error.message : "Không tìm thấy bài thi."}
+          {error instanceof Error ? error.message : tr("Không tìm thấy bài thi.", "Exam not found.")}
         </p>
         <Button variant="outline" asChild>
-          <Link href="/student">Quay lại</Link>
+          <Link href="/student">{tr("Quay lại", "Back")}</Link>
         </Button>
       </div>
     );
@@ -119,7 +120,7 @@ export default function StudentAssignmentRulesPage() {
         body: JSON.stringify({ rulesAccepted: true, attemptToken }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Không thể bắt đầu bài thi");
+      if (!res.ok) throw new Error(json.error ?? tr("Không thể bắt đầu bài thi", "Could not start the exam"));
 
       router.push(`/student/assignments/${assignmentId}/do`);
     } catch (err) {
@@ -147,16 +148,16 @@ export default function StudentAssignmentRulesPage() {
             <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
               {assignment.timeLimitMin && (
                 <Badge variant="orange">
-                  <Clock className="h-3 w-3" /> {assignment.timeLimitMin} phút
+                  <Clock className="h-3 w-3" /> {assignment.timeLimitMin} {tr("phút", "min")}
                 </Badge>
               )}
               <Badge variant="default">
-                <FileQuestion className="h-3 w-3" /> {assignment.worksheet.questionCount ?? assignment.worksheet.fields.length} câu hỏi
+                <FileQuestion className="h-3 w-3" /> {assignment.worksheet.questionCount ?? assignment.worksheet.fields.length} {tr("câu hỏi", "questions")}
               </Badge>
               <Badge variant="danger">
                 • {vi.proctor.badge} ({vi.proctor.modes[assignment.proctorMode]})
               </Badge>
-              <Badge variant="neutral">{assignment.maxAttempts} lượt làm</Badge>
+              <Badge variant="neutral">{assignment.maxAttempts} {tr("lượt làm", "attempt(s)")}</Badge>
             </div>
           </div>
 
@@ -164,7 +165,7 @@ export default function StudentAssignmentRulesPage() {
           <div className="space-y-2.5">
             <div className="flex items-center justify-between text-xs font-bold text-[#0B1C30]">
               <span>{vi.proctor.rulesTitle}</span>
-              <span className="text-slate-400">Học sinh cần tuân thủ</span>
+              <span className="text-slate-400">{tr("Học sinh cần tuân thủ", "Students must follow")}</span>
             </div>
 
             {(assignment.requireFullscreen || assignment.proctorMode === "LOCKDOWN") && (
@@ -174,10 +175,10 @@ export default function StudentAssignmentRulesPage() {
                 </span>
                 <div>
                   <p className="text-sm font-bold text-[#0B1C30]">
-                    Chế độ toàn màn hình (Full Screen)
+                    {tr("Chế độ toàn màn hình (Full Screen)", "Fullscreen mode")}
                   </p>
                   <p className="text-xs text-[#464555]">
-                    Bắt buộc duy trì chế độ toàn màn hình trong suốt quá trình làm bài.
+                    {tr("Bắt buộc duy trì chế độ toàn màn hình trong suốt quá trình làm bài.", "You must stay in fullscreen for the whole exam.")}
                   </p>
                 </div>
               </div>
@@ -190,10 +191,10 @@ export default function StudentAssignmentRulesPage() {
                 </span>
                 <div>
                   <p className="text-sm font-bold text-[#0B1C30]">
-                    Vô hiệu hoá sao chép &amp; dán
+                    {tr("Vô hiệu hoá sao chép & dán", "Copy & paste disabled")}
                   </p>
                   <p className="text-xs text-[#464555]">
-                    Không được sao chép (Copy), dán (Paste), cắt hoặc mở menu chuột phải.
+                    {tr("Không được sao chép (Copy), dán (Paste), cắt hoặc mở menu chuột phải.", "No copying, pasting, cutting or right-click menu.")}
                   </p>
                 </div>
               </div>
@@ -205,10 +206,10 @@ export default function StudentAssignmentRulesPage() {
               </span>
               <div>
                 <p className="text-sm font-bold text-[#0B1C30]">
-                  Không chuyển tab hoặc đổi ứng dụng
+                  {tr("Không chuyển tab hoặc đổi ứng dụng", "No switching tabs or apps")}
                 </p>
                 <p className="text-xs text-[#464555]">
-                  Không mở tab trình duyệt khác, không thu nhỏ cửa sổ hay đăng nhập nhiều thiết bị.
+                  {tr("Không mở tab trình duyệt khác, không thu nhỏ cửa sổ hay đăng nhập nhiều thiết bị.", "Do not open other browser tabs, minimise the window or sign in on several devices.")}
                 </p>
               </div>
             </div>
@@ -218,9 +219,9 @@ export default function StudentAssignmentRulesPage() {
                 <Radio className="h-4 w-4" />
               </span>
               <div>
-                <p className="text-sm font-bold text-[#0B1C30]">Giám sát &amp; cảnh báo tức thì</p>
+                <p className="text-sm font-bold text-[#0B1C30]">{tr("Giám sát & cảnh báo tức thì", "Live monitoring & alerts")}</p>
                 <p className="text-xs text-[#464555]">
-                  Mọi hành vi rời màn hình được ghi theo giờ máy chủ và báo ngay cho giáo viên.
+                  {tr("Mọi hành vi rời màn hình được ghi theo giờ máy chủ và báo ngay cho giáo viên.", "Every time you leave the screen it is logged with server time and reported to the teacher.")}
                 </p>
               </div>
             </div>
@@ -237,41 +238,38 @@ export default function StudentAssignmentRulesPage() {
           >
             <p className="flex items-center gap-1.5 text-sm font-bold text-[#BA1A1A]">
               <AlertTriangle className="h-4 w-4 shrink-0" />
-              LUẬT XỬ LÝ VI PHẠM (ÁP DỤNG CHO BÀI THI NÀY)
+              {tr("LUẬT XỬ LÝ VI PHẠM (ÁP DỤNG CHO BÀI THI NÀY)", "VIOLATION RULES (FOR THIS EXAM)")}
             </p>
             <ul className="list-disc space-y-1 pl-5 leading-relaxed">
               <li>
-                Số lần vi phạm tối đa trước khi xử lý:{" "}
-                <strong>{assignment.maxViolations} lần</strong>.
+                {tr("Số lần vi phạm tối đa trước khi xử lý:", "Maximum violations before action:")}{" "}
+                <strong>{assignment.maxViolations} {tr("lần", "times")}</strong>.
               </li>
               {assignment.violationAction === "LOCK" && (
                 <li>
-                  Chạm ngưỡng {assignment.maxViolations} lần →{" "}
-                  <strong>BÀI THI BỊ KHOÁ NGAY LẬP TỨC</strong>. Đáp án đã làm được giữ lại, chỉ
-                  giáo viên mới có quyền mở khoá để tiếp tục.
+                  {tr("Chạm ngưỡng", "Reaching")} {assignment.maxViolations} {tr("lần →", "violation(s) →")}{" "}
+                  <strong>{tr("BÀI THI BỊ KHOÁ NGAY LẬP TỨC", "THE EXAM IS LOCKED IMMEDIATELY")}</strong>{tr(". Đáp án đã làm được giữ lại, chỉ giáo viên mới có quyền mở khoá để tiếp tục.", ". Your answers are kept; only the teacher can unlock it so you can continue.")}
                 </li>
               )}
               {assignment.violationAction === "RESTART" && (
                 <li>
-                  Chạm ngưỡng {assignment.maxViolations} lần →{" "}
-                  <strong>HUỶ TOÀN BỘ ĐÁP ÁN &amp; BẮT BUỘC LÀM LẠI TỪ ĐẦU</strong>. Đồng hồ đếm
-                  ngược KHÔNG được đặt lại.
+                  {tr("Chạm ngưỡng", "Reaching")} {assignment.maxViolations} {tr("lần →", "violation(s) →")}{" "}
+                  <strong>{tr("HUỶ TOÀN BỘ ĐÁP ÁN & BẮT BUỘC LÀM LẠI TỪ ĐẦU", "ALL ANSWERS CLEARED & YOU MUST START OVER")}</strong>{tr(". Đồng hồ đếm ngược KHÔNG được đặt lại.", ". The countdown is NOT reset.")}
                 </li>
               )}
               {assignment.violationAction === "AUTO_SUBMIT" && (
                 <li>
-                  Chạm ngưỡng {assignment.maxViolations} lần →{" "}
-                  <strong>HỆ THỐNG TỰ ĐỘNG NỘP BÀI NGAY</strong> với các đáp án hiện có.
+                  {tr("Chạm ngưỡng", "Reaching")} {assignment.maxViolations} {tr("lần →", "violation(s) →")}{" "}
+                  <strong>{tr("HỆ THỐNG TỰ ĐỘNG NỘP BÀI NGAY", "THE SYSTEM SUBMITS IMMEDIATELY")}</strong> {tr("với các đáp án hiện có.", "with your current answers.")}
                 </li>
               )}
               {assignment.violationAction === "WARN" && (
                 <li>
-                  Mọi hành vi rời màn hình sẽ được ghi nhận vào nhật ký giám sát và báo giáo viên.
+                  {tr("Mọi hành vi rời màn hình sẽ được ghi nhận vào nhật ký giám sát và báo giáo viên.", "Every time you leave the screen it is logged and reported to the teacher.")}
                 </li>
               )}
               <li>
-                Lưu ý: Đồng hồ làm bài tính theo máy chủ và vẫn tiếp tục đếm ngược trong thời gian
-                bạn rời màn hình hoặc bị khoá bài.
+                {tr("Lưu ý: Đồng hồ làm bài tính theo máy chủ và vẫn tiếp tục đếm ngược trong thời gian bạn rời màn hình hoặc bị khoá bài.", "Note: the timer runs on the server and keeps counting down while you are away or locked.")}
               </li>
             </ul>
           </div>
@@ -302,7 +300,7 @@ export default function StudentAssignmentRulesPage() {
             >
               <Maximize2 className="h-4 w-4" />
               {starting
-                ? "Đang khởi tạo ca thi…"
+                ? tr("Đang khởi tạo ca thi…", "Starting the exam session…")
                 : assignment.requireFullscreen || assignment.proctorMode === "LOCKDOWN"
                   ? vi.proctor.startFullscreen
                   : vi.proctor.startExam}
@@ -310,7 +308,7 @@ export default function StudentAssignmentRulesPage() {
 
             <Button variant="secondary" className="w-full" asChild>
               <Link href="/student">
-                <ArrowLeft className="h-4 w-4" /> Quay lại danh sách bài tập
+                <ArrowLeft className="h-4 w-4" /> {tr("Quay lại danh sách bài tập", "Back to assignments")}
               </Link>
             </Button>
           </div>

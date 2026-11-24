@@ -17,7 +17,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { formatDateTime, formatScore } from "@/lib/utils";
-import { vi } from "@/messages/vi";
+import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -68,6 +68,7 @@ export function StudentDashboardClient({
   classes,
   assignments,
 }: StudentDashboardProps) {
+  const { m: vi, tr } = useI18n();
   const router = useRouter();
   const [joinCode, setJoinCode] = useState("");
   const [joining, setJoining] = useState(false);
@@ -84,7 +85,7 @@ export function StudentDashboardClient({
         body: JSON.stringify({ joinCode: joinCode.trim().toUpperCase() }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Mã lớp không hợp lệ");
+      if (!res.ok) throw new Error(json.error ?? tr("Mã lớp không hợp lệ", "Invalid class code"));
 
       if (json.enrollment?.status === "PENDING") {
         toast.info(vi.classes.joinPending);
@@ -106,9 +107,9 @@ export function StudentDashboardClient({
     const json = await res.json();
     if (res.ok) {
       setParentCodeModal(json.invite.code);
-      toast.success(`Đã tạo mã liên kết phụ huynh: ${json.invite.code}`);
+      toast.success(tr(`Đã tạo mã liên kết phụ huynh: ${json.invite.code}`, `Parent link code created: ${json.invite.code}`));
     } else {
-      toast.error(json.error ?? "Không thể tạo mã");
+      toast.error(json.error ?? tr("Không thể tạo mã", "Could not create the code"));
     }
   };
 
@@ -130,17 +131,17 @@ export function StudentDashboardClient({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#0B1C30]">
-            Chào {studentName}!
+            {tr("Chào", "Hello")} {studentName}!
           </h1>
           <p className="mt-1 text-sm text-[#464555]">
-            Theo dõi bài tập sắp đến hạn, làm worksheet tương tác và xem bảng xếp hạng lớp.
+            {tr("Theo dõi bài tập sắp đến hạn, làm worksheet tương tác và xem bảng xếp hạng lớp.", "Track upcoming assignments, do interactive worksheets and see the class leaderboard.")}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
           <Button variant="outline" size="sm" onClick={handleGenerateParentCode}>
             <KeyRound className="h-4 w-4 text-[#4F46E5]" />
-            Tạo mã cho Phụ huynh
+            {tr("Tạo mã cho Phụ huynh", "Create code for parent")}
           </Button>
           <form onSubmit={handleJoinClass} className="flex items-center gap-2">
             <Input
@@ -162,13 +163,13 @@ export function StudentDashboardClient({
         <div className="flex items-center gap-2">
           <Clock className="h-5 w-5 text-[#F97316]" />
           <h2 className="text-xl font-bold text-[#0B1C30]">
-            Bài tập cần làm ({pendingAssignments.length})
+            {tr("Bài tập cần làm (", "To do (")}{pendingAssignments.length})
           </h2>
         </div>
 
         {pendingAssignments.length === 0 ? (
           <div className="stitch-card p-8 text-center text-sm text-slate-500">
-            Tuyệt vời! Bạn đã hoàn thành tất cả bài tập hiện có.
+            {tr("Tuyệt vời! Bạn đã hoàn thành tất cả bài tập hiện có.", "Great! You have finished all current assignments.")}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -192,16 +193,16 @@ export function StudentDashboardClient({
                         </Badge>
                       )}
                       {a.latestSubmission?.status === "IN_PROGRESS" && (
-                        <Badge variant="orange">Đang làm dở</Badge>
+                        <Badge variant="orange">{tr("Đang làm dở", "In progress")}</Badge>
                       )}
                     </div>
 
                     <h3 className="text-base font-bold text-[#0B1C30]">{a.title}</h3>
 
                     <div className="flex flex-wrap items-center gap-3 text-xs text-[#464555]">
-                      <span>{a.questionCount} câu</span>
-                      {a.timeLimitMin && <span>• {a.timeLimitMin} phút</span>}
-                      {a.dueAt && <span>• Hạn: {formatDateTime(a.dueAt)}</span>}
+                      <span>{a.questionCount} {tr("câu", "questions")}</span>
+                      {a.timeLimitMin && <span>• {a.timeLimitMin} {tr("phút", "min")}</span>}
+                      {a.dueAt && <span>{tr("• Hạn:", "• Due:")} {formatDateTime(a.dueAt)}</span>}
                     </div>
 
                     {a.proctorSummary && (
@@ -213,7 +214,7 @@ export function StudentDashboardClient({
                   </div>
 
                   <div className="flex items-center justify-between pt-1">
-                    <span className="text-xs text-slate-400">GV: {a.teacherName}</span>
+                    <span className="text-xs text-slate-400">{tr("GV:", "Teacher:")} {a.teacherName}</span>
                     <Button variant="accent" size="sm" asChild>
                       <Link href={targetHref}>
                         {a.latestSubmission?.status === "IN_PROGRESS"
@@ -235,13 +236,13 @@ export function StudentDashboardClient({
         <div className="flex items-center gap-2 border-b border-slate-100 px-6 py-4">
           <CheckCircle2 className="h-5 w-5 text-emerald-600" />
           <h2 className="text-base font-bold text-[#0B1C30]">
-            Bài đã nộp &amp; Kết quả ({completedAssignments.length})
+            {tr("Bài đã nộp & Kết quả (", "Submitted & results (")}{completedAssignments.length})
           </h2>
         </div>
 
         {completedAssignments.length === 0 ? (
           <p className="p-8 text-center text-sm text-slate-400">
-            Bạn chưa nộp bài tập nào.
+            {tr("Bạn chưa nộp bài tập nào.", "You have not submitted any assignment yet.")}
           </p>
         ) : (
           <div className="divide-y divide-slate-100">
@@ -253,21 +254,21 @@ export function StudentDashboardClient({
                 <div>
                   <p className="font-semibold text-[#0B1C30]">{a.title}</p>
                   <p className="text-xs text-[#464555]">
-                    {a.className} • Nộp lúc {formatDateTime(a.latestSubmission?.submittedAt)}
+                    {a.className} {tr("• Nộp lúc", "• Submitted at")} {formatDateTime(a.latestSubmission?.submittedAt)}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
                   {a.latestSubmission?.status === "GRADED" ? (
                     <Badge variant="mint" className="text-xs px-3 py-1 tabular-nums">
-                      Điểm: {formatScore(a.latestSubmission.totalScore, a.latestSubmission.maxScore)}
+                      {tr("Điểm:", "Score:")} {formatScore(a.latestSubmission.totalScore, a.latestSubmission.maxScore)}
                     </Badge>
                   ) : (
-                    <Badge variant="orange">Chờ chấm tự luận</Badge>
+                    <Badge variant="orange">{tr("Chờ chấm tự luận", "Essay awaiting grading")}</Badge>
                   )}
                   <Button size="sm" variant="outline" asChild>
                     <Link href={`/student/classes/${a.classId}/leaderboard?assignmentId=${a.id}`}>
                       <Trophy className="h-3.5 w-3.5 text-[#F97316]" />
-                      Xếp hạng
+                      {tr("Xếp hạng", "Leaderboard")}
                     </Link>
                   </Button>
                   <Button size="sm" variant="secondary" asChild>
@@ -287,7 +288,7 @@ export function StudentDashboardClient({
         <div className="flex items-center gap-2">
           <BookOpen className="h-5 w-5 text-[#4F46E5]" />
           <h2 className="text-xl font-bold text-[#0B1C30]">
-            Lớp học của tôi ({classes.length})
+            {tr("Lớp học của tôi (", "My classes (")}{classes.length})
           </h2>
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -295,14 +296,14 @@ export function StudentDashboardClient({
             <div key={cls.id} className="stitch-card-hover p-5 space-y-4">
               <div>
                 <h3 className="text-base font-bold text-[#0B1C30]">{cls.name}</h3>
-                <p className="mt-1 text-xs text-[#464555]">Giáo viên: {cls.teacherName}</p>
+                <p className="mt-1 text-xs text-[#464555]">{tr("Giáo viên:", "Teacher:")} {cls.teacherName}</p>
                 <p className="mt-1 text-xs text-slate-400">
-                  {cls.studentCount} học sinh • {cls.assignmentCount} bài tập
+                  {cls.studentCount} {tr("học sinh •", "students •")} {cls.assignmentCount} {tr("bài tập", "assignments")}
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <Button size="sm" asChild className="flex-1">
-                  <Link href={`/student/classes/${cls.id}`}>Vào lớp</Link>
+                  <Link href={`/student/classes/${cls.id}`}>{tr("Vào lớp", "Open class")}</Link>
                 </Button>
                 <Button size="sm" variant="outline" asChild>
                   <Link href={`/student/classes/${cls.id}/leaderboard`}>
@@ -319,13 +320,12 @@ export function StudentDashboardClient({
       <Dialog open={Boolean(parentCodeModal)} onOpenChange={(o) => !o && setParentCodeModal(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Mã liên kết dành cho Phụ huynh</DialogTitle>
+            <DialogTitle>{tr("Mã liên kết dành cho Phụ huynh", "Parent link code")}</DialogTitle>
           </DialogHeader>
           {parentCodeModal && (
             <div className="space-y-4 text-center">
               <p className="text-sm text-[#464555]">
-                Chia sẻ mã này để phụ huynh liên kết tài khoản và theo dõi kết quả học tập của bạn
-                (hạn 7 ngày, dùng một lần):
+                {tr("Chia sẻ mã này để phụ huynh liên kết tài khoản và theo dõi kết quả học tập của bạn (hạn 7 ngày, dùng một lần):", "Share this code so your parent can link their account and follow your results (valid 7 days, single use):")}
               </p>
               <div className="rounded-2xl bg-[#EEF2FF] py-4 font-mono text-2xl font-extrabold tracking-widest text-[#3525CD]">
                 {parentCodeModal}
@@ -334,10 +334,10 @@ export function StudentDashboardClient({
                 className="w-full"
                 onClick={() => {
                   navigator.clipboard?.writeText(parentCodeModal);
-                  toast.success("Đã sao chép mã!");
+                  toast.success(tr("Đã sao chép mã!", "Code copied!"));
                 }}
               >
-                <Copy className="h-4 w-4" /> Sao chép mã
+                <Copy className="h-4 w-4" /> {tr("Sao chép mã", "Copy code")}
               </Button>
             </div>
           )}

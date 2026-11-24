@@ -2,9 +2,10 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { getAppName } from "@/lib/utils";
 import { AppNavbar } from "@/components/layout/AppNavbar";
-import { vi } from "@/messages/vi";
+import { getI18n } from "@/lib/i18n/server";
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
+  const { m: vi, tr } = await getI18n();
   const session = await auth();
   if (!session?.user) redirect("/login");
   if (session.user.role !== "STUDENT") {
@@ -17,7 +18,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
         appName={getAppName()}
         user={{
           id: session.user.id,
-          name: session.user.name ?? "Học sinh",
+          name: session.user.name ?? tr("Học sinh", "Student"),
           email: session.user.email ?? "",
           role: session.user.role,
         }}

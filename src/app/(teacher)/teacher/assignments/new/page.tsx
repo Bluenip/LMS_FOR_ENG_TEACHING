@@ -25,7 +25,7 @@ import type {
   ViolationAction,
 } from "@prisma/client";
 import { cn } from "@/lib/utils";
-import { vi } from "@/messages/vi";
+import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,6 +45,7 @@ interface ClassOption {
 }
 
 function NewAssignmentForm() {
+  const { m: vi, tr } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
   const preWorksheetId = searchParams.get("worksheetId") ?? "";
@@ -140,11 +141,11 @@ function NewAssignmentForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!worksheetId) {
-      toast.error("Vui lòng chọn một Worksheet.");
+      toast.error(tr("Vui lòng chọn một Worksheet.", "Please choose a worksheet."));
       return;
     }
     if (selectedClassIds.length === 0) {
-      toast.error("Vui lòng chọn ít nhất một lớp học.");
+      toast.error(tr("Vui lòng chọn ít nhất một lớp học.", "Please choose at least one class."));
       return;
     }
     setSubmitting(true);
@@ -177,8 +178,8 @@ function NewAssignmentForm() {
         }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Giao bài thất bại");
-      toast.success(`Đã giao bài cho ${json.assignments.length} lớp thành công!`);
+      if (!res.ok) throw new Error(json.error ?? tr("Giao bài thất bại", "Assigning failed"));
+      toast.success(tr(`Đã giao bài cho ${json.assignments.length} lớp thành công!`, `Assigned to ${json.assignments.length} class(es) successfully!`));
       router.push("/teacher/assignments");
       router.refresh();
     } catch (err) {
@@ -197,13 +198,13 @@ function NewAssignmentForm() {
     <form onSubmit={handleSubmit} className="space-y-6 pb-12">
       <div>
         <p className="text-xs font-semibold text-[#464555]">
-          Worksheet Studio › Giao bài &amp; Cấu hình giám sát
+          {tr("Worksheet Studio › Giao bài & Cấu hình giám sát", "Worksheet Studio › Assign & proctoring settings")}
         </p>
         <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-[#0B1C30]">
           {vi.assignments.createTitle}
         </h1>
         <p className="mt-1 text-sm text-[#464555]">
-          Cài đặt thời gian, lớp áp dụng, bảng xếp hạng và cơ chế chống gian lận cho ca thi.
+          {tr("Cài đặt thời gian, lớp áp dụng, bảng xếp hạng và cơ chế chống gian lận cho ca thi.", "Set the timing, classes, leaderboard and anti-cheating rules for this exam.")}
         </p>
       </div>
 
@@ -218,13 +219,13 @@ function NewAssignmentForm() {
                   1
                 </span>
                 <div>
-                  <h2 className="text-base font-bold text-[#0B1C30]">Thông tin cơ bản</h2>
+                  <h2 className="text-base font-bold text-[#0B1C30]">{tr("Thông tin cơ bản", "Basic information")}</h2>
                   <p className="text-xs text-[#464555]">
-                    Chọn Worksheet, lớp học áp dụng và thời lượng kiểm tra
+                    {tr("Chọn Worksheet, lớp học áp dụng và thời lượng kiểm tra", "Choose the worksheet, classes and duration")}
                   </p>
                 </div>
               </div>
-              <Badge variant="neutral">Bắt buộc</Badge>
+              <Badge variant="neutral">{tr("Bắt buộc", "Required")}</Badge>
             </div>
 
             <div className="space-y-4">
@@ -240,10 +241,10 @@ function NewAssignmentForm() {
                   }}
                   className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium outline-none focus:border-[#4F46E5]"
                 >
-                  <option value="">— Chọn phiếu bài tập —</option>
+                  <option value="">{tr("— Chọn phiếu bài tập —", "— Choose a worksheet —")}</option>
                   {worksheets.map((w) => (
                     <option key={w.id} value={w.id}>
-                      {w.title} ({w._count.fields} câu)
+                      {w.title} ({w._count.fields} {tr("câu)", "questions)")}
                     </option>
                   ))}
                 </select>
@@ -255,7 +256,7 @@ function NewAssignmentForm() {
                   required
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="VD: Unit 7: The World of Work - Đề số 1"
+                  placeholder={tr("VD: Unit 7: The World of Work - Đề số 1", "e.g. Unit 7: The World of Work - Test 1")}
                 />
               </div>
 
@@ -311,7 +312,7 @@ function NewAssignmentForm() {
                     max={600}
                     value={timeLimitMin}
                     onChange={(e) => setTimeLimitMin(e.target.value)}
-                    placeholder="Không giới hạn"
+                    placeholder={tr("Không giới hạn", "Unlimited")}
                     className="text-xs"
                   />
                 </div>
@@ -338,10 +339,10 @@ function NewAssignmentForm() {
               </span>
               <div>
                 <h2 className="text-base font-bold text-[#0B1C30]">
-                  Kết quả &amp; Bảng xếp hạng
+                  {tr("Kết quả & Bảng xếp hạng", "Results & leaderboard")}
                 </h2>
                 <p className="text-xs text-[#464555]">
-                  Chính sách công bố điểm số, đáp án đúng và bảng vinh danh học sinh
+                  {tr("Chính sách công bố điểm số, đáp án đúng và bảng vinh danh học sinh", "When scores, correct answers and the leaderboard are shown")}
                 </p>
               </div>
             </div>
@@ -384,7 +385,7 @@ function NewAssignmentForm() {
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Cách tính điểm xếp hạng (nhiều lượt)</Label>
+                  <Label className="text-xs">{tr("Cách tính điểm xếp hạng (nhiều lượt)", "Leaderboard score rule (multiple attempts)")}</Label>
                   <select
                     value={leaderboardScoreRule}
                     onChange={(e) =>
@@ -392,8 +393,8 @@ function NewAssignmentForm() {
                     }
                     className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold outline-none focus:border-[#4F46E5]"
                   >
-                    <option value="BEST">Lấy lượt có điểm cao nhất</option>
-                    <option value="LAST">Lấy lượt làm cuối cùng</option>
+                    <option value="BEST">{tr("Lấy lượt có điểm cao nhất", "Best attempt")}</option>
+                    <option value="LAST">{tr("Lấy lượt làm cuối cùng", "Last attempt")}</option>
                   </select>
                 </div>
               </div>
@@ -436,10 +437,10 @@ function NewAssignmentForm() {
                 </span>
                 <div>
                   <h2 className="text-base font-bold text-[#0B1C30]">
-                    Chống gian lận &amp; Bảo mật ca thi
+                    {tr("Chống gian lận & Bảo mật ca thi", "Anti-cheating & exam security")}
                   </h2>
                   <p className="text-xs text-[#464555]">
-                    Thiết lập mức giám sát hành vi và phản ứng tự động khi phát hiện vi phạm
+                    {tr("Thiết lập mức giám sát hành vi và phản ứng tự động khi phát hiện vi phạm", "Set the monitoring level and the automatic response to violations")}
                   </p>
                 </div>
               </div>
@@ -450,7 +451,7 @@ function NewAssignmentForm() {
 
             {/* Proctor Mode selector */}
             <div className="space-y-1.5">
-              <Label className="text-xs">Cấp độ bảo mật tổng thể</Label>
+              <Label className="text-xs">{tr("Cấp độ bảo mật tổng thể", "Overall security level")}</Label>
               <div className="grid grid-cols-2 gap-2 rounded-xl bg-[#EFF4FF] p-1 sm:grid-cols-4">
                 {(["OFF", "MONITOR", "LOCKDOWN", "SEB"] as const).map((m) => (
                   <button
@@ -481,7 +482,7 @@ function NewAssignmentForm() {
               <>
                 {/* 4 Quick Presets matching Stitch & PLAN 6C */}
                 <div className="space-y-2">
-                  <Label className="text-xs">Kịch bản phản ứng nhanh khi vi phạm</Label>
+                  <Label className="text-xs">{tr("Kịch bản phản ứng nhanh khi vi phạm", "Quick violation presets")}</Label>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <button
                       type="button"
@@ -495,10 +496,10 @@ function NewAssignmentForm() {
                     >
                       <div className="flex items-center gap-2 font-bold text-xs text-[#0B1C30]">
                         <Bell className="h-4 w-4 text-[#4F46E5]" />
-                        Chỉ cảnh báo
+                        {tr("Chỉ cảnh báo", "Warn only")}
                       </div>
                       <p className="mt-1 text-[11px] text-[#464555]">
-                        Ghi nhận vi phạm và báo giáo viên realtime, không khoá bài.
+                        {tr("Ghi nhận vi phạm và báo giáo viên realtime, không khoá bài.", "Log violations and alert the teacher in real time, no lock.")}
                       </p>
                     </button>
 
@@ -514,10 +515,10 @@ function NewAssignmentForm() {
                     >
                       <div className="flex items-center gap-2 font-bold text-xs text-[#0B1C30]">
                         <Lock className="h-4 w-4 text-[#BA1A1A]" />
-                        Nhảy tab là khoá luôn
+                        {tr("Nhảy tab là khoá luôn", "Leave tab = locked")}
                       </div>
                       <p className="mt-1 text-[11px] text-[#464555]">
-                        Rời tab/thoát toàn màn hình 1 lần → Khoá bài ngay, chờ giáo viên mở.
+                        {tr("Rời tab/thoát toàn màn hình 1 lần → Khoá bài ngay, chờ giáo viên mở.", "Leaving the tab / exiting fullscreen once → locked until the teacher unlocks.")}
                       </p>
                     </button>
 
@@ -533,10 +534,10 @@ function NewAssignmentForm() {
                     >
                       <div className="flex items-center gap-2 font-bold text-xs text-[#0B1C30]">
                         <RefreshCcw className="h-4 w-4 text-[#EA580C]" />
-                        Thoát ra là làm lại từ đầu
+                        {tr("Thoát ra là làm lại từ đầu", "Leave = start over")}
                       </div>
                       <p className="mt-1 text-[11px] text-[#464555]">
-                        Vi phạm lần đầu → Xoá toàn bộ đáp án cũ, đồng hồ KHÔNG đặt lại.
+                        {tr("Vi phạm lần đầu → Xoá toàn bộ đáp án cũ, đồng hồ KHÔNG đặt lại.", "First violation → all previous answers cleared, timer NOT reset.")}
                       </p>
                     </button>
 
@@ -552,10 +553,10 @@ function NewAssignmentForm() {
                     >
                       <div className="flex items-center gap-2 font-bold text-xs text-[#0B1C30]">
                         <ShieldAlert className="h-4 w-4 text-[#4F46E5]" />
-                        Tự nộp sau 3 lần
+                        {tr("Tự nộp sau 3 lần", "Auto submit after 3")}
                       </div>
                       <p className="mt-1 text-[11px] text-[#464555]">
-                        Cảnh báo 2 lần đầu; lần thứ 3 hệ thống tự động thu và chấm bài.
+                        {tr("Cảnh báo 2 lần đầu; lần thứ 3 hệ thống tự động thu và chấm bài.", "Warn on the first 2; on the 3rd the system collects and grades the exam.")}
                       </p>
                     </button>
                   </div>
@@ -564,7 +565,7 @@ function NewAssignmentForm() {
                 {/* Custom Action + Threshold */}
                 <div className="grid grid-cols-1 gap-3 rounded-xl bg-[#F8F9FF] p-4 sm:grid-cols-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Tuỳ chỉnh hành vi khi chạm ngưỡng</Label>
+                    <Label className="text-xs">{tr("Tuỳ chỉnh hành vi khi chạm ngưỡng", "Action when the threshold is reached")}</Label>
                     <select
                       value={violationAction}
                       onChange={(e) => setViolationAction(e.target.value as ViolationAction)}
@@ -577,7 +578,7 @@ function NewAssignmentForm() {
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Ngưỡng vi phạm (1–10 lần)</Label>
+                    <Label className="text-xs">{tr("Ngưỡng vi phạm (1–10 lần)", "Violation threshold (1–10)")}</Label>
                     <Input
                       type="number"
                       min={1}
@@ -593,7 +594,7 @@ function NewAssignmentForm() {
                 <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                   <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3.5 py-2.5">
                     <span className="text-xs font-semibold text-[#0B1C30]">
-                      Bắt buộc toàn màn hình
+                      {tr("Bắt buộc toàn màn hình", "Require fullscreen")}
                     </span>
                     <Switch
                       checked={requireFullscreen}
@@ -602,13 +603,13 @@ function NewAssignmentForm() {
                   </label>
                   <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3.5 py-2.5">
                     <span className="text-xs font-semibold text-[#0B1C30]">
-                      Chặn Copy / Paste / Chuột phải
+                      {tr("Chặn Copy / Paste / Chuột phải", "Block copy / paste / right-click")}
                     </span>
                     <Switch checked={blockCopyPaste} onCheckedChange={setBlockCopyPaste} />
                   </label>
                   <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 sm:col-span-2">
                     <span className="text-xs font-semibold text-[#0B1C30]">
-                      Chia sẻ cảnh báo vi phạm với Phụ huynh (Cổng phụ huynh)
+                      {tr("Chia sẻ cảnh báo vi phạm với Phụ huynh (Cổng phụ huynh)", "Share violation alerts with parents (parent portal)")}
                     </span>
                     <Switch
                       checked={shareProctorWithParent}
@@ -625,7 +626,7 @@ function NewAssignmentForm() {
                     <Input
                       value={sebConfigKeyHash}
                       onChange={(e) => setSebConfigKeyHash(e.target.value)}
-                      placeholder="Nhập chuỗi ConfigKeyHash của file .seb (tuỳ chọn)"
+                      placeholder={tr("Nhập chuỗi ConfigKeyHash của file .seb (tuỳ chọn)", "ConfigKeyHash of the .seb file (optional)")}
                       className="bg-white font-mono text-xs"
                     />
                   </div>
@@ -646,42 +647,42 @@ function NewAssignmentForm() {
           <div className="stitch-card p-5 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <span className="text-xs font-bold text-[#0B1C30]">
-                Học sinh sẽ thấy (Live Preview)
+                {tr("Học sinh sẽ thấy (Live Preview)", "What students will see (live preview)")}
               </span>
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
             </div>
 
             <div className="rounded-2xl border border-indigo-100 bg-[#F8F9FF] p-4 space-y-3">
               <div className="flex items-center justify-between gap-2">
-                <Badge variant="default">BÀI KIỂM TRA</Badge>
+                <Badge variant="default">{tr("BÀI KIỂM TRA", "TEST")}</Badge>
                 {proctorMode !== "OFF" && (
                   <Badge variant="danger">
-                    <Lock className="h-3 w-3" /> Chế độ giám sát
+                    <Lock className="h-3 w-3" /> {tr("Chế độ giám sát", "Proctoring mode")}
                   </Badge>
                 )}
               </div>
 
               <div>
                 <h3 className="text-base font-bold text-[#0B1C30]">
-                  {title || "Chưa nhập tên bài"}
+                  {title || tr("Chưa nhập tên bài", "Untitled")}
                 </h3>
                 <p className="text-xs text-[#464555]">
-                  {selectedWs ? `${selectedWs._count.fields} câu hỏi` : "Chưa chọn worksheet"}
+                  {selectedWs ? tr(`${selectedWs._count.fields} câu hỏi`, `${selectedWs._count.fields} questions`) : tr("Chưa chọn worksheet", "No worksheet selected")}
                 </p>
               </div>
 
               <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-[#464555]">
                 <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 border border-slate-200">
                   <Clock className="h-3 w-3 text-[#F97316]" />
-                  {timeLimitMin ? `${timeLimitMin} phút` : "Không giới hạn"}
+                  {timeLimitMin ? tr(`${timeLimitMin} phút`, `${timeLimitMin} min`) : tr("Không giới hạn", "Unlimited")}
                 </span>
                 <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 border border-slate-200">
-                  {maxAttempts} lượt làm
+                  {maxAttempts} {tr("lượt làm", "attempt(s)")}
                 </span>
                 {showLeaderboard !== "OFF" && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 border border-slate-200">
                     <Trophy className="h-3 w-3 text-[#F97316]" />
-                    Có Xếp hạng
+                    {tr("Có Xếp hạng", "Leaderboard on")}
                   </span>
                 )}
               </div>
@@ -690,17 +691,17 @@ function NewAssignmentForm() {
                 <div className="rounded-xl border border-red-200 bg-[#FEF2F2] p-3 text-xs text-[#BA1A1A] space-y-1">
                   <p className="flex items-center gap-1 font-bold">
                     <AlertTriangle className="h-3.5 w-3.5" />
-                    Luật giám sát đang bật:
+                    {tr("Luật giám sát đang bật:", "Active proctoring rules:")}
                   </p>
                   <p>
                     {violationAction === "LOCK" &&
-                      `Rời tab hoặc vi phạm ${maxViolations} lần → BỊ KHOÁ BÀI NGAY.`}
+                      tr(`Rời tab hoặc vi phạm ${maxViolations} lần → BỊ KHOÁ BÀI NGAY.`, `Leaving the tab or ${maxViolations} violation(s) → EXAM LOCKED.`)}
                     {violationAction === "RESTART" &&
-                      `Vi phạm ${maxViolations} lần → XOÁ ĐÁP ÁN & LÀM LẠI TỪ ĐẦU.`}
+                      tr(`Vi phạm ${maxViolations} lần → XOÁ ĐÁP ÁN & LÀM LẠI TỪ ĐẦU.`, `${maxViolations} violation(s) → ANSWERS CLEARED & START OVER.`)}
                     {violationAction === "AUTO_SUBMIT" &&
-                      `Vi phạm ${maxViolations} lần → TỰ ĐỘNG NỘP BÀI.`}
+                      tr(`Vi phạm ${maxViolations} lần → TỰ ĐỘNG NỘP BÀI.`, `${maxViolations} violation(s) → AUTO SUBMIT.`)}
                     {violationAction === "WARN" &&
-                      "Ghi nhận mọi lần rời tab và cảnh báo trực tiếp giáo viên."}
+                      tr("Ghi nhận mọi lần rời tab và cảnh báo trực tiếp giáo viên.", "Every tab switch is logged and the teacher is alerted live.")}
                   </p>
                 </div>
               )}
@@ -708,24 +709,24 @@ function NewAssignmentForm() {
               <ul className="space-y-1.5 text-xs text-[#464555]">
                 {requireFullscreen && (
                   <li className="flex items-center gap-1.5">
-                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> Bắt buộc toàn màn hình
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> {tr("Bắt buộc toàn màn hình", "Require fullscreen")}
                   </li>
                 )}
                 {blockCopyPaste && (
                   <li className="flex items-center gap-1.5">
-                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> Chặn Copy/Paste &amp; chuột phải
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> {tr("Chặn Copy/Paste & chuột phải", "Copy/paste & right-click blocked")}
                   </li>
                 )}
                 {shuffle && (
                   <li className="flex items-center gap-1.5">
-                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> Trộn thứ tự câu phiếu trả lời
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> {tr("Trộn thứ tự câu phiếu trả lời", "Shuffle answer-sheet questions")}
                   </li>
                 )}
               </ul>
             </div>
 
             <div className="rounded-xl bg-[#EFF4FF] px-3.5 py-2.5 text-xs font-semibold text-[#3525CD]">
-              Sẽ giao cho {selectedClassIds.length} lớp ({totalSelectedStudents} học sinh)
+              {tr("Sẽ giao cho", "Will be assigned to")} {selectedClassIds.length} {tr("lớp (", "class(es) (")}{totalSelectedStudents} {tr("học sinh)", "students)")}
             </div>
 
             <Button
@@ -736,7 +737,7 @@ function NewAssignmentForm() {
               disabled={submitting}
             >
               <Rocket className="h-4 w-4" />
-              {submitting ? "Đang giao bài…" : "Giao bài ngay"}
+              {submitting ? tr("Đang giao bài…", "Assigning…") : tr("Giao bài ngay", "Assign now")}
             </Button>
           </div>
         </aside>
@@ -746,6 +747,7 @@ function NewAssignmentForm() {
 }
 
 export default function NewAssignmentPage() {
+  const { m: vi } = useI18n();
   return (
     <Suspense
       fallback={

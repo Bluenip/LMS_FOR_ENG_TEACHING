@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
+import { useI18n } from "@/lib/i18n/client";
 
 let pdfjsConfigured = false;
 
@@ -15,6 +16,10 @@ async function getPdfJs() {
 }
 
 export function usePdfDocument(pdfUrl: string | null) {
+  const { tr } = useI18n();
+  // ref so switching language does not reload the PDF
+  const trRef = useRef(tr);
+  trRef.current = tr;
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +54,7 @@ export function usePdfDocument(pdfUrl: string | null) {
       } catch (err) {
         if (!cancelled) {
           console.error("PDF load error:", err);
-          setError("Không thể tải tệp PDF. Vui lòng thử tải lại trang.");
+          setError(trRef.current("Không thể tải tệp PDF. Vui lòng thử tải lại trang.", "Could not load the PDF file. Please reload the page."));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -94,6 +99,7 @@ export function PdfCanvasPage({
   className = "",
   children,
 }: PdfCanvasPageProps) {
+  const { tr } = useI18n();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [inView, setInView] = useState(eager);
@@ -193,7 +199,7 @@ export function PdfCanvasPage({
       />
       {!rendered && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-50/80 text-xs font-medium text-slate-400">
-          Đang hiển thị trang {pageIndex + 1}…
+          {tr("Đang hiển thị trang", "Showing page")} {pageIndex + 1}…
         </div>
       )}
       {/* Interactive overlay layer strictly matching canvas pixel bounds */}

@@ -10,11 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { vi } from "@/messages/vi";
+import { useI18n } from "@/lib/i18n/client";
+import { ThemeLangToggle } from "@/components/layout/ThemeLangToggle";
 
 type RegisterRole = "STUDENT" | "TEACHER" | "PARENT";
 
 export default function RegisterPage() {
+  const { m: vi, tr } = useI18n();
   const router = useRouter();
   const appName = process.env.NEXT_PUBLIC_APP_NAME || vi.app.defaultName;
 
@@ -53,7 +55,7 @@ export default function RegisterPage() {
         return;
       }
 
-      toast.success("Đăng ký tài khoản thành công!");
+      toast.success(tr("Đăng ký tài khoản thành công!", "Account created successfully!"));
       router.push("/");
       router.refresh();
     } catch {
@@ -70,7 +72,8 @@ export default function RegisterPage() {
   ];
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F8F9FF] px-4 py-8">
+    <div className="relative flex min-h-screen items-center justify-center bg-[#F8F9FF] px-4 py-8">
+      <ThemeLangToggle className="absolute right-4 top-4" />
       <div className="w-full max-w-md rounded-3xl border border-slate-200/80 bg-white p-8 shadow-xl shadow-indigo-950/5">
         <div className="mb-6 text-center">
           <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#4F46E5] text-white shadow-sm">
@@ -158,7 +161,7 @@ export default function RegisterPage() {
               minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Tối thiểu 6 ký tự"
+              placeholder={tr("Tối thiểu 6 ký tự", "At least 6 characters")}
             />
           </div>
 

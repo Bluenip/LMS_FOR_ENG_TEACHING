@@ -4,7 +4,7 @@ import { useState } from "react";
 import { CheckCircle2, ChevronUp, ClipboardList, Flag, XCircle } from "lucide-react";
 import type { AnswerValue } from "@/lib/grading/types";
 import { cn, compareQuestionLabels } from "@/lib/utils";
-import { vi } from "@/messages/vi";
+import { useI18n } from "@/lib/i18n/client";
 import { Badge } from "@/components/ui/badge";
 import {
   formatRevealedAnswer,
@@ -36,6 +36,7 @@ export function AnswerSheetPanel({
   revealKey = false,
   gradeByFieldId = {},
 }: AnswerSheetPanelProps) {
+  const { m: vi, tr } = useI18n();
   const [filter, setFilter] = useState<"ALL" | "UNANSWERED" | "FLAGGED">("ALL");
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -94,7 +95,7 @@ export function AnswerSheetPanel({
               filter === "ALL" ? "bg-white text-[#3525CD] shadow-sm" : "text-[#464555]"
             )}
           >
-            Tất cả ({allFields.length})
+            {tr("Tất cả (", "All (")}{allFields.length})
           </button>
           <button
             type="button"
@@ -104,7 +105,7 @@ export function AnswerSheetPanel({
               filter === "UNANSWERED" ? "bg-white text-[#3525CD] shadow-sm" : "text-[#464555]"
             )}
           >
-            Chưa làm ({allFields.length - answeredCount})
+            {tr("Chưa làm (", "Unanswered (")}{allFields.length - answeredCount})
           </button>
           <button
             type="button"
@@ -114,7 +115,7 @@ export function AnswerSheetPanel({
               filter === "FLAGGED" ? "bg-white text-[#3525CD] shadow-sm" : "text-[#464555]"
             )}
           >
-            Đã cờ ({flaggedIds.size})
+            {tr("Đã cờ (", "Flagged (")}{flaggedIds.size})
           </button>
         </div>
 
@@ -145,7 +146,7 @@ export function AnswerSheetPanel({
                   const el = document.getElementById(`sheet-field-${f.id}`);
                   el?.scrollIntoView({ behavior: "smooth", block: "center" });
                 }}
-                title={`Đi tới câu ${f.label} (${f.placement === "OVERLAY" ? "Ô trên PDF" : "Phiếu trả lời"})`}
+                title={tr(`Đi tới câu ${f.label} (${f.placement === "OVERLAY" ? "Ô trên PDF" : "Phiếu trả lời"})`, `Go to question ${f.label} (${f.placement === "OVERLAY" ? "box on the PDF" : "answer sheet"})`)}
                 className={cn(
                   "flex h-8 items-center justify-center rounded-lg text-xs font-bold transition",
                   btnStyle
@@ -162,7 +163,7 @@ export function AnswerSheetPanel({
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
         {answerSheetFields.length === 0 ? (
           <p className="py-4 text-center text-xs text-slate-400">
-            Tất cả câu hỏi nằm trực tiếp trên trang PDF. Nhấn vào số câu ở trên để cuộn nhanh tới ô điền.
+            {tr("Tất cả câu hỏi nằm trực tiếp trên trang PDF. Nhấn vào số câu ở trên để cuộn nhanh tới ô điền.", "All questions are directly on the PDF page. Click a question number above to jump to its box.")}
           </p>
         ) : (
           answerSheetFields.map((field) => {
@@ -171,7 +172,7 @@ export function AnswerSheetPanel({
             const isFlagged = flaggedIds.has(field.id);
             const revealedText =
               revealKey && field.revealedAnswer
-                ? formatRevealedAnswer(field.type, field.revealedAnswer, field.options)
+                ? formatRevealedAnswer(field.type, field.revealedAnswer, field.options, tr)
                 : "";
 
             return (
@@ -194,7 +195,7 @@ export function AnswerSheetPanel({
                       {field.label}
                     </span>
                     <span className="text-[11px] font-medium text-slate-500">
-                      {field.points} đ
+                      {field.points} {tr("đ", "pt")}
                     </span>
                     {field.skillTag && (
                       <Badge variant="neutral" className="text-[10px] py-0">
@@ -217,7 +218,7 @@ export function AnswerSheetPanel({
                           "rounded p-1 transition",
                           isFlagged ? "text-[#F97316]" : "text-slate-300 hover:text-slate-500"
                         )}
-                        title="Đánh dấu xem lại"
+                        title={tr("Đánh dấu xem lại", "Mark for review")}
                       >
                         <Flag className="h-3.5 w-3.5" />
                       </button>
@@ -311,7 +312,7 @@ export function AnswerSheetPanel({
                   {field.type === "TRUE_FALSE" && (
                     <div className="grid grid-cols-2 gap-2">
                       {[
-                        { v: true, label: "Đúng (True)" },
+                        { v: true, label: tr("Đúng (True)", "True") },
                         { v: false, label: "Sai (False)" },
                       ].map((opt) => (
                         <button
@@ -339,7 +340,7 @@ export function AnswerSheetPanel({
                       onChange={(e) => onChange?.(field.id, e.target.value)}
                       className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs outline-none focus:border-[#4F46E5]"
                     >
-                      <option value="">Chọn đáp án…</option>
+                      <option value="">{tr("Chọn đáp án…", "Choose an answer…")}</option>
                       {(field.options ?? []).map((opt) => (
                         <option key={opt.id} value={opt.id}>
                           {opt.text || opt.id}
@@ -352,7 +353,7 @@ export function AnswerSheetPanel({
                     <div className="grid grid-cols-2 gap-2">
                       {[
                         { v: true, label: "✓ Tick" },
-                        { v: false, label: "✗ Không tick" },
+                        { v: false, label: tr("✗ Không tick", "✗ No tick") },
                       ].map((opt) => (
                         <button
                           key={String(opt.v)}
@@ -380,7 +381,7 @@ export function AnswerSheetPanel({
                       value={val !== null && val !== undefined ? String(val) : ""}
                       onChange={(e) => onChange?.(field.id, e.target.value)}
                       placeholder={
-                        field.type === "NUMBER" ? "Nhập số…" : "Nhập câu trả lời ngắn…"
+                        field.type === "NUMBER" ? tr("Nhập số…", "Enter a number…") : tr("Nhập câu trả lời ngắn…", "Enter a short answer…")
                       }
                       className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs outline-none focus:border-[#4F46E5]"
                     />
@@ -392,7 +393,7 @@ export function AnswerSheetPanel({
                       rows={3}
                       value={typeof val === "string" ? val : ""}
                       onChange={(e) => onChange?.(field.id, e.target.value)}
-                      placeholder="Nhập bài viết tự luận…"
+                      placeholder={tr("Nhập bài viết tự luận…", "Write your essay…")}
                       className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs outline-none focus:border-[#4F46E5]"
                     />
                   )}
@@ -403,7 +404,7 @@ export function AnswerSheetPanel({
                   <div className="mt-2 space-y-1 text-[11px]">
                     {grade?.score !== null && grade?.score !== undefined && (
                       <p className="font-semibold text-slate-600">
-                        Điểm câu này: {grade.score}/{field.points}
+                        {tr("Điểm câu này:", "Score for this question:")} {grade.score}/{field.points}
                       </p>
                     )}
                     {revealedText && (
@@ -412,7 +413,7 @@ export function AnswerSheetPanel({
                       </p>
                     )}
                     {field.explanation && (
-                      <p className="text-slate-600">Giải thích: {field.explanation}</p>
+                      <p className="text-slate-600">{tr("Giải thích:", "Explanation:")} {field.explanation}</p>
                     )}
                     {grade?.teacherNote && (
                       <p className="font-medium text-amber-700">
@@ -445,7 +446,7 @@ export function AnswerSheetPanel({
                 type="button"
                 onClick={() => setMobileOpen(false)}
                 className="h-1.5 w-12 rounded-full bg-slate-300"
-                aria-label="Thu gọn phiếu trả lời"
+                aria-label={tr("Thu gọn phiếu trả lời", "Collapse answer sheet")}
               />
             </div>
             <div className="h-[64vh]">{panelContent}</div>

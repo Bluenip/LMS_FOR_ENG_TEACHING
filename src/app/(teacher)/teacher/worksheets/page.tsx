@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Edit3, FileText, Plus, Send, Trash2 } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
-import { vi } from "@/messages/vi";
+import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,6 +31,7 @@ interface WorksheetRow {
 }
 
 export default function TeacherWorksheetsPage() {
+  const { m: vi, tr } = useI18n();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -42,7 +43,7 @@ export default function TeacherWorksheetsPage() {
     queryKey: ["teacher-worksheets"],
     queryFn: async () => {
       const res = await fetch("/api/worksheets");
-      if (!res.ok) throw new Error("Không thể tải danh sách worksheet");
+      if (!res.ok) throw new Error(tr("Không thể tải danh sách worksheet", "Could not load worksheets"));
       return res.json();
     },
   });
@@ -57,7 +58,7 @@ export default function TeacherWorksheetsPage() {
         body: JSON.stringify({ title, instructions: instructions || null }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Tạo thất bại");
+      if (!res.ok) throw new Error(json.error ?? tr("Tạo thất bại", "Creation failed"));
       setOpen(false);
       setTitle("");
       setInstructions("");
@@ -73,7 +74,7 @@ export default function TeacherWorksheetsPage() {
   const handleDelete = async (id: string) => {
     const res = await fetch(`/api/worksheets/${id}`, { method: "DELETE" });
     if (res.ok) {
-      toast.success("Đã xoá Worksheet.");
+      toast.success(tr("Đã xoá Worksheet.", "Worksheet deleted."));
       queryClient.invalidateQueries({ queryKey: ["teacher-worksheets"] });
     }
   };
@@ -86,7 +87,7 @@ export default function TeacherWorksheetsPage() {
         <div>
           <h1 className="text-2xl font-bold text-[#0B1C30]">{vi.worksheets.title}</h1>
           <p className="mt-0.5 text-sm text-[#464555]">
-            Tải đề PDF, đặt ô điền tương tác (Overlay) hoặc tạo phiếu trả lời trắc nghiệm nhanh.
+            {tr("Tải đề PDF, đặt ô điền tương tác (Overlay) hoặc tạo phiếu trả lời trắc nghiệm nhanh.", "Upload a PDF test, place interactive boxes (overlay) or build a quick multiple-choice answer sheet.")}
           </p>
         </div>
         <Button variant="accent" onClick={() => setOpen(true)}>
@@ -102,7 +103,7 @@ export default function TeacherWorksheetsPage() {
       ) : worksheets.length === 0 ? (
         <div className="stitch-card p-12 text-center space-y-3">
           <FileText className="mx-auto h-10 w-10 text-indigo-300" />
-          <p className="text-sm text-slate-500">Bạn chưa tạo Worksheet nào.</p>
+          <p className="text-sm text-slate-500">{tr("Bạn chưa tạo Worksheet nào.", "You have not created any worksheet yet.")}</p>
           <Button variant="accent" onClick={() => setOpen(true)}>
             <Plus className="h-4 w-4" />
             {vi.worksheets.createWorksheet}
@@ -119,7 +120,7 @@ export default function TeacherWorksheetsPage() {
                   </span>
                   <div className="flex gap-1.5">
                     <Badge variant={ws.pdfFileKey ? "default" : "neutral"}>
-                      {ws.pdfFileKey ? `PDF • ${ws.pageCount} trang` : "Chỉ phiếu trả lời"}
+                      {ws.pdfFileKey ? `PDF • ${ws.pageCount} trang` : tr("Chỉ phiếu trả lời", "Answer sheet only")}
                     </Badge>
                   </div>
                 </div>
@@ -128,12 +129,12 @@ export default function TeacherWorksheetsPage() {
                   <p className="text-xs text-[#464555] line-clamp-2">{ws.instructions}</p>
                 )}
                 <div className="flex items-center gap-3 text-xs text-slate-500">
-                  <span>{ws._count.fields} câu hỏi</span>
+                  <span>{ws._count.fields} {tr("câu hỏi", "questions")}</span>
                   <span>•</span>
-                  <span>Đã giao {ws._count.assignments} lần</span>
+                  <span>{tr("Đã giao", "Assigned")} {ws._count.assignments} {tr("lần", "times")}</span>
                 </div>
                 <p className="text-[11px] text-slate-400">
-                  Cập nhật: {formatDateTime(ws.updatedAt)}
+                  {tr("Cập nhật:", "Updated:")} {formatDateTime(ws.updatedAt)}
                 </p>
               </div>
 
@@ -142,13 +143,13 @@ export default function TeacherWorksheetsPage() {
                   <Button size="sm" asChild>
                     <Link href={`/teacher/worksheets/${ws.id}/edit`}>
                       <Edit3 className="h-3.5 w-3.5" />
-                      Biên tập
+                      {tr("Biên tập", "Edit")}
                     </Link>
                   </Button>
                   <Button size="sm" variant="secondary" asChild>
                     <Link href={`/teacher/assignments/new?worksheetId=${ws.id}`}>
                       <Send className="h-3.5 w-3.5" />
-                      Giao bài
+                      {tr("Giao bài", "Assign")}
                     </Link>
                   </Button>
                 </div>
@@ -156,7 +157,7 @@ export default function TeacherWorksheetsPage() {
                   type="button"
                   onClick={() => void handleDelete(ws.id)}
                   className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                  title="Xoá worksheet"
+                  title={tr("Xoá worksheet", "Delete worksheet")}
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -186,16 +187,16 @@ export default function TeacherWorksheetsPage() {
               <Textarea
                 value={instructions}
                 onChange={(e) => setInstructions(e.target.value)}
-                placeholder="Hướng dẫn làm bài cho học sinh…"
+                placeholder={tr("Hướng dẫn làm bài cho học sinh…", "Instructions for students…")}
                 rows={3}
               />
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                Huỷ
+                {tr("Huỷ", "Cancel")}
               </Button>
               <Button type="submit" variant="accent" disabled={creating}>
-                Tạo &amp; Mở Editor
+                {tr("Tạo & Mở Editor", "Create & open editor")}
               </Button>
             </div>
           </form>

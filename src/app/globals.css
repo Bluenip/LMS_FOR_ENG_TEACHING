@@ -52,3 +52,206 @@
 body[data-exam-mode="1"] [data-app-navbar] {
   display: none;
 }
+
+/* ===================== Dark mode =====================
+ * The UI uses hard-coded Tailwind color utilities (e.g. text-[#0B1C30]); instead of adding
+ * dark: variants to hundreds of elements, map them to dark equivalents when <html class="dark">.
+ * PDF canvases keep their own white background so worksheets stay readable. */
+html.dark {
+  color-scheme: dark;
+  --background: 222 47% 8%;
+  --foreground: 214 32% 91%;
+  --card: 222 45% 12%;
+  --card-foreground: 214 32% 91%;
+  --popover: 222 45% 12%;
+  --popover-foreground: 214 32% 91%;
+  --secondary: 226 40% 20%;
+  --secondary-foreground: 230 94% 82%;
+  --muted: 217 33% 17%;
+  --muted-foreground: 215 20% 65%;
+  --border: 217 33% 17%;
+  --input: 217 33% 22%;
+}
+html.dark body {
+  background-color: #0b1220;
+  color: #e2e8f0;
+}
+html.dark .stitch-card,
+html.dark .stitch-card-hover {
+  background-color: #111a2e;
+  border-color: #1e293b;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+html.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html.dark select,
+html.dark textarea {
+  background-color: #0c1424;
+  color: #e2e8f0;
+  border-color: #334155;
+}
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #64748b;
+}
+html.dark option {
+  background-color: #111a2e;
+  color: #e2e8f0;
+}
+html.dark [data-app-navbar] {
+  background-color: rgba(11, 18, 32, 0.92);
+  border-color: #1e293b;
+}
+/* Keep the PDF page itself white (it is a printed document) */
+html.dark canvas {
+  background-color: #ffffff;
+}
+
+html.dark .bg-white,
+html.dark .bg-white\/95,
+html.dark .bg-white\/90,
+html.dark .bg-white\/80,
+html.dark .bg-white\/75 {
+  background-color: #111a2e;
+}
+html.dark .bg-\[\#F8F9FF\],
+html.dark .bg-slate-50,
+html.dark .bg-\[\#EFF4FF\],
+html.dark .bg-\[\#E5EEFF\],
+html.dark .bg-\[\#EFF4FF\]\/70,
+html.dark .bg-slate-50\/50 {
+  background-color: #0c1424;
+}
+html.dark .bg-slate-100,
+html.dark .bg-slate-200 {
+  background-color: #1e293b;
+}
+html.dark .bg-slate-300 {
+  background-color: #334155;
+}
+html.dark .bg-\[\#EEF2FF\],
+html.dark .bg-\[\#EEF2FF\]\/70,
+html.dark .bg-\[\#EEF2FF\]\/60,
+html.dark .bg-indigo-50,
+html.dark .bg-\[\#E2DFFF\],
+html.dark .bg-indigo-100,
+html.dark .from-\[\#EEF2FF\] {
+  background-color: rgba(99, 102, 241, 0.16);
+}
+html.dark .bg-\[\#FEF2F2\],
+html.dark .bg-red-50,
+html.dark .bg-red-100 {
+  background-color: rgba(239, 68, 68, 0.14);
+}
+html.dark .bg-\[\#FFEDD5\],
+html.dark .bg-orange-50 {
+  background-color: rgba(249, 115, 22, 0.14);
+}
+html.dark .bg-amber-50,
+html.dark .bg-amber-50\/40,
+html.dark .bg-yellow-50 {
+  background-color: rgba(245, 158, 11, 0.12);
+}
+html.dark .bg-\[\#DCFCE7\],
+html.dark .bg-emerald-50,
+html.dark .bg-green-50 {
+  background-color: rgba(16, 185, 129, 0.14);
+}
+html.dark .hover\:bg-slate-50:hover,
+html.dark .hover\:bg-slate-50\/70:hover,
+html.dark .hover\:bg-slate-50\/80:hover,
+html.dark .hover\:bg-\[\#EFF4FF\]:hover,
+html.dark .hover\:bg-slate-100:hover,
+html.dark .hover\:bg-\[\#F8F9FF\]:hover {
+  background-color: #1a2540;
+}
+html.dark .hover\:bg-indigo-100:hover,
+html.dark .hover\:bg-\[\#E2DFFF\]:hover,
+html.dark .hover\:bg-\[\#EEF2FF\]:hover,
+html.dark .hover\:bg-indigo-50:hover {
+  background-color: rgba(99, 102, 241, 0.26);
+}
+html.dark .hover\:bg-red-50:hover {
+  background-color: rgba(239, 68, 68, 0.2);
+}
+html.dark .text-\[\#0B1C30\],
+html.dark .text-slate-900,
+html.dark .text-slate-800,
+html.dark .text-slate-700,
+html.dark .hover\:text-\[\#0B1C30\]:hover,
+html.dark .text-gray-900 {
+  color: #e2e8f0;
+}
+html.dark .text-\[\#464555\],
+html.dark .text-slate-600,
+html.dark .text-slate-500 {
+  color: #9aa8bd;
+}
+html.dark .text-slate-400 {
+  color: #6b7a90;
+}
+html.dark .text-slate-300 {
+  color: #475569;
+}
+html.dark .text-\[\#3525CD\],
+html.dark .text-indigo-700,
+html.dark .text-indigo-800,
+html.dark .hover\:text-\[\#3525CD\]:hover {
+  color: #a5b4fc;
+}
+html.dark .text-\[\#4F46E5\],
+html.dark .text-indigo-600,
+html.dark .hover\:text-indigo-600:hover {
+  color: #818cf8;
+}
+html.dark .text-\[\#BA1A1A\],
+html.dark .text-\[\#93000A\],
+html.dark .text-red-600,
+html.dark .text-red-700,
+html.dark .text-red-500,
+html.dark .hover\:text-red-600:hover {
+  color: #f87171;
+}
+html.dark .text-\[\#C2410C\],
+html.dark .text-\[\#EA580C\],
+html.dark .text-orange-700 {
+  color: #fb923c;
+}
+html.dark .text-amber-700,
+html.dark .text-amber-800,
+html.dark .text-amber-900 {
+  color: #fbbf24;
+}
+html.dark .text-emerald-600,
+html.dark .text-emerald-700,
+html.dark .text-\[\#15803D\] {
+  color: #34d399;
+}
+html.dark .border-slate-200,
+html.dark .border-slate-100,
+html.dark .border-slate-200\/80,
+html.dark .border-slate-200\/90,
+html.dark .border-slate-300,
+html.dark .divide-slate-100,
+html.dark .border-slate-50 {
+  border-color: #1e293b;
+}
+html.dark .border-indigo-200,
+html.dark .border-indigo-100,
+html.dark .hover\:border-indigo-200:hover,
+html.dark .hover\:border-indigo-300:hover {
+  border-color: #3730a3;
+}
+html.dark .border-red-200 {
+  border-color: rgba(239, 68, 68, 0.4);
+}
+html.dark .border-amber-200,
+html.dark .border-amber-300 {
+  border-color: rgba(245, 158, 11, 0.4);
+}
+html.dark .border-emerald-200 {
+  border-color: rgba(16, 185, 129, 0.4);
+}
+html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-y > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1e293b;
+}

@@ -15,8 +15,9 @@ import {
   X,
 } from "lucide-react";
 import type { Role } from "@prisma/client";
+import { ThemeLangToggle } from "./ThemeLangToggle";
 import { cn, formatDateTime, getInitials } from "@/lib/utils";
-import { vi } from "@/messages/vi";
+import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
 
 export interface NavLinkItem {
@@ -50,6 +51,7 @@ interface AppNavbarProps {
 }
 
 export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
+  const { m: vi, tr } = useI18n();
   const pathname = usePathname();
   const [notifOpen, setNotifOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -130,7 +132,7 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
             </span>
           </Link>
 
-          <nav className="hidden items-center gap-1 md:flex" aria-label="Điều hướng chính">
+          <nav className="hidden items-center gap-1 md:flex" aria-label={tr("Điều hướng chính", "Main navigation")}>
             {links.map((link) => {
               const active = isActive(link);
               return (
@@ -156,6 +158,7 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
 
         {/* Right actions */}
         <div className="flex items-center gap-2 sm:gap-3">
+          <ThemeLangToggle />
           {/* Notification Bell */}
           <div className="relative">
             <button

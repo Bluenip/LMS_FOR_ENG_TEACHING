@@ -4,6 +4,7 @@ import { CheckCircle2, XCircle } from "lucide-react";
 import type { AnswerValue } from "@/lib/grading/types";
 import { cn } from "@/lib/utils";
 import { formatRevealedAnswer, type StudentFieldDTO } from "./types";
+import { useI18n } from "@/lib/i18n/client";
 
 interface OverlayFieldInputProps {
   field: StudentFieldDTO;
@@ -35,6 +36,7 @@ export function OverlayFieldInput({
   teacherNote,
   highlighted = false,
 }: OverlayFieldInputProps) {
+  const { tr } = useI18n();
   const x = field.x ?? 0;
   const y = field.y ?? 0;
   const w = field.w ?? 0.15;
@@ -58,7 +60,7 @@ export function OverlayFieldInput({
 
   const revealedText =
     revealKey && field.revealedAnswer
-      ? formatRevealedAnswer(field.type, field.revealedAnswer, field.options)
+      ? formatRevealedAnswer(field.type, field.revealedAnswer, field.options, tr)
       : "";
 
   // Reference pageHeightPx & zoom cleanly so props remain meaningful
@@ -98,11 +100,11 @@ export function OverlayFieldInput({
       {field.type === "TEXT" && (
         <input
           type="text"
-          aria-label={`Câu ${field.label}`}
+          aria-label={tr(`Câu ${field.label}`, `Question ${field.label}`)}
           disabled={disabled}
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange?.(e.target.value)}
-          placeholder="Nhập đáp án…"
+          placeholder={tr("Nhập đáp án…", "Enter answer…")}
           style={{ textAlign: align, fontSize: "inherit" }}
           className="h-full w-full rounded bg-transparent px-1.5 outline-none placeholder:text-slate-400"
         />
@@ -112,7 +114,7 @@ export function OverlayFieldInput({
         <input
           type="text"
           inputMode="decimal"
-          aria-label={`Câu ${field.label}`}
+          aria-label={tr(`Câu ${field.label}`, `Question ${field.label}`)}
           disabled={disabled}
           value={value !== null && value !== undefined ? String(value) : ""}
           onChange={(e) => onChange?.(e.target.value)}
@@ -124,14 +126,14 @@ export function OverlayFieldInput({
 
       {field.type === "DROPDOWN" && (
         <select
-          aria-label={`Câu ${field.label}`}
+          aria-label={tr(`Câu ${field.label}`, `Question ${field.label}`)}
           disabled={disabled}
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange?.(e.target.value)}
           style={{ fontSize: "inherit" }}
           className="h-full w-full cursor-pointer rounded bg-transparent px-1 outline-none"
         >
-          <option value="">Chọn đáp án…</option>
+          <option value="">{tr("Chọn đáp án…", "Choose an answer…")}</option>
           {(field.options ?? []).map((opt) => (
             <option key={opt.id} value={opt.id}>
               {opt.text || opt.id}
@@ -144,10 +146,14 @@ export function OverlayFieldInput({
         // Tri-state: chưa trả lời → ✓ (tick) → ✗ (không tick) → ✓ ...
         <button
           type="button"
-          aria-label={`Câu ${field.label}: ${
-            value === true ? "đã tick" : value === false ? "không tick" : "chưa trả lời"
+          aria-label={`${tr("Câu", "Question")} ${field.label}: ${
+            value === true
+              ? tr("đã tick", "ticked")
+              : value === false
+                ? tr("không tick", "not ticked")
+                : tr("chưa trả lời", "unanswered")
           }`}
-          title="Nhấn 1 lần để tick, nhấn lần nữa để chọn 'Không tick'"
+          title={tr("Nhấn 1 lần để tick, nhấn lần nữa để chọn 'Không tick'", "Click once to tick, click again to choose 'No tick'")}
           disabled={disabled}
           onClick={() => onChange?.(value === true ? false : true)}
           className={cn(
@@ -164,7 +170,7 @@ export function OverlayFieldInput({
       {field.type === "TRUE_FALSE" && (
         <div className="flex h-full w-full items-center justify-around gap-1 px-1">
           {[
-            { v: true, label: "Đúng" },
+            { v: true, label: tr("Đúng", "True") },
             { v: false, label: "Sai" },
           ].map((opt) => (
             <button
@@ -241,11 +247,11 @@ export function OverlayFieldInput({
 
       {field.type === "ESSAY" && (
         <textarea
-          aria-label={`Câu ${field.label}`}
+          aria-label={tr(`Câu ${field.label}`, `Question ${field.label}`)}
           disabled={disabled}
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange?.(e.target.value)}
-          placeholder="Nhập câu trả lời tự luận của bạn…"
+          placeholder={tr("Nhập câu trả lời tự luận của bạn…", "Write your essay answer…")}
           style={{ textAlign: align, fontSize: "inherit" }}
           className="h-full w-full resize-none rounded bg-transparent p-1.5 leading-snug outline-none placeholder:text-slate-400"
         />
@@ -266,13 +272,13 @@ export function OverlayFieldInput({
       {revealResult && (revealedText || teacherNote || field.explanation) && (
         <div className="pointer-events-none absolute left-0 top-full z-30 mt-1 hidden min-w-[180px] max-w-[260px] rounded-lg border border-slate-200 bg-slate-900 p-2 text-[11px] leading-snug text-white shadow-xl group-hover:block">
           {revealedText && (
-            <p className="font-semibold text-emerald-300">Đáp án đúng: {revealedText}</p>
+            <p className="font-semibold text-emerald-300">{tr("Đáp án đúng:", "Correct answer:")} {revealedText}</p>
           )}
           {field.explanation && (
             <p className="mt-1 text-slate-200">{field.explanation}</p>
           )}
           {teacherNote && (
-            <p className="mt-1 text-amber-300">Nhận xét GV: {teacherNote}</p>
+            <p className="mt-1 text-amber-300">{tr("Nhận xét GV:", "Teacher's note:")} {teacherNote}</p>
           )}
         </div>
       )}

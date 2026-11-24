@@ -399,4 +399,11 @@ export const vi = {
   },
 } as const;
 
-export type Messages = typeof vi;
+type Widen<T> = T extends string
+  ? string
+  : T extends readonly (infer U)[]
+    ? readonly Widen<U>[]
+    : { readonly [K in keyof T]: Widen<T[K]> };
+
+/** Shape every locale file must implement (same keys as `vi`, any string values). */
+export type Messages = Widen<typeof vi>;

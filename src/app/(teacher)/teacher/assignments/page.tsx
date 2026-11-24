@@ -4,11 +4,12 @@ import { Clock, Lock, Plus, Radio, Trophy } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { listTeacherAssignments, describeProctorRuleSummary } from "@/server/assignmentService";
 import { formatDateTime } from "@/lib/utils";
-import { vi } from "@/messages/vi";
+import { getI18n } from "@/lib/i18n/server";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 export default async function TeacherAssignmentsPage() {
+  const { m: vi, tr } = await getI18n();
   const session = await auth();
   if (!session?.user) redirect("/login");
   const assignments = await listTeacherAssignments(session.user.id);
@@ -19,25 +20,25 @@ export default async function TeacherAssignmentsPage() {
         <div>
           <h1 className="text-2xl font-bold text-[#0B1C30]">{vi.nav.assignments}</h1>
           <p className="mt-0.5 text-sm text-[#464555]">
-            Quản lý bài tập đã giao, giám sát phòng thi trực tiếp và chấm điểm.
+            {tr("Quản lý bài tập đã giao, giám sát phòng thi trực tiếp và chấm điểm.", "Manage assigned work, run live exams and grade.")}
           </p>
         </div>
         <Button variant="accent" asChild>
           <Link href="/teacher/assignments/new">
             <Plus className="h-4 w-4" />
-            Giao bài tập mới
+            {tr("Giao bài tập mới", "New assignment")}
           </Link>
         </Button>
       </div>
 
       {assignments.length === 0 ? (
         <div className="stitch-card p-12 text-center text-sm text-slate-400">
-          Chưa có bài tập nào được giao.
+          {tr("Chưa có bài tập nào được giao.", "No assignments yet.")}
         </div>
       ) : (
         <div className="space-y-3">
           {assignments.map((a) => {
-            const summary = describeProctorRuleSummary(a);
+            const summary = describeProctorRuleSummary(a, tr);
             const submittedCount = new Set(
               a.submissions
                 .filter((s) => s.status === "SUBMITTED" || s.status === "GRADED")
@@ -62,16 +63,16 @@ export default async function TeacherAssignmentsPage() {
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-3 text-xs text-[#464555]">
-                    <span>{a.worksheet._count.fields} câu hỏi</span>
+                    <span>{a.worksheet._count.fields} {tr("câu hỏi", "questions")}</span>
                     {a.timeLimitMin && (
                       <span className="inline-flex items-center gap-1">
                         <Clock className="h-3.5 w-3.5 text-[#F97316]" />
-                        {a.timeLimitMin} phút
+                        {a.timeLimitMin} {tr("phút", "min")}
                       </span>
                     )}
-                    <span>Hạn nộp: {formatDateTime(a.dueAt)}</span>
+                    <span>{tr("Hạn nộp:", "Due:")} {formatDateTime(a.dueAt)}</span>
                     <span className="font-semibold text-[#3525CD]">
-                      Đã nộp: {submittedCount}/{a.class._count.enrollments}
+                      {tr("Đã nộp:", "Submitted:")} {submittedCount}/{a.class._count.enrollments}
                     </span>
                   </div>
                   {summary && (
@@ -85,20 +86,20 @@ export default async function TeacherAssignmentsPage() {
                       href={`/teacher/classes/${a.class.id}/leaderboard?assignmentId=${a.id}`}
                     >
                       <Trophy className="h-3.5 w-3.5 text-[#F97316]" />
-                      Xếp hạng
+                      {tr("Xếp hạng", "Leaderboard")}
                     </Link>
                   </Button>
                   {a.proctorMode !== "OFF" && (
                     <Button size="sm" variant="secondary" asChild>
                       <Link href={`/teacher/assignments/${a.id}/live`}>
                         <Radio className="h-3.5 w-3.5 text-red-500" />
-                        Giám sát Live
+                        {tr("Giám sát Live", "Live proctoring")}
                       </Link>
                     </Button>
                   )}
                   <Button size="sm" asChild>
                     <Link href={`/teacher/assignments/${a.id}/grading`}>
-                      {pendingCount > 0 ? `Chấm bài (${pendingCount})` : "Báo cáo & Chấm"}
+                      {pendingCount > 0 ? tr(`Chấm bài (${pendingCount})`, `Grade (${pendingCount})`) : tr("Báo cáo & Chấm", "Report & grading")}
                     </Link>
                   </Button>
                 </div>

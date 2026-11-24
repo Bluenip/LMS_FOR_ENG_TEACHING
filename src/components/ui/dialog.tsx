@@ -4,6 +4,12 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n/client";
+
+function CloseLabel() {
+  const { m } = useI18n();
+  return <>{m.common.close}</>;
+}
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
@@ -42,7 +48,9 @@ const DialogContent = React.forwardRef<
       {children}
       <DialogPrimitive.Close className="absolute right-4 top-4 rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none">
         <X className="h-4 w-4" />
-        <span className="sr-only">Đóng</span>
+        <span className="sr-only">
+          <CloseLabel />
+        </span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
   </DialogPortal>

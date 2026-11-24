@@ -36,7 +36,7 @@ import {
 import type { FieldType, SkillTag } from "@prisma/client";
 import { gradeSubmission, parseBulkAnswerString, type AnswerValue } from "@/lib/grading";
 import { cn } from "@/lib/utils";
-import { vi } from "@/messages/vi";
+import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -73,19 +73,13 @@ const TOOL_COLORS: Record<FieldType, { border: string; bg: string; badge: string
   ESSAY: { border: "border-rose-500", bg: "bg-rose-50/75", badge: "bg-rose-600" },
 };
 
-const SKILL_OPTIONS: Array<{ value: SkillTag; label: string }> = [
-  { value: "GRAMMAR", label: vi.skills.GRAMMAR },
-  { value: "VOCABULARY", label: vi.skills.VOCABULARY },
-  { value: "READING", label: vi.skills.READING },
-  { value: "LISTENING", label: vi.skills.LISTENING },
-  { value: "WRITING", label: vi.skills.WRITING },
-  { value: "SPEAKING", label: vi.skills.SPEAKING },
-];
+const SKILL_VALUES: SkillTag[] = ["GRAMMAR", "VOCABULARY", "READING", "LISTENING", "WRITING", "SPEAKING"];
 
 function createDefaultFieldPayload(
   type: FieldType,
   label: string,
-  order: number
+  order: number,
+  optionWord = "Lựa chọn"
 ): Pick<EditorFieldDTO, "type" | "label" | "order" | "points" | "options" | "answerKey" | "gradingOpts" | "style"> {
   const baseStyle = { fontSize: 13, align: "left" as const, transparentBg: false };
   switch (type) {
@@ -150,9 +144,9 @@ function createDefaultFieldPayload(
         order,
         points: 1,
         options: [
-          { id: "opt1", text: "Lựa chọn 1" },
-          { id: "opt2", text: "Lựa chọn 2" },
-          { id: "opt3", text: "Lựa chọn 3" },
+          { id: "opt1", text: `${optionWord} 1` },
+          { id: "opt2", text: `${optionWord} 2` },
+          { id: "opt3", text: `${optionWord} 3` },
         ],
         answerKey: { correct: "opt1" },
         gradingOpts: null,
@@ -199,6 +193,7 @@ function clamp01(val: number): number {
 }
 
 export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
+  const { m: vi, tr } = useI18n();
   const [worksheetId] = useState(initialWorksheet.id);
   const [title, setTitle] = useState(initialWorksheet.title);
   const [pdfFileKey, setPdfFileKey] = useState<string | null>(initialWorksheet.pdfFileKey);
@@ -302,12 +297,12 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
           const err = await res.json().catch(() => ({}));
           if (err.code === "FIELD_HAS_ANSWERS") {
             // Server refused the change to protect student answers: restore the saved version
-            toast.error(`${err.error} Đang tải lại phiên bản đã lưu…`);
+            toast.error(tr(`${err.error} Đang tải lại phiên bản đã lưu…`, `${err.error} Reloading the saved version…`));
             setSaveState("error");
             setTimeout(() => window.location.reload(), 2500);
             return;
           }
-          throw new Error(err.error ?? "Lưu thất bại");
+          throw new Error(err.error ?? tr("Lưu thất bại", "Save failed"));
         }
         const json = (await res.json()) as { fields: EditorFieldDTO[] };
         // Remap client temp IDs to persisted DB IDs without re-triggering autosave loop
@@ -333,7 +328,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
         toast.error(err instanceof Error ? err.message : vi.common.saveFailed);
       }
     },
-    [worksheetId]
+    [worksheetId, tr, vi]
   );
 
   // Debounced 1s autosave whenever fields change
@@ -366,11 +361,11 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
 
   const handleUploadPdf = async (file: File) => {
     if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-      toast.error("Chỉ chấp nhận tệp PDF (.pdf).");
+      toast.error(tr("Chỉ chấp nhận tệp PDF (.pdf).", "Only PDF files (.pdf) are accepted."));
       return;
     }
     if (file.size > 20 * 1024 * 1024) {
-      toast.error("Tệp PDF vượt quá 20MB.");
+      toast.error(tr("Tệp PDF vượt quá 20MB.", "The PDF file is larger than 20MB."));
       return;
     }
 
@@ -383,13 +378,13 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
         body: formData,
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Tải PDF thất bại");
+      if (!res.ok) throw new Error(json.error ?? tr("Tải PDF thất bại", "PDF upload failed"));
       setPdfFileKey(json.worksheet.pdfFileKey);
       setPages(json.worksheet.pages);
       setActivePage(0);
-      toast.success(`Đã tải PDF (${json.worksheet.pageCount} trang)!`);
+      toast.success(tr(`Đã tải PDF (${json.worksheet.pageCount} trang)!`, `PDF uploaded (${json.worksheet.pageCount} pages)!`));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Tải PDF thất bại");
+      toast.error(err instanceof Error ? err.message : tr("Tải PDF thất bại", "PDF upload failed"));
     } finally {
       setUploadingPdf(false);
     }
@@ -503,7 +498,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
       const combined = [...overlays, ...sheets];
       return combined.map((f, idx) => ({ ...f, label: String(idx + 1), order: idx }));
     });
-    toast.success("Đã đánh số câu tự động theo thứ tự đọc!");
+    toast.success(tr("Đã đánh số câu tự động theo thứ tự đọc!", "Questions numbered automatically in reading order!"));
   };
 
   // Multi-select alignment helpers
@@ -512,7 +507,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
       (f) => selectedIds.includes(f.id) && f.placement === "OVERLAY"
     );
     if (selectedOverlays.length < 2) {
-      toast.info("Giữ Shift + click để chọn từ 2 ô trở lên.");
+      toast.info(tr("Giữ Shift + click để chọn từ 2 ô trở lên.", "Hold Shift + click to select 2 or more boxes."));
       return;
     }
     const minX = Math.min(...selectedOverlays.map((f) => f.x ?? 0));
@@ -536,7 +531,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
     const created: EditorFieldDTO[] = [];
     for (let i = 0; i < count; i++) {
       const label = String(start + i);
-      const base = createDefaultFieldPayload(quickType, label, fields.length + i);
+      const base = createDefaultFieldPayload(quickType, label, fields.length + i, tr("Lựa chọn", "Option"));
       created.push({
         id: `tmp-sheet-${Date.now()}-${i}`,
         isPersisted: false,
@@ -546,14 +541,14 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
     }
     setFields((prev) => [...prev, ...created]);
     setQuickStart(start + count);
-    toast.success(`Đã thêm ${count} câu vào phiếu trả lời!`);
+    toast.success(tr(`Đã thêm ${count} câu vào phiếu trả lời!`, `Added ${count} questions to the answer sheet!`));
   };
 
   // Mode B Bulk Answer Key string apply
   const handleApplyBulkKey = () => {
     const letters = parseBulkAnswerString(bulkKeyInput);
     if (letters.length === 0) {
-      toast.error("Không nhận diện được đáp án từ chuỗi đã nhập.");
+      toast.error(tr("Không nhận diện được đáp án từ chuỗi đã nhập.", "Could not read any answers from that text."));
       return;
     }
 
@@ -575,7 +570,8 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
           const base = createDefaultFieldPayload(
             "MULTIPLE_CHOICE",
             String(startNum + i),
-            next.length
+            next.length,
+            tr("Lựa chọn", "Option")
           );
           const created: EditorFieldDTO = {
             id: `tmp-bulk-${Date.now()}-${i}`,
@@ -601,7 +597,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
       return next;
     });
 
-    toast.success(`Đã áp dụng ${applied} đáp án trắc nghiệm!`);
+    toast.success(tr(`Đã áp dụng ${applied} đáp án trắc nghiệm!`, `Applied ${applied} multiple-choice answers!`));
   };
 
   const snapValue = (v: number) => (snapToGrid ? Math.round(v * 100) / 100 : v);
@@ -638,7 +634,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
       <div className="space-y-4">
         <div className="sticky top-16 z-30 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-200 bg-white/95 px-5 py-3 shadow-toolbar backdrop-blur">
           <div className="flex items-center gap-3">
-            <Badge variant="indigo">Xem như học sinh</Badge>
+            <Badge variant="indigo">{tr("Xem như học sinh", "Preview as student")}</Badge>
             <h2 className="text-base font-bold text-[#0B1C30]">{title}</h2>
           </div>
           <div className="flex items-center gap-2">
@@ -676,11 +672,11 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                   previewAnswers
                 );
                 setPreviewGraded(res);
-                toast.success(`Chấm thử: ${res.autoScore} / ${res.maxScore} điểm`);
+                toast.success(tr(`Chấm thử: ${res.autoScore} / ${res.maxScore} điểm`, `Test score: ${res.autoScore} / ${res.maxScore} points`));
               }}
             >
               <CheckCircle2 className="h-4 w-4" />
-              Chấm thử ngay
+              {tr("Chấm thử ngay", "Test grading")}
             </Button>
             {previewGraded && (
               <Button
@@ -691,7 +687,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                   setPreviewGraded(null);
                 }}
               >
-                Làm lại thử
+                {tr("Làm lại thử", "Try again")}
               </Button>
             )}
             <Button
@@ -710,8 +706,8 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
         {previewGraded && (
           <div className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-900">
             <span>
-              Kết quả chấm thử: {previewGraded.autoScore} / {previewGraded.maxScore} điểm
-              {previewGraded.hasManualFields ? " (chưa tính điểm câu Tự luận)" : ""}
+              {tr("Kết quả chấm thử:", "Test result:")} {previewGraded.autoScore} / {previewGraded.maxScore} {tr("điểm", "points")}
+              {previewGraded.hasManualFields ? tr(" (chưa tính điểm câu Tự luận)", " (essay questions not included)") : ""}
             </span>
           </div>
         )}
@@ -756,7 +752,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
               ))
             ) : (
               <div className="stitch-card p-10 text-center text-sm text-slate-500">
-                Worksheet không có PDF — học sinh sẽ làm trực tiếp trên Phiếu trả lời bên phải.
+                {tr("Worksheet không có PDF — học sinh sẽ làm trực tiếp trên Phiếu trả lời bên phải.", "This worksheet has no PDF — students answer directly on the answer sheet on the right.")}
               </div>
             )}
           </div>
@@ -799,7 +795,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
           {/* Left: Back + Title + Autosave status */}
           <div className="flex items-center gap-2.5 min-w-0">
             <Button variant="ghost" size="icon" asChild>
-              <Link href="/teacher/worksheets" title="Quay lại danh sách Worksheet">
+              <Link href="/teacher/worksheets" title={tr("Quay lại danh sách Worksheet", "Back to worksheets")}>
                 <ArrowLeft className="h-4 w-4" />
               </Link>
             </Button>
@@ -832,12 +828,12 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                   />
                   {saveState === "saved" && vi.common.saved}
                   {saveState === "saving" && vi.common.saving}
-                  {saveState === "dirty" && "Chưa lưu…"}
+                  {saveState === "dirty" && tr("Chưa lưu…", "Unsaved…")}
                   {saveState === "error" && vi.common.saveFailed}
                 </span>
                 <span className="text-slate-300">•</span>
                 <span className="text-slate-500">
-                  {pages.length} trang • {fields.length} câu
+                  {pages.length} {tr("trang •", "pages •")} {fields.length} {tr("câu", "questions")}
                 </span>
               </div>
             </div>
@@ -877,7 +873,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
               disabled={saveState === "saving"}
             >
               <Save className="h-4 w-4" />
-              <span className="hidden sm:inline">Lưu</span>
+              <span className="hidden sm:inline">{tr("Lưu", "Save")}</span>
             </Button>
             <Button variant="accent" size="sm" asChild>
               <Link href={`/teacher/assignments/new?worksheetId=${worksheetId}`}>
@@ -896,7 +892,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                 type="button"
                 onClick={() => setZoom((z) => Math.max(0.5, Math.round((z - 0.25) * 100) / 100))}
                 className="p-1 text-slate-600 hover:text-indigo-600"
-                aria-label="Thu nhỏ"
+                aria-label={tr("Thu nhỏ", "Zoom out")}
               >
                 <ZoomOut className="h-3.5 w-3.5" />
               </button>
@@ -907,7 +903,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                 type="button"
                 onClick={() => setZoom((z) => Math.min(2.0, Math.round((z + 0.25) * 100) / 100))}
                 className="p-1 text-slate-600 hover:text-indigo-600"
-                aria-label="Phóng to"
+                aria-label={tr("Phóng to", "Zoom in")}
               >
                 <ZoomIn className="h-3.5 w-3.5" />
               </button>
@@ -939,7 +935,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
             {selectedIds.length >= 2 && (
               <div className="flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-0.5">
                 <span className="font-semibold text-indigo-700 mr-1">
-                  Đang chọn {selectedIds.length} ô:
+                  {tr("Đang chọn", "Selected")} {selectedIds.length} {tr("ô:", "boxes:")}
                 </span>
                 <button
                   type="button"
@@ -971,7 +967,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
 
           <p className="hidden text-slate-400 xl:block">
             {activeTool === "SELECT"
-              ? "Mẹo: Delete xoá ô • Ctrl+D nhân bản • Mũi tên (+Shift) dịch chuyển"
+              ? tr("Mẹo: Delete xoá ô • Ctrl+D nhân bản • Mũi tên (+Shift) dịch chuyển", "Tip: Delete removes • Ctrl+D duplicates • Arrows (+Shift) move")
               : vi.worksheets.editor.drawHint}
           </p>
         </div>
@@ -983,9 +979,9 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
         <aside className="space-y-4 lg:col-span-2">
           <div className="stitch-card p-3">
             <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-xs font-bold text-[#0B1C30]">Trang tài liệu</h3>
+              <h3 className="text-xs font-bold text-[#0B1C30]">{tr("Trang tài liệu", "Document pages")}</h3>
               <Badge variant="default" className="text-[10px]">
-                {pages.length} trang
+                {pages.length} {tr("trang", "pages")}
               </Badge>
             </div>
 
@@ -1035,9 +1031,9 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                     </div>
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="font-semibold text-[#0B1C30]">
-                        Trang {p.pageIndex + 1}
+                        {tr("Trang", "Page")} {p.pageIndex + 1}
                       </span>
-                      <span className="text-indigo-600 font-semibold">{countOnPage} ô</span>
+                      <span className="text-indigo-600 font-semibold">{countOnPage} {tr("ô", "boxes")}</span>
                     </div>
                   </button>
                 );
@@ -1064,7 +1060,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
             >
               <Upload className="h-3.5 w-3.5" />
               {uploadingPdf
-                ? "Đang tải…"
+                ? tr("Đang tải…", "Loading…")
                 : pdfFileKey
                   ? vi.worksheets.replacePdf
                   : vi.worksheets.uploadPdf}
@@ -1073,18 +1069,18 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
 
           {/* Stitch Total Points Card */}
           <div className="stitch-card p-4">
-            <p className="text-xs font-semibold text-[#464555]">Tổng điểm bài tập</p>
+            <p className="text-xs font-semibold text-[#464555]">{tr("Tổng điểm bài tập", "Total points")}</p>
             <div className="mt-1 flex items-baseline gap-2">
               <span className="text-3xl font-bold text-[#3525CD] tabular-nums">
                 {totalPoints}
               </span>
               <Badge variant="mint" className="text-[10px]">
-                {fields.length} câu
+                {fields.length} {tr("câu", "questions")}
               </Badge>
             </div>
             <div className="mt-2.5 flex justify-between text-[11px] text-slate-500">
               <span>Overlay: {overlayFields.length}</span>
-              <span>Phiếu: {sheetFields.length}</span>
+              <span>{tr("Phiếu:", "Sheet:")} {sheetFields.length}</span>
             </div>
           </div>
         </aside>
@@ -1102,11 +1098,10 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
               <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-indigo-200 bg-white px-6 py-20 text-center">
                 <Upload className="h-10 w-10 text-[#4F46E5]" />
                 <h3 className="mt-3 text-base font-bold text-[#0B1C30]">
-                  Tải file PDF đề bài lên để vẽ ô tương tác
+                  {tr("Tải file PDF đề bài lên để vẽ ô tương tác", "Upload the test PDF to draw interactive boxes")}
                 </h3>
                 <p className="mt-1 max-w-md text-xs text-[#464555]">
-                  {vi.worksheets.pdfRequirements} Bạn cũng có thể tạo câu hỏi trực tiếp ở mục
-                  &ldquo;Phiếu trả lời&rdquo; bên dưới mà không cần PDF.
+                  {vi.worksheets.pdfRequirements} {tr("Bạn cũng có thể tạo câu hỏi trực tiếp ở mục “Phiếu trả lời” bên dưới mà không cần PDF.", "You can also create questions directly in the “Answer sheet” section below without a PDF.")}
                 </p>
                 <Button
                   className="mt-4"
@@ -1121,7 +1116,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
               <div className="space-y-6">
                 {pdfLoading && (
                   <p className="text-center text-xs font-medium text-indigo-600">
-                    Đang tải nội dung PDF…
+                    {tr("Đang tải nội dung PDF…", "Loading PDF content…")}
                   </p>
                 )}
 
@@ -1132,11 +1127,11 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                     <div key={p.pageIndex} className="space-y-1.5">
                       <div className="flex items-center justify-between px-1 text-[11px] font-semibold text-slate-500">
                         <span>
-                          Trang {p.pageIndex + 1} / {pages.length} (
+                          {tr("Trang", "Page")} {p.pageIndex + 1} / {pages.length} (
                           {Math.round(p.widthPt)} × {Math.round(p.heightPt)} pt{" "}
-                          {p.widthPt > p.heightPt ? "• Ngang" : "• Dọc"})
+                          {p.widthPt > p.heightPt ? "• Ngang" : tr("• Dọc", "• Portrait")})
                         </span>
-                        <span>{pageOverlays.length} ô tương tác</span>
+                        <span>{pageOverlays.length} {tr("ô tương tác", "interactive boxes")}</span>
                       </div>
 
                       <PdfCanvasPage
@@ -1208,7 +1203,8 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                               const base = createDefaultFieldPayload(
                                 toolType,
                                 String(fields.length + 1),
-                                fields.length
+                                fields.length,
+                                tr("Lựa chọn", "Option")
                               );
                               const newField: EditorFieldDTO = {
                                 id: newId,
@@ -1346,13 +1342,13 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                                         colors.badge
                                       )}
                                     >
-                                      Câu {field.label}
+                                      {tr("Câu", "Q")} {field.label}
                                     </span>
                                     <span className="truncate opacity-80">
                                       {vi.worksheets.tools[field.type]}
                                     </span>
                                     <span className="ml-1 shrink-0 text-[10px] text-slate-500">
-                                      {field.points}đ
+                                      {field.points}{tr("đ", "pt")}
                                     </span>
                                   </div>
                                 </Rnd>
@@ -1377,7 +1373,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                 {vi.worksheets.editor.properties}
               </h3>
               {selectedField && (
-                <Badge variant="default">Câu {selectedField.label}</Badge>
+                <Badge variant="default">{tr("Câu", "Q")} {selectedField.label}</Badge>
               )}
             </div>
 
@@ -1390,7 +1386,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                 {/* Type & Label */}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Loại ô</Label>
+                    <Label className="text-xs">{tr("Loại ô", "Box type")}</Label>
                     <select
                       value={selectedField.type}
                       onChange={(e) => {
@@ -1398,7 +1394,8 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                         const def = createDefaultFieldPayload(
                           newType,
                           selectedField.label,
-                          selectedField.order
+                          selectedField.order,
+                          tr("Lựa chọn", "Option")
                         );
                         updateField(selectedField.id, {
                           type: newType,
@@ -1455,10 +1452,10 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                       }
                       className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#4F46E5]"
                     >
-                      <option value="">Không gắn</option>
-                      {SKILL_OPTIONS.map((sk) => (
-                        <option key={sk.value} value={sk.value}>
-                          {sk.label}
+                      <option value="">{tr("Không gắn", "None")}</option>
+                      {SKILL_VALUES.map((sk) => (
+                        <option key={sk} value={sk}>
+                          {vi.skills[sk]}
                         </option>
                       ))}
                     </select>
@@ -1472,7 +1469,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                     <Input
                       value={selectedField.prompt ?? ""}
                       onChange={(e) => updateField(selectedField.id, { prompt: e.target.value })}
-                      placeholder="Nhập đề câu hỏi nếu muốn…"
+                      placeholder={tr("Nhập đề câu hỏi nếu muốn…", "Enter the question text if you like…")}
                       className="h-9 text-xs"
                     />
                   </div>
@@ -1480,13 +1477,13 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
 
                 {/* Answer Key Editor by FieldType */}
                 <div className="rounded-xl border border-indigo-100 bg-[#F8F9FF] p-3 space-y-2.5">
-                  <p className="font-bold text-[#3525CD]">Cấu hình Đáp án đúng</p>
+                  <p className="font-bold text-[#3525CD]">{tr("Cấu hình Đáp án đúng", "Correct answer settings")}</p>
 
                   {selectedField.type === "TEXT" && (
                     <div className="space-y-1.5">
                       <Label className="text-[11px]">{vi.worksheets.editor.acceptedAnswers}</Label>
                       <Input
-                        aria-label="Đáp án chấp nhận"
+                        aria-label={tr("Đáp án chấp nhận", "Accepted answer")}
                         value={
                           Array.isArray(selectedField.answerKey.accepted)
                             ? (selectedField.answerKey.accepted as string[]).join("|")
@@ -1664,7 +1661,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                   {selectedField.type === "TRUE_FALSE" && (
                     <div className="grid grid-cols-2 gap-2">
                       {[
-                        { v: true, label: "Đúng (True)" },
+                        { v: true, label: tr("Đúng (True)", "True") },
                         { v: false, label: "Sai (False)" },
                       ].map((item) => (
                         <button
@@ -1688,7 +1685,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
 
                   {selectedField.type === "CHECKBOX" && (
                     <label className="flex items-center justify-between">
-                      <span>Đáp án đúng là ĐÃ TICK (✓)</span>
+                      <span>{tr("Đáp án đúng là ĐÃ TICK (✓)", "The correct answer is TICKED (✓)")}</span>
                       <Switch
                         checked={Boolean(selectedField.answerKey.checked)}
                         onCheckedChange={(v) =>
@@ -1707,7 +1704,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                         onChange={(e) =>
                           updateField(selectedField.id, { answerKey: { rubric: e.target.value } })
                         }
-                        placeholder="Tiêu chí chấm tự luận…"
+                        placeholder={tr("Tiêu chí chấm tự luận…", "Essay grading criteria…")}
                         className="text-xs"
                       />
                     </div>
@@ -1787,7 +1784,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                     onChange={(e) =>
                       updateField(selectedField.id, { explanation: e.target.value })
                     }
-                    placeholder="Giải thích hiện cho học sinh sau khi nộp…"
+                    placeholder={tr("Giải thích hiện cho học sinh sau khi nộp…", "Explanation shown to students after submitting…")}
                     className="text-xs"
                   />
                 </div>
@@ -1801,7 +1798,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                     onClick={duplicateSelectedFields}
                   >
                     <Copy className="h-3.5 w-3.5" />
-                    Sao chép
+                    {tr("Sao chép", "Duplicate")}
                   </Button>
                   <Button
                     type="button"
@@ -1810,7 +1807,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                     onClick={deleteSelectedFields}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
-                    Xoá ô
+                    {tr("Xoá ô", "Delete box")}
                   </Button>
                 </div>
               </div>
@@ -1828,10 +1825,10 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
             </span>
             <div>
               <h3 className="text-base font-bold text-[#0B1C30]">
-                {vi.worksheets.modes.sheetTab} ({sheetFields.length} câu)
+                {vi.worksheets.modes.sheetTab} ({sheetFields.length} {tr("câu)", "questions)")}
               </h3>
               <p className="text-xs text-[#464555]">
-                Thêm nhanh câu hỏi phiếu trả lời hoặc dán chuỗi đáp án trắc nghiệm (VD: ABCDA hoặc 1A 2B 3C).
+                {tr("Thêm nhanh câu hỏi phiếu trả lời hoặc dán chuỗi đáp án trắc nghiệm (VD: ABCDA hoặc 1A 2B 3C).", "Quickly add answer-sheet questions or paste a multiple-choice key (e.g. ABCDA or 1A 2B 3C).")}
               </p>
             </div>
           </div>
@@ -1863,11 +1860,11 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                   onChange={(e) => setQuickType(e.target.value as FieldType)}
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-medium outline-none focus:border-[#4F46E5]"
                 >
-                  <option value="MULTIPLE_CHOICE">Trắc nghiệm A–D</option>
-                  <option value="TRUE_FALSE">Đúng / Sai</option>
-                  <option value="TEXT">Điền ngắn</option>
-                  <option value="NUMBER">Điền số</option>
-                  <option value="ESSAY">Tự luận</option>
+                  <option value="MULTIPLE_CHOICE">{tr("Trắc nghiệm A–D", "Multiple choice A–D")}</option>
+                  <option value="TRUE_FALSE">{tr("Đúng / Sai", "True / False")}</option>
+                  <option value="TEXT">{tr("Điền ngắn", "Short answer")}</option>
+                  <option value="NUMBER">{tr("Điền số", "Number")}</option>
+                  <option value="ESSAY">{tr("Tự luận", "Essay")}</option>
                 </select>
               </div>
               <div className="w-24">
@@ -1933,7 +1930,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="text-[11px] font-semibold text-slate-500">
-                        {field.points}đ
+                        {field.points}{tr("đ", "pt")}
                       </span>
                       <button
                         type="button"
@@ -1976,7 +1973,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                     {field.type === "TRUE_FALSE" && (
                       <div className="flex gap-1.5">
                         {[
-                          { v: true, label: "Đúng" },
+                          { v: true, label: tr("Đúng", "True") },
                           { v: false, label: "Sai" },
                         ].map((o) => (
                           <button
@@ -2012,7 +2009,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                             },
                           })
                         }
-                        placeholder="Đáp án chấp nhận (vd: don't|do not)"
+                        placeholder={tr("Đáp án chấp nhận (vd: don't|do not)", "Accepted answer (e.g. don't|do not)")}
                         className="h-8 text-xs"
                       />
                     )}

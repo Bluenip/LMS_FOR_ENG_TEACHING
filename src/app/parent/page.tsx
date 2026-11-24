@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import type { SkillTag } from "@prisma/client";
 import { cn, formatDateTime, getInitials } from "@/lib/utils";
-import { vi } from "@/messages/vi";
+import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -96,10 +96,11 @@ function ScoreTrendSvgChart({
 }: {
   trend: ParentOverviewDTO["trend"];
 }) {
+  const { tr } = useI18n();
   if (trend.length === 0) {
     return (
       <div className="flex h-48 items-center justify-center text-xs text-slate-400">
-        Chưa đủ dữ liệu bài kiểm tra để vẽ biểu đồ tiến bộ.
+        {tr("Chưa đủ dữ liệu bài kiểm tra để vẽ biểu đồ tiến bộ.", "Not enough test data to draw the progress chart yet.")}
       </div>
     );
   }
@@ -211,6 +212,7 @@ function ScoreTrendSvgChart({
 }
 
 function ParentPortalContent() {
+  const { m: vi, tr } = useI18n();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const initialChildId = searchParams.get("childId") ?? "";
@@ -218,7 +220,7 @@ function ParentPortalContent() {
   const [selectedChildId, setSelectedChildId] = useState(initialChildId);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [inviteCode, setInviteCode] = useState("");
-  const [relation, setRelation] = useState("Phụ huynh");
+  const [relation, setRelation] = useState(tr("Phụ huynh", "Parent"));
   const [linking, setLinking] = useState(false);
 
   const { data: childrenData, isLoading: loadingChildren } = useQuery<{
@@ -227,7 +229,7 @@ function ParentPortalContent() {
     queryKey: ["parent-children"],
     queryFn: async () => {
       const res = await fetch("/api/parent/children");
-      if (!res.ok) throw new Error("Không tải được danh sách con");
+      if (!res.ok) throw new Error(tr("Không tải được danh sách con", "Could not load your children"));
       return res.json();
     },
   });
@@ -245,7 +247,7 @@ function ParentPortalContent() {
     enabled: Boolean(selectedChildId),
     queryFn: async () => {
       const res = await fetch(`/api/parent/children/${selectedChildId}/overview`);
-      if (!res.ok) throw new Error("Không tải được báo cáo của con");
+      if (!res.ok) throw new Error(tr("Không tải được báo cáo của con", "Could not load your child's report"));
       return res.json();
     },
   });
@@ -261,8 +263,8 @@ function ParentPortalContent() {
         body: JSON.stringify({ code: inviteCode.trim().toUpperCase(), relation }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Mã liên kết không hợp lệ");
-      toast.success(`Đã liên kết với học sinh ${json.link.student.name}!`);
+      if (!res.ok) throw new Error(json.error ?? tr("Mã liên kết không hợp lệ", "Invalid link code"));
+      toast.success(tr(`Đã liên kết với học sinh ${json.link.student.name}!`, `Linked with student ${json.link.student.name}!`));
       setInviteCode("");
       setLinkDialogOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["parent-children"] });
@@ -288,10 +290,10 @@ function ParentPortalContent() {
             <h1 className="text-2xl sm:text-3xl font-bold text-[#0B1C30]">
               {vi.parent.title}
             </h1>
-            <Badge variant="default">Chỉ xem</Badge>
+            <Badge variant="default">{tr("Chỉ xem", "Read-only")}</Badge>
           </div>
           <p className="mt-0.5 text-sm text-[#464555]">
-            Dữ liệu kết quả học tập được đồng bộ tự động từ lớp học trực tuyến của giáo viên.
+            {tr("Dữ liệu kết quả học tập được đồng bộ tự động từ lớp học trực tuyến của giáo viên.", "Learning results are synced automatically from the teacher's online class.")}
           </p>
         </div>
 
@@ -306,7 +308,7 @@ function ParentPortalContent() {
             >
               {children.map((ch) => (
                 <option key={ch.studentId} value={ch.studentId}>
-                  Con: {ch.studentName}
+                  {tr("Con:", "Child:")} {ch.studentName}
                   {ch.classes[0] ? ` — ${ch.classes[0].name}` : ""}
                 </option>
               ))}
@@ -315,7 +317,7 @@ function ParentPortalContent() {
 
           <Button variant="outline" size="sm" onClick={() => setLinkDialogOpen(true)}>
             <Plus className="h-4 w-4" />
-            Liên kết thêm con
+            {tr("Liên kết thêm con", "Link another child")}
           </Button>
         </div>
       </div>
@@ -330,7 +332,7 @@ function ParentPortalContent() {
           <p className="text-sm text-[#464555]">{vi.parent.noLinkedChildren}</p>
           <Button onClick={() => setLinkDialogOpen(true)}>
             <KeyRound className="h-4 w-4" />
-            Nhập mã liên kết 8 ký tự
+            {tr("Nhập mã liên kết 8 ký tự", "Enter the 8-character link code")}
           </Button>
         </div>
       ) : loadingOverview || !overview ? (
@@ -354,13 +356,13 @@ function ParentPortalContent() {
                 </div>
                 {overview.classes[0] && (
                   <p className="text-xs text-[#464555]">
-                    Giáo viên phụ trách: <strong>{overview.classes[0].teacherName}</strong>
+                    {tr("Giáo viên phụ trách:", "Teacher in charge:")} <strong>{overview.classes[0].teacherName}</strong>
                   </p>
                 )}
               </div>
             </div>
             <Badge variant="mint" className="gap-1.5">
-              <UserCheck className="h-3.5 w-3.5" /> Đã xác nhận liên kết phụ huynh
+              <UserCheck className="h-3.5 w-3.5" /> {tr("Đã xác nhận liên kết phụ huynh", "Parent link verified")}
             </Badge>
           </div>
 
@@ -381,7 +383,7 @@ function ParentPortalContent() {
                   diffAvg >= 0 ? "text-emerald-700" : "text-orange-700"
                 )}
               >
-                {diffAvg >= 0 ? `+${diffAvg}` : diffAvg} so với TB lớp ({overview.kpis.classAvg10})
+                {diffAvg >= 0 ? `+${diffAvg}` : diffAvg} {tr("so với TB lớp (", "vs class avg (")}{overview.kpis.classAvg10})
               </p>
             </div>
 
@@ -397,7 +399,7 @@ function ParentPortalContent() {
                   / {overview.kpis.totalStudents}
                 </span>
               </p>
-              <p className="mt-1.5 text-xs text-slate-500">Xếp hạng tổng hợp trong lớp</p>
+              <p className="mt-1.5 text-xs text-slate-500">{tr("Xếp hạng tổng hợp trong lớp", "Overall rank in class")}</p>
             </div>
 
             <div className="stitch-card p-5">
@@ -409,7 +411,7 @@ function ParentPortalContent() {
                 {overview.kpis.onTimeRate}%
               </p>
               <p className="mt-1.5 text-xs text-slate-500">
-                {overview.kpis.onTimeCount}/{overview.kpis.totalSubmitted} bài nộp đúng hạn
+                {overview.kpis.onTimeCount}/{overview.kpis.totalSubmitted} {tr("bài nộp đúng hạn", "submissions on time")}
               </p>
             </div>
 
@@ -423,8 +425,8 @@ function ParentPortalContent() {
               </p>
               <p className="mt-1.5 text-xs text-[#C2410C]">
                 {overview.kpis.pendingCount > 0
-                  ? "Cần nhắc con hoàn thành sớm"
-                  : "Con đã hoàn thành hết bài tập"}
+                  ? tr("Cần nhắc con hoàn thành sớm", "Remind your child to finish soon")
+                  : tr("Con đã hoàn thành hết bài tập", "Your child has finished all assignments")}
               </p>
             </div>
           </div>
@@ -439,7 +441,7 @@ function ParentPortalContent() {
                     {vi.parent.trendChartTitle}
                   </h3>
                   <p className="text-xs text-[#464555]">
-                    So sánh điểm của con với trung bình lớp qua các bài gần nhất
+                    {tr("So sánh điểm của con với trung bình lớp qua các bài gần nhất", "Your child's scores compared with the class average on recent assignments")}
                   </p>
                 </div>
                 <div className="flex items-center gap-4 text-xs font-semibold">
@@ -448,8 +450,7 @@ function ParentPortalContent() {
                     {overview.kpis.childAvg10})
                   </span>
                   <span className="inline-flex items-center gap-1.5 text-slate-500">
-                    <span className="h-0.5 w-4 border-t-2 border-dashed border-slate-400" /> TB
-                    lớp ({overview.kpis.classAvg10})
+                    <span className="h-0.5 w-4 border-t-2 border-dashed border-slate-400" /> {tr("TB lớp (", "Class avg (")}{overview.kpis.classAvg10})
                   </span>
                 </div>
               </div>
@@ -464,7 +465,7 @@ function ParentPortalContent() {
                     {vi.parent.skillsChartTitle}
                   </h3>
                   <p className="text-xs text-[#464555]">
-                    Thành tích của con so với trung bình lớp theo từng kỹ năng
+                    {tr("Thành tích của con so với trung bình lớp theo từng kỹ năng", "Your child's performance vs the class average by skill")}
                   </p>
                 </div>
                 <BarChart2 className="h-5 w-5 text-[#4F46E5]" />
@@ -477,11 +478,11 @@ function ParentPortalContent() {
                       <span className="font-bold text-[#0B1C30]">{vi.skills[s.skill]}</span>
                       <span className="tabular-nums">
                         <strong className="text-[#3525CD]">
-                          Con: {s.childPct === null ? "—" : `${s.childPct}%`}
+                          {tr("Con:", "Child:")} {s.childPct === null ? "—" : `${s.childPct}%`}
                         </strong>
                         <span className="mx-1.5 text-slate-300">|</span>
                         <span className="text-slate-500">
-                          Lớp: {s.classPct === null ? "—" : `${s.classPct}%`}
+                          {tr("Lớp:", "Class:")} {s.classPct === null ? "—" : `${s.classPct}%`}
                         </span>
                       </span>
                     </div>
@@ -515,19 +516,19 @@ function ParentPortalContent() {
                 {vi.parent.recentAssignments}
               </h3>
               <p className="text-xs text-[#464555]">
-                Hiển thị điểm của con so với điểm trung bình lớp và vị trí xếp hạng
+                {tr("Hiển thị điểm của con so với điểm trung bình lớp và vị trí xếp hạng", "Your child's score vs the class average and their rank")}
               </p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="bg-[#F8F9FF] text-xs font-bold uppercase text-[#464555]">
                   <tr>
-                    <th className="px-6 py-3">Tên bài tập</th>
-                    <th className="px-6 py-3">Hạn nộp</th>
-                    <th className="px-6 py-3">Trạng thái</th>
-                    <th className="px-6 py-3 text-right">Điểm của con</th>
-                    <th className="px-6 py-3 text-right">TB Lớp</th>
-                    <th className="px-6 py-3 text-center">Thứ hạng</th>
+                    <th className="px-6 py-3">{tr("Tên bài tập", "Assignment")}</th>
+                    <th className="px-6 py-3">{tr("Hạn nộp", "Due")}</th>
+                    <th className="px-6 py-3">{tr("Trạng thái", "Status")}</th>
+                    <th className="px-6 py-3 text-right">{tr("Điểm của con", "Child's score")}</th>
+                    <th className="px-6 py-3 text-right">{tr("TB Lớp", "Class avg")}</th>
+                    <th className="px-6 py-3 text-center">{tr("Thứ hạng", "Rank")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -541,16 +542,16 @@ function ParentPortalContent() {
                       <td className="px-6 py-3.5">
                         <p className="font-semibold text-[#0B1C30]">{a.title}</p>
                         <p className="text-xs text-slate-400">
-                          {a.className} • {a.questionCount} câu
+                          {a.className} • {a.questionCount} {tr("câu", "questions")}
                         </p>
                       </td>
                       <td className="px-6 py-3.5 text-xs text-[#464555] tabular-nums">
                         {formatDateTime(a.dueAt)}
                       </td>
                       <td className="px-6 py-3.5">
-                        {a.status === "ON_TIME" && <Badge variant="mint">Đã nộp (Đúng hạn)</Badge>}
-                        {a.status === "LATE" && <Badge variant="orange">Đã nộp (Trễ hạn)</Badge>}
-                        {a.status === "NOT_STARTED" && <Badge variant="danger">Chưa làm</Badge>}
+                        {a.status === "ON_TIME" && <Badge variant="mint">{tr("Đã nộp (Đúng hạn)", "Submitted (on time)")}</Badge>}
+                        {a.status === "LATE" && <Badge variant="orange">{tr("Đã nộp (Trễ hạn)", "Submitted (late)")}</Badge>}
+                        {a.status === "NOT_STARTED" && <Badge variant="danger">{tr("Chưa làm", "Not started")}</Badge>}
                       </td>
                       <td className="px-6 py-3.5 text-right font-bold text-[#3525CD] tabular-nums">
                         {a.childScore10 !== null ? `${a.childScore10} / 10` : "—"}
@@ -561,7 +562,7 @@ function ParentPortalContent() {
                       <td className="px-6 py-3.5 text-center">
                         {a.rank !== null ? (
                           <Badge variant="default" className="tabular-nums">
-                            Hạng {a.rank}/{a.totalParticipants}
+                            {tr("Hạng", "Rank")} {a.rank}/{a.totalParticipants}
                           </Badge>
                         ) : (
                           "—"
@@ -584,7 +585,7 @@ function ParentPortalContent() {
                 </h3>
               </div>
               {overview.teacherFeedback.length === 0 ? (
-                <p className="text-xs text-slate-400">Chưa có nhận xét nào từ giáo viên.</p>
+                <p className="text-xs text-slate-400">{tr("Chưa có nhận xét nào từ giáo viên.", "No teacher feedback yet.")}</p>
               ) : (
                 <div className="space-y-3">
                   {overview.teacherFeedback.map((fb, idx) => (
@@ -597,7 +598,7 @@ function ParentPortalContent() {
                         <span className="text-slate-400">{formatDateTime(fb.submittedAt)}</span>
                       </div>
                       <p className="text-xs font-semibold text-slate-500">
-                        Bài: {fb.assignmentTitle}
+                        {tr("Bài:", "Assignment:")} {fb.assignmentTitle}
                       </p>
                       <p className="text-sm italic leading-relaxed text-[#0B1C30]">
                         &ldquo;{fb.comment}&rdquo;
@@ -617,7 +618,7 @@ function ParentPortalContent() {
               </div>
               {overview.proctorAlerts.length === 0 ? (
                 <div className="rounded-xl bg-emerald-50/70 p-4 text-xs font-medium text-emerald-800">
-                  Không có cảnh báo vi phạm quy chế thi nào được chia sẻ.
+                  {tr("Không có cảnh báo vi phạm quy chế thi nào được chia sẻ.", "No exam-rule violation alerts have been shared.")}
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -628,7 +629,7 @@ function ParentPortalContent() {
                     >
                       <p className="flex items-center gap-1.5 font-bold text-[#BA1A1A]">
                         <AlertTriangle className="h-3.5 w-3.5" />
-                        {al.assignmentTitle} ({al.violationCount} vi phạm)
+                        {al.assignmentTitle} ({al.violationCount} {tr("vi phạm)", "violations)")}
                       </p>
                       <ul className="space-y-0.5 text-[#93000A]">
                         {al.events.map((ev, j) => (
@@ -654,7 +655,7 @@ function ParentPortalContent() {
           </DialogHeader>
           <form onSubmit={handleLinkChild} className="space-y-4">
             <div className="space-y-1.5">
-              <Label>Mã liên kết 8 ký tự</Label>
+              <Label>{tr("Mã liên kết 8 ký tự", "8-character link code")}</Label>
               <Input
                 required
                 value={inviteCode}
@@ -664,23 +665,23 @@ function ParentPortalContent() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Mối quan hệ</Label>
+              <Label>{tr("Mối quan hệ", "Relationship")}</Label>
               <select
                 value={relation}
                 onChange={(e) => setRelation(e.target.value)}
                 className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#4F46E5]"
               >
-                <option value="Bố">Bố</option>
-                <option value="Mẹ">Mẹ</option>
-                <option value="Người giám hộ">Người giám hộ</option>
+                <option value={tr("Bố", "Father")}>{tr("Bố", "Father")}</option>
+                <option value={tr("Mẹ", "Mother")}>{tr("Mẹ", "Mother")}</option>
+                <option value={tr("Người giám hộ", "Guardian")}>{tr("Người giám hộ", "Guardian")}</option>
               </select>
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setLinkDialogOpen(false)}>
-                Huỷ
+                {tr("Huỷ", "Cancel")}
               </Button>
               <Button type="submit" disabled={linking}>
-                {linking ? "Đang xác nhận…" : vi.parent.linkButton}
+                {linking ? tr("Đang xác nhận…", "Verifying…") : vi.parent.linkButton}
               </Button>
             </div>
           </form>
@@ -691,6 +692,7 @@ function ParentPortalContent() {
 }
 
 export default function ParentPortalPage() {
+  const { m: vi } = useI18n();
   return (
     <Suspense
       fallback={

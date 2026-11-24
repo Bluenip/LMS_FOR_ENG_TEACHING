@@ -72,7 +72,8 @@ export function isAnswerFilled(value: AnswerValue): boolean {
 export function formatRevealedAnswer(
   type: FieldType,
   revealedAnswer?: Record<string, unknown>,
-  options?: FieldOption[] | null
+  options?: FieldOption[] | null,
+  tr: (viText: string, enText: string) => string = (v) => v
 ): string {
   if (!revealedAnswer) return "";
   switch (type) {
@@ -96,11 +97,13 @@ export function formatRevealedAnswer(
       return arr.join(", ");
     }
     case "TRUE_FALSE":
-      return revealedAnswer.correct === true ? "Đúng" : "Sai";
+      return revealedAnswer.correct === true ? tr("Đúng", "True") : tr("Sai", "False");
     case "CHECKBOX":
-      return revealedAnswer.checked === true ? "Có đánh dấu (✓)" : "Không đánh dấu";
+      return revealedAnswer.checked === true
+        ? tr("Có đánh dấu (✓)", "Ticked (✓)")
+        : tr("Không đánh dấu", "Not ticked");
     case "ESSAY":
-      return String(revealedAnswer.rubric ?? "Chấm tự luận");
+      return String(revealedAnswer.rubric ?? tr("Chấm tự luận", "Essay (manual grading)"));
     default:
       return "";
   }

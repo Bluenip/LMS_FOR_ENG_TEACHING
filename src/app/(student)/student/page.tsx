@@ -6,8 +6,10 @@ import {
   listStudentAssignments,
 } from "@/server/assignmentService";
 import { StudentDashboardClient } from "./StudentDashboardClient";
+import { getI18n } from "@/lib/i18n/server";
 
 export default async function StudentDashboardPage() {
+  const { tr } = await getI18n();
   const session = await auth();
   if (!session?.user) redirect("/login");
 
@@ -38,7 +40,7 @@ export default async function StudentDashboardPage() {
       maxAttempts: a.maxAttempts,
       questionCount: a.worksheet._count.fields,
       proctorMode: a.proctorMode,
-      proctorSummary: describeProctorRuleSummary(a),
+      proctorSummary: describeProctorRuleSummary(a, tr),
       attemptsUsed: a.submissions.length,
       latestSubmission: latestSub
         ? {
@@ -56,7 +58,7 @@ export default async function StudentDashboardPage() {
 
   return (
     <StudentDashboardClient
-      studentName={session.user.name ?? "Học sinh"}
+      studentName={session.user.name ?? tr("Học sinh", "Student")}
       classes={serializedClasses}
       assignments={serializedAssignments}
     />

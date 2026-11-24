@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import { describeProctorRuleSummary } from "@/lib/proctor-helpers";
 import { formatDateTime, getInitials } from "@/lib/utils";
-import { vi } from "@/messages/vi";
+import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -120,6 +120,7 @@ function extractYoutubeEmbed(url: string): string | null {
 }
 
 function LessonPdfModal({ fileKey, title, onClose }: { fileKey: string; title: string; onClose: () => void }) {
+  const { tr } = useI18n();
   const { pdfDoc, loading } = usePdfDocument(`/api/files/${fileKey}`);
   const [pageCount, setPageCount] = useState(1);
 
@@ -134,7 +135,7 @@ function LessonPdfModal({ fileKey, title, onClose }: { fileKey: string; title: s
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 overflow-x-auto py-2">
-          {loading && <p className="text-center text-sm text-slate-400">Đang tải PDF…</p>}
+          {loading && <p className="text-center text-sm text-slate-400">{tr("Đang tải PDF…", "Loading PDF…")}</p>}
           {Array.from({ length: pageCount }).map((_, idx) => (
             <PdfCanvasPage
               key={idx}
@@ -161,6 +162,7 @@ export function ClassDetailView({
   isTeacher: boolean;
   currentUserId: string;
 }) {
+  const { m: vi, tr } = useI18n();
   const router = useRouter();
   const [cls, setCls] = useState<ClassDetailData>(initialClass);
 
@@ -208,10 +210,10 @@ export function ClassDetailView({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: postContent }),
       });
-      if (!res.ok) throw new Error("Đăng bài thất bại");
+      if (!res.ok) throw new Error(tr("Đăng bài thất bại", "Posting failed"));
       setPostContent("");
       await refreshClass();
-      toast.success("Đã đăng bài lên bảng tin!");
+      toast.success(tr("Đã đăng bài lên bảng tin!", "Posted to the stream!"));
     } catch {
       toast.error(vi.common.errorGeneric);
     } finally {
@@ -238,7 +240,7 @@ export function ClassDetailView({
     if (res.ok) {
       const json = await res.json();
       setCls((prev) => ({ ...prev, joinCode: json.joinCode }));
-      toast.success(`Đã tạo mã mới: ${json.joinCode}`);
+      toast.success(tr(`Đã tạo mã mới: ${json.joinCode}`, `New code created: ${json.joinCode}`));
     }
   };
 
@@ -255,7 +257,7 @@ export function ClassDetailView({
     });
     if (res.ok) {
       await refreshClass();
-      toast.success("Đã cập nhật cài đặt lớp học!");
+      toast.success(tr("Đã cập nhật cài đặt lớp học!", "Class settings updated!"));
     }
   };
 
@@ -267,7 +269,7 @@ export function ClassDetailView({
     });
     if (res.ok) {
       await refreshClass();
-      toast.success(cls.archived ? "Đã khôi phục lớp học!" : "Đã lưu trữ lớp học!");
+      toast.success(cls.archived ? tr("Đã khôi phục lớp học!", "Class restored!") : tr("Đã lưu trữ lớp học!", "Class archived!"));
     }
   };
 
@@ -277,7 +279,7 @@ export function ClassDetailView({
     });
     if (res.ok) {
       await refreshClass();
-      toast.success("Đã duyệt học sinh vào lớp!");
+      toast.success(tr("Đã duyệt học sinh vào lớp!", "Student approved!"));
     }
   };
 
@@ -287,7 +289,7 @@ export function ClassDetailView({
     });
     if (res.ok) {
       await refreshClass();
-      toast.success("Đã xoá học sinh khỏi lớp.");
+      toast.success(tr("Đã xoá học sinh khỏi lớp.", "Student removed from the class."));
     }
   };
 
@@ -301,13 +303,13 @@ export function ClassDetailView({
         body: fd,
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Import thất bại");
+      if (!res.ok) throw new Error(json.error ?? tr("Import thất bại", "Import failed"));
       toast.success(
-        `Đã thêm ${json.enrolledCount} học sinh vào lớp (tạo mới ${json.createdCount} tài khoản)!`
+        tr(`Đã thêm ${json.enrolledCount} học sinh vào lớp (tạo mới ${json.createdCount} tài khoản)!`, `Added ${json.enrolledCount} students to the class (${json.createdCount} new accounts)!`)
       );
       await refreshClass();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Import Excel thất bại");
+      toast.error(err instanceof Error ? err.message : tr("Import Excel thất bại", "Excel import failed"));
     } finally {
       setImportingExcel(false);
     }
@@ -322,9 +324,9 @@ export function ClassDetailView({
     const json = await res.json();
     if (res.ok) {
       setGeneratedParentCode({ studentName, code: json.invite.code });
-      toast.success(`Đã tạo mã phụ huynh: ${json.invite.code}`);
+      toast.success(tr(`Đã tạo mã phụ huynh: ${json.invite.code}`, `Parent code created: ${json.invite.code}`));
     } else {
-      toast.error(json.error ?? "Không thể tạo mã");
+      toast.error(json.error ?? tr("Không thể tạo mã", "Could not create the code"));
     }
   };
 
@@ -340,7 +342,7 @@ export function ClassDetailView({
       setChapterTitle("");
       setChapterDesc("");
       await refreshClass();
-      toast.success("Đã thêm chương bài giảng!");
+      toast.success(tr("Đã thêm chương bài giảng!", "Chapter added!"));
     }
   };
 
@@ -359,7 +361,7 @@ export function ClassDetailView({
     );
     const json = await res.json();
     if (!res.ok) {
-      toast.error(json.error ?? "Không thể thêm tài liệu");
+      toast.error(json.error ?? tr("Không thể thêm tài liệu", "Could not add the material"));
       return;
     }
     setAddingItemLessonId(null);
@@ -367,7 +369,7 @@ export function ClassDetailView({
     setItemUrl("");
     setItemFile(null);
     await refreshClass();
-    toast.success("Đã thêm tài liệu bài giảng!");
+    toast.success(tr("Đã thêm tài liệu bài giảng!", "Material added!"));
   };
 
   const activeStudents = cls.enrollments.filter((e) => e.status === "ACTIVE");
@@ -384,7 +386,7 @@ export function ClassDetailView({
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-white/20 px-3 py-0.5 text-xs font-semibold backdrop-blur">
-                GV: {cls.teacher.name}
+                {tr("GV:", "Teacher:")} {cls.teacher.name}
               </span>
               {cls.archived && (
                 <span className="rounded-full bg-amber-400/90 px-3 py-0.5 text-xs font-bold text-slate-900">
@@ -413,10 +415,10 @@ export function ClassDetailView({
                   type="button"
                   onClick={() => {
                     navigator.clipboard?.writeText(cls.joinCode);
-                    toast.success("Đã sao chép mã lớp!");
+                    toast.success(tr("Đã sao chép mã lớp!", "Class code copied!"));
                   }}
                   className="rounded-lg p-1.5 hover:bg-white/20"
-                  title="Sao chép mã"
+                  title={tr("Sao chép mã", "Copy code")}
                 >
                   <Copy className="h-4 w-4" />
                 </button>
@@ -442,7 +444,7 @@ export function ClassDetailView({
               <Button variant="accent" asChild>
                 <Link href={`/teacher/assignments/new?classId=${cls.id}`}>
                   <Plus className="h-4 w-4" />
-                  Giao bài tập
+                  {tr("Giao bài tập", "Assign work")}
                 </Link>
               </Button>
             )}
@@ -517,7 +519,7 @@ export function ClassDetailView({
                           {post.author.name}
                         </span>
                         {post.author.role === "TEACHER" && (
-                          <Badge variant="default">Giáo viên</Badge>
+                          <Badge variant="default">{tr("Giáo viên", "Teacher")}</Badge>
                         )}
                       </div>
                       <p className="text-xs text-slate-400">{formatDateTime(post.createdAt)}</p>
@@ -598,11 +600,11 @@ export function ClassDetailView({
         <TabsContent value="assignments" className="space-y-3">
           {cls.assignments.length === 0 ? (
             <div className="stitch-card p-10 text-center text-sm text-slate-400">
-              Chưa có bài tập nào được giao trong lớp này.
+              {tr("Chưa có bài tập nào được giao trong lớp này.", "No assignments in this class yet.")}
             </div>
           ) : (
             cls.assignments.map((asg) => {
-              const proctorSummary = describeProctorRuleSummary(asg);
+              const proctorSummary = describeProctorRuleSummary(asg, tr);
               const studentTarget =
                 asg.proctorMode !== "OFF"
                   ? `/student/assignments/${asg.id}/rules`
@@ -624,14 +626,14 @@ export function ClassDetailView({
                       )}
                     </div>
                     <div className="flex flex-wrap items-center gap-3 text-xs text-[#464555]">
-                      <span>{asg.worksheet._count.fields} câu hỏi</span>
+                      <span>{asg.worksheet._count.fields} {tr("câu hỏi", "questions")}</span>
                       {asg.timeLimitMin && (
                         <span className="inline-flex items-center gap-1">
                           <Clock className="h-3.5 w-3.5 text-[#F97316]" />
-                          {asg.timeLimitMin} phút
+                          {asg.timeLimitMin} {tr("phút", "min")}
                         </span>
                       )}
-                      {asg.dueAt && <span>Hạn nộp: {formatDateTime(asg.dueAt)}</span>}
+                      {asg.dueAt && <span>{tr("Hạn nộp:", "Due:")} {formatDateTime(asg.dueAt)}</span>}
                     </div>
                     {proctorSummary && (
                       <p className="inline-flex items-center gap-1 text-xs font-semibold text-[#BA1A1A]">
@@ -645,7 +647,7 @@ export function ClassDetailView({
                     <Button variant="outline" size="sm" asChild>
                       <Link href={`${leaderboardHref}?assignmentId=${asg.id}`}>
                         <Trophy className="h-3.5 w-3.5 text-[#F97316]" />
-                        Xếp hạng
+                        {tr("Xếp hạng", "Leaderboard")}
                       </Link>
                     </Button>
                     {isTeacher ? (
@@ -654,19 +656,19 @@ export function ClassDetailView({
                           <Button variant="secondary" size="sm" asChild>
                             <Link href={`/teacher/assignments/${asg.id}/live`}>
                               <Radio className="h-3.5 w-3.5 text-red-500" />
-                              Giám sát Live
+                              {tr("Giám sát Live", "Live proctoring")}
                             </Link>
                           </Button>
                         )}
                         <Button size="sm" asChild>
                           <Link href={`/teacher/assignments/${asg.id}/grading`}>
-                            Chấm &amp; Kết quả ({asg._count.submissions})
+                            {tr("Chấm & Kết quả (", "Grades & results (")}{asg._count.submissions})
                           </Link>
                         </Button>
                       </>
                     ) : (
                       <Button variant="accent" size="sm" asChild>
-                        <Link href={studentTarget}>Vào làm bài →</Link>
+                        <Link href={studentTarget}>{tr("Vào làm bài →", "Start →")}</Link>
                       </Button>
                     )}
                   </div>
@@ -687,13 +689,13 @@ export function ClassDetailView({
                 <Input
                   value={chapterTitle}
                   onChange={(e) => setChapterTitle(e.target.value)}
-                  placeholder="VD: Chương 2: Passive Voice & Reading"
+                  placeholder={tr("VD: Chương 2: Passive Voice & Reading", "e.g. Chapter 2: Passive Voice & Reading")}
                   required
                 />
                 <Input
                   value={chapterDesc}
                   onChange={(e) => setChapterDesc(e.target.value)}
-                  placeholder="Mô tả ngắn (tuỳ chọn)"
+                  placeholder={tr("Mô tả ngắn (tuỳ chọn)", "Short description (optional)")}
                 />
               </div>
               <Button type="submit" size="sm">
@@ -777,13 +779,13 @@ export function ClassDetailView({
                                   setViewingPdf({ fileKey: item.fileKey!, title: item.title })
                                 }
                               >
-                                Xem PDF
+                                {tr("Xem PDF", "View PDF")}
                               </Button>
                             )}
                             {item.type === "LINK" && item.url && (
                               <Button size="sm" variant="outline" asChild>
                                 <a href={item.url} target="_blank" rel="noopener noreferrer">
-                                  Mở liên kết <ExternalLink className="h-3.5 w-3.5" />
+                                  {tr("Mở liên kết", "Open link")} <ExternalLink className="h-3.5 w-3.5" />
                                 </a>
                               </Button>
                             )}
@@ -854,7 +856,7 @@ export function ClassDetailView({
               </div>
               <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-[#EEF2FF] px-4 py-2 text-xs font-bold text-[#3525CD] hover:bg-[#E2DFFF]">
                 <Upload className="h-4 w-4" />
-                {importingExcel ? "Đang nhập…" : "Chọn file .xlsx"}
+                {importingExcel ? tr("Đang nhập…", "Importing…") : tr("Chọn file .xlsx", "Choose .xlsx file")}
                 <input
                   type="file"
                   accept=".xlsx"
@@ -872,7 +874,7 @@ export function ClassDetailView({
           {isTeacher && pendingStudents.length > 0 && (
             <div className="stitch-card border-amber-200 p-5 space-y-3">
               <h3 className="text-sm font-bold text-amber-800">
-                Yêu cầu chờ duyệt ({pendingStudents.length})
+                {tr("Yêu cầu chờ duyệt (", "Pending requests (")}{pendingStudents.length})
               </h3>
               <div className="divide-y divide-slate-100">
                 {pendingStudents.map((e) => (
@@ -906,7 +908,7 @@ export function ClassDetailView({
           <div className="stitch-card overflow-hidden">
             <div className="border-b border-slate-100 px-5 py-3.5">
               <h3 className="text-sm font-bold text-[#0B1C30]">
-                Danh sách học sinh ({activeStudents.length})
+                {tr("Danh sách học sinh (", "Students (")}{activeStudents.length})
               </h3>
             </div>
             <div className="divide-y divide-slate-100">
@@ -945,7 +947,7 @@ export function ClassDetailView({
                         onClick={() => void handleRemoveEnrollment(e.id)}
                       >
                         <UserMinus className="h-3.5 w-3.5" />
-                        Xoá
+                        {tr("Xoá", "Remove")}
                       </Button>
                     </div>
                   )}
@@ -977,7 +979,7 @@ export function ClassDetailView({
                     {vi.classes.requireApproval}
                   </p>
                   <p className="text-xs text-slate-500">
-                    Khi bật, học sinh nhập mã sẽ ở trạng thái Chờ duyệt.
+                    {tr("Khi bật, học sinh nhập mã sẽ ở trạng thái Chờ duyệt.", "When on, students who enter the code wait for approval.")}
                   </p>
                 </div>
                 <Switch
@@ -992,7 +994,7 @@ export function ClassDetailView({
                 </Button>
                 <Button type="submit">
                   <Check className="h-4 w-4" />
-                  Lưu thay đổi
+                  {tr("Lưu thay đổi", "Save changes")}
                 </Button>
               </div>
             </form>
@@ -1034,7 +1036,7 @@ export function ClassDetailView({
             </div>
             {itemType !== "LINK" && (
               <div className="space-y-1.5">
-                <Label>Tải file lên (PDF / MP4 / MP3)</Label>
+                <Label>{tr("Tải file lên (PDF / MP4 / MP3)", "Upload a file (PDF / MP4 / MP3)")}</Label>
                 <Input
                   type="file"
                   accept={
@@ -1050,7 +1052,7 @@ export function ClassDetailView({
             )}
             {itemType !== "PDF" && (
               <div className="space-y-1.5">
-                <Label>Hoặc dán đường dẫn URL (YouTube / Audio / Web)</Label>
+                <Label>{tr("Hoặc dán đường dẫn URL (YouTube / Audio / Web)", "Or paste a URL (YouTube / audio / web)")}</Label>
                 <Input
                   type="url"
                   value={itemUrl}
@@ -1065,9 +1067,9 @@ export function ClassDetailView({
                 variant="outline"
                 onClick={() => setAddingItemLessonId(null)}
               >
-                Huỷ
+                {tr("Huỷ", "Cancel")}
               </Button>
-              <Button type="submit">Thêm tài liệu</Button>
+              <Button type="submit">{tr("Thêm tài liệu", "Add material")}</Button>
             </div>
           </form>
         </DialogContent>
@@ -1080,13 +1082,13 @@ export function ClassDetailView({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Mã liên kết phụ huynh</DialogTitle>
+            <DialogTitle>{tr("Mã liên kết phụ huynh", "Parent link code")}</DialogTitle>
           </DialogHeader>
           {generatedParentCode && (
             <div className="space-y-3 text-center">
               <p className="text-sm text-[#464555]">
-                Gửi mã sau cho phụ huynh của <strong>{generatedParentCode.studentName}</strong>{" "}
-                (hạn sử dụng 7 ngày, dùng một lần):
+                {tr("Gửi mã sau cho phụ huynh của", "Send this code to the parent of")} <strong>{generatedParentCode.studentName}</strong>{" "}
+                {tr("(hạn sử dụng 7 ngày, dùng một lần):", "(valid 7 days, single use):")}
               </p>
               <div className="rounded-2xl bg-[#EEF2FF] py-4 font-mono text-2xl font-extrabold tracking-widest text-[#3525CD]">
                 {generatedParentCode.code}
@@ -1095,11 +1097,11 @@ export function ClassDetailView({
                 className="w-full"
                 onClick={() => {
                   navigator.clipboard?.writeText(generatedParentCode.code);
-                  toast.success("Đã sao chép mã liên kết!");
+                  toast.success(tr("Đã sao chép mã liên kết!", "Link code copied!"));
                 }}
               >
                 <Copy className="h-4 w-4" />
-                Sao chép mã
+                {tr("Sao chép mã", "Copy code")}
               </Button>
             </div>
           )}

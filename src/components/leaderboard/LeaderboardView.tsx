@@ -13,7 +13,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { cn, formatDurationMs, getInitials } from "@/lib/utils";
-import { vi } from "@/messages/vi";
+import { useI18n } from "@/lib/i18n/client";
 import { Badge } from "@/components/ui/badge";
 import type {
   AssignmentLeaderboardResponse,
@@ -42,6 +42,7 @@ export function LeaderboardView({
   isTeacher,
   initialAssignmentId,
 }: LeaderboardViewProps) {
+  const { m: vi, tr } = useI18n();
   const [mode, setMode] = useState<"ASSIGNMENT" | "CLASS">(
     initialAssignmentId ? "ASSIGNMENT" : "ASSIGNMENT"
   );
@@ -65,7 +66,7 @@ export function LeaderboardView({
         params.set("missingZero", String(missingZero));
       }
       const res = await fetch(`/api/classes/${classId}/leaderboard?${params.toString()}`);
-      if (!res.ok) throw new Error("Không thể tải bảng xếp hạng");
+      if (!res.ok) throw new Error(tr("Không thể tải bảng xếp hạng", "Could not load the leaderboard"));
       const json = await res.json();
       // Auto-select first assignment if in ASSIGNMENT mode with none selected yet
       if (mode === "ASSIGNMENT" && !selectedAssignmentId && json.assignments?.length > 0) {
@@ -91,7 +92,7 @@ export function LeaderboardView({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-xs font-semibold text-[#464555]">
-            {className} › Bảng vinh danh &amp; Xếp hạng
+            {className} {tr("› Bảng vinh danh & Xếp hạng", "› Hall of fame & ranking")}
           </p>
           <h1 className="mt-0.5 text-2xl font-bold text-[#0B1C30]">
             {vi.leaderboard.title} — {className}
@@ -152,8 +153,8 @@ export function LeaderboardView({
               onChange={(e) => setScoreRule(e.target.value as "BEST" | "LAST")}
               className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-[#0B1C30] outline-none"
             >
-              <option value="BEST">Lượt điểm cao nhất</option>
-              <option value="LAST">Lượt nộp gần nhất</option>
+              <option value="BEST">{tr("Lượt điểm cao nhất", "Best attempt")}</option>
+              <option value="LAST">{tr("Lượt nộp gần nhất", "Latest attempt")}</option>
             </select>
           )}
 
@@ -163,8 +164,8 @@ export function LeaderboardView({
               onChange={(e) => setMissingZero(e.target.value === "zero")}
               className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-[#0B1C30] outline-none"
             >
-              <option value="zero">Bài chưa làm = 0 điểm</option>
-              <option value="skip">Bỏ qua bài chưa làm</option>
+              <option value="zero">{tr("Bài chưa làm = 0 điểm", "Missing work = 0 points")}</option>
+              <option value="skip">{tr("Bỏ qua bài chưa làm", "Ignore missing work")}</option>
             </select>
           )}
         </div>
@@ -180,7 +181,7 @@ export function LeaderboardView({
             <Lock className="h-6 w-6" />
           </span>
           <h3 className="mt-3 text-base font-bold text-[#0B1C30]">
-            Bảng xếp hạng hiện đang ẩn
+            {tr("Bảng xếp hạng hiện đang ẩn", "The leaderboard is hidden")}
           </h3>
           <p className="mt-1 max-w-md text-sm text-[#464555]">
             {lb?.hiddenReason ?? vi.leaderboard.hiddenUntilDue}
@@ -188,7 +189,7 @@ export function LeaderboardView({
         </div>
       ) : entries.length === 0 ? (
         <div className="stitch-card p-12 text-center text-sm text-slate-500">
-          Chưa có bài nộp hợp lệ nào để xếp hạng.
+          {tr("Chưa có bài nộp hợp lệ nào để xếp hạng.", "No valid submissions to rank yet.")}
         </div>
       ) : (
         <>
@@ -202,12 +203,12 @@ export function LeaderboardView({
                     {vi.leaderboard.podiumTitle}
                   </h2>
                   <p className="text-xs text-[#464555]">
-                    Top 3 học sinh có thành tích xuất sắc nhất
+                    {tr("Top 3 học sinh có thành tích xuất sắc nhất", "Top 3 best-performing students")}
                   </p>
                 </div>
               </div>
               {lb?.anonymized && (
-                <Badge variant="default">Chế độ ẩn danh (chỉ hiện tên Top 3 &amp; bạn)</Badge>
+                <Badge variant="default">{tr("Chế độ ẩn danh (chỉ hiện tên Top 3 & bạn)", "Anonymous mode (only top 3 & you are named)")}</Badge>
               )}
             </div>
 
@@ -220,7 +221,7 @@ export function LeaderboardView({
                       {getInitials(top2.displayName)}
                     </div>
                     <Badge variant="neutral" className="mt-2">
-                      Á Quân • Hạng {top2.rank}
+                      {tr("Á Quân • Hạng", "Runner-up • Rank")} {top2.rank}
                     </Badge>
                     <p className="mt-2 font-bold text-[#0B1C30]">{top2.displayName}</p>
                     <p className="mt-1 text-2xl font-bold text-[#3525CD] tabular-nums">
@@ -229,14 +230,14 @@ export function LeaderboardView({
                     </p>
                     <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-white p-2 text-xs">
                       <div>
-                        <p className="text-[10px] text-slate-400">Thời gian</p>
+                        <p className="text-[10px] text-slate-400">{tr("Thời gian", "Time")}</p>
                         <p className="font-semibold tabular-nums">
                           {formatDurationMs(top2.durationMs)}
                         </p>
                       </div>
                       <div>
                         <p className="text-[10px] text-slate-400">
-                          {mode === "ASSIGNMENT" ? "Chính xác" : "Đã làm"}
+                          {mode === "ASSIGNMENT" ? tr("Chính xác", "Correct") : tr("Đã làm", "Done")}
                         </p>
                         <p className="font-semibold tabular-nums">
                           {top2.correctCount}/{top2.totalQuestions}
@@ -256,7 +257,7 @@ export function LeaderboardView({
                       {getInitials(top1.displayName)}
                     </div>
                     <Badge variant="orange" className="mt-2">
-                      Quán Quân • Hạng {top1.rank}
+                      {tr("Quán Quân • Hạng", "Champion • Rank")} {top1.rank}
                     </Badge>
                     <p className="mt-2 text-lg font-bold text-[#0B1C30]">
                       {top1.displayName}
@@ -267,14 +268,14 @@ export function LeaderboardView({
                     </p>
                     <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-white p-2.5 text-xs border border-orange-100">
                       <div>
-                        <p className="text-[10px] text-slate-400">Thời gian</p>
+                        <p className="text-[10px] text-slate-400">{tr("Thời gian", "Time")}</p>
                         <p className="font-bold tabular-nums">
                           {formatDurationMs(top1.durationMs)}
                         </p>
                       </div>
                       <div>
                         <p className="text-[10px] text-slate-400">
-                          {mode === "ASSIGNMENT" ? "Chính xác" : "Đã làm"}
+                          {mode === "ASSIGNMENT" ? tr("Chính xác", "Correct") : tr("Đã làm", "Done")}
                         </p>
                         <p className="font-bold tabular-nums">
                           {top1.correctCount}/{top1.totalQuestions}
@@ -293,7 +294,7 @@ export function LeaderboardView({
                       {getInitials(top3.displayName)}
                     </div>
                     <Badge variant="outline" className="mt-2 border-amber-300 text-amber-800">
-                      Hạng {top3.rank}
+                      {tr("Hạng", "Rank")} {top3.rank}
                     </Badge>
                     <p className="mt-2 font-bold text-[#0B1C30]">{top3.displayName}</p>
                     <p className="mt-1 text-2xl font-bold text-[#3525CD] tabular-nums">
@@ -302,14 +303,14 @@ export function LeaderboardView({
                     </p>
                     <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-white p-2 text-xs">
                       <div>
-                        <p className="text-[10px] text-slate-400">Thời gian</p>
+                        <p className="text-[10px] text-slate-400">{tr("Thời gian", "Time")}</p>
                         <p className="font-semibold tabular-nums">
                           {formatDurationMs(top3.durationMs)}
                         </p>
                       </div>
                       <div>
                         <p className="text-[10px] text-slate-400">
-                          {mode === "ASSIGNMENT" ? "Chính xác" : "Đã làm"}
+                          {mode === "ASSIGNMENT" ? tr("Chính xác", "Correct") : tr("Đã làm", "Done")}
                         </p>
                         <p className="font-semibold tabular-nums">
                           {top3.correctCount}/{top3.totalQuestions}
@@ -328,7 +329,7 @@ export function LeaderboardView({
               <div className="flex items-center gap-2">
                 <Award className="h-5 w-5 text-[#4F46E5]" />
                 <h2 className="text-base font-bold text-[#0B1C30]">
-                  Bảng thành tích chi tiết ({entries.length} / {lb?.totalStudentsInClass ?? entries.length} học sinh)
+                  {tr("Bảng thành tích chi tiết (", "Detailed results (")}{entries.length} / {lb?.totalStudentsInClass ?? entries.length} {tr("học sinh)", "students)")}
                 </h2>
               </div>
             </div>
@@ -337,14 +338,14 @@ export function LeaderboardView({
               <table className="w-full text-left text-sm">
                 <thead className="bg-[#F8F9FF] text-xs font-bold uppercase text-[#464555]">
                   <tr>
-                    <th className="px-6 py-3">Hạng</th>
-                    <th className="px-6 py-3">Học sinh</th>
-                    <th className="px-6 py-3 text-right">Điểm (thang 10)</th>
-                    <th className="px-6 py-3 text-center">Thời gian làm</th>
+                    <th className="px-6 py-3">{tr("Hạng", "Rank")}</th>
+                    <th className="px-6 py-3">{tr("Học sinh", "Student")}</th>
+                    <th className="px-6 py-3 text-right">{tr("Điểm (thang 10)", "Score (out of 10)")}</th>
+                    <th className="px-6 py-3 text-center">{tr("Thời gian làm", "Time taken")}</th>
                     <th className="px-6 py-3 text-center">
-                      {mode === "ASSIGNMENT" ? "Số câu đúng" : "Bài hoàn thành"}
+                      {mode === "ASSIGNMENT" ? tr("Số câu đúng", "Correct answers") : tr("Bài hoàn thành", "Completed")}
                     </th>
-                    <th className="px-6 py-3 text-center">Xu hướng</th>
+                    <th className="px-6 py-3 text-center">{tr("Xu hướng", "Trend")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -382,7 +383,7 @@ export function LeaderboardView({
                           <span className="font-semibold text-[#0B1C30]">
                             {entry.displayName}
                           </span>
-                          {entry.isCurrentUser && <Badge variant="indigo">Bạn</Badge>}
+                          {entry.isCurrentUser && <Badge variant="indigo">{tr("Bạn", "You")}</Badge>}
                         </div>
                       </td>
                       <td className="px-6 py-3.5 text-right font-bold tabular-nums">
@@ -458,29 +459,29 @@ export function LeaderboardView({
                   <span className="font-bold text-[#0B1C30]">
                     {currentUserEntry.displayName}
                   </span>
-                  <Badge variant="indigo">Bạn</Badge>
+                  <Badge variant="indigo">{tr("Bạn", "You")}</Badge>
                 </div>
                 <p className="text-xs font-semibold text-[#3525CD]">
-                  Bạn đang ở hạng {currentUserEntry.rank}/{entries.length}
+                  {tr("Bạn đang ở hạng", "You are ranked")} {currentUserEntry.rank}/{entries.length}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-6 text-xs">
               <div>
-                <p className="text-slate-500">Điểm số</p>
+                <p className="text-slate-500">{tr("Điểm số", "Score")}</p>
                 <p className="text-base font-bold text-[#3525CD] tabular-nums">
                   {currentUserEntry.scoreScale10} / 10
                 </p>
               </div>
               <div>
-                <p className="text-slate-500">Thời gian</p>
+                <p className="text-slate-500">{tr("Thời gian", "Time")}</p>
                 <p className="font-bold text-[#0B1C30] tabular-nums">
                   {formatDurationMs(currentUserEntry.durationMs)}
                 </p>
               </div>
               <div>
-                <p className="text-slate-500">Đúng</p>
+                <p className="text-slate-500">{tr("Đúng", "Correct")}</p>
                 <p className="font-bold text-[#0B1C30] tabular-nums">
                   {currentUserEntry.correctCount}/{currentUserEntry.totalQuestions}
                 </p>

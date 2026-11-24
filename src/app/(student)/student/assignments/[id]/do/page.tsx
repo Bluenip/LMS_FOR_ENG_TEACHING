@@ -23,7 +23,7 @@ import {
 import type { ProctorEventType, ProctorMode, ViolationAction } from "@prisma/client";
 import type { AnswerValue } from "@/lib/grading/types";
 import { cn, formatScore, formatSecondsMMSS } from "@/lib/utils";
-import { vi } from "@/messages/vi";
+import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -120,6 +120,12 @@ interface QueuedProctorEvent {
 }
 
 export default function StudentDoAssignmentPage() {
+  const { m: vi, tr } = useI18n();
+  // refs so long-lived effects (listeners, SSE, PDF loading) don't restart on language change
+  const trRef = useRef(tr);
+  trRef.current = tr;
+  const viRef = useRef(vi);
+  viRef.current = vi;
   const params = useParams<{ id: string }>();
   const assignmentId = params.id;
   const router = useRouter();
@@ -167,7 +173,7 @@ export default function StudentDoAssignmentPage() {
     try {
       const res = await fetch(`/api/assignments/${assignmentId}`, { cache: "no-store" });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Không tải được bài tập");
+      if (!res.ok) throw new Error(json.error ?? tr("Không tải được bài tập", "Could not load the assignment"));
       const data = json as StudentAssignmentPayload;
 
       // Redirect to mandatory rules page if proctored and rules not yet accepted on active submission
@@ -199,7 +205,7 @@ export default function StudentDoAssignmentPage() {
     } finally {
       setLoading(false);
     }
-  }, [assignmentId, router]);
+  }, [assignmentId, router, tr, vi]);
 
   useEffect(() => {
     void fetchPayload();
@@ -233,7 +239,7 @@ export default function StudentDoAssignmentPage() {
         body: JSON.stringify({ rulesAccepted: false }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Không thể bắt đầu làm bài");
+      if (!res.ok) throw new Error(json.error ?? tr("Không thể bắt đầu làm bài", "Could not start the attempt"));
       await fetchPayload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : vi.common.errorGeneric);
@@ -267,7 +273,7 @@ export default function StudentDoAssignmentPage() {
       const json = await res.json();
       if (!res.ok) {
         if (json.code === "STALE_ATTEMPT_VERSION") {
-          toast.error("Bài làm vừa bị đặt lại từ đầu. Đang đồng bộ lại…");
+          toast.error(tr("Bài làm vừa bị đặt lại từ đầu. Đang đồng bộ lại…", "Your attempt was just restarted. Re-syncing…"));
           dirtyFieldIdsRef.current.clear();
           await fetchPayload();
           return;
@@ -290,7 +296,7 @@ export default function StudentDoAssignmentPage() {
     } catch {
       setSaveState(navigator.onLine ? "error" : "offline");
     }
-  }, [submission, isLocked, fetchPayload]);
+  }, [submission, isLocked, fetchPayload, tr]);
 
   const handleAnswerChange = (fieldId: string, value: AnswerValue) => {
     if (!isInProgress || isLocked) return;
@@ -333,26 +339,26 @@ export default function StudentDoAssignmentPage() {
         }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Nộp bài thất bại");
+      if (!res.ok) throw new Error(json.error ?? tr("Nộp bài thất bại", "Submit failed"));
 
       if (document.fullscreenElement && document.exitFullscreen) {
         await document.exitFullscreen().catch(() => undefined);
       }
       setConfirmSubmitOpen(false);
-      toast.success("Nộp bài thành công!");
+      toast.success(tr("Nộp bài thành công!", "Submitted successfully!"));
       await fetchPayload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : vi.common.errorGeneric);
     } finally {
       setSubmitting(false);
     }
-  }, [submission, submitting, allFields, fetchPayload]);
+  }, [submission, submitting, allFields, fetchPayload, tr, vi]);
 
   // Server-synced countdown timer (ticks 1s locally, auto-submits at 0)
   useEffect(() => {
     if (!isInProgress || remainingSeconds === null) return;
     if (remainingSeconds <= 0) {
-      toast.warning(vi.assignments.do.timeUp);
+      toast.warning(viRef.current.assignments.do.timeUp);
       void handleSubmit();
       return;
     }
@@ -397,19 +403,19 @@ export default function StudentDoAssignmentPage() {
 
         if (result.locked) {
           setIsLocked(true);
-          toast.error("Bài thi đã bị khoá do vượt ngưỡng vi phạm!");
+          toast.error(tr("Bài thi đã bị khoá do vượt ngưỡng vi phạm!", "The exam was locked: too many violations!"));
         } else if (result.restarted) {
           // Server wiped all answers & incremented attemptVersion; timer is NOT reset!
           dirtyFieldIdsRef.current.clear();
           setAnswers({});
           setRestartedBanner(
-            `Vi phạm quy chế thi! Toàn bộ ${result.clearedAnswersCount} đáp án đã bị xoá và bài thi được đặt lại từ câu 1. Đồng hồ không đặt lại.`
+            tr(`Vi phạm quy chế thi! Toàn bộ ${result.clearedAnswersCount} đáp án đã bị xoá và bài thi được đặt lại từ câu 1. Đồng hồ không đặt lại.`, `Exam rule violation! All ${result.clearedAnswersCount} answers were cleared and the exam restarted from question 1. The timer was not reset.`)
           );
           window.scrollTo({ top: 0, behavior: "smooth" });
-          toast.error("Bài thi đã bị đặt lại từ đầu!", { duration: 6000 });
+          toast.error(tr("Bài thi đã bị đặt lại từ đầu!", "The exam has been restarted!"), { duration: 6000 });
         } else if (result.autoSubmitted) {
           setLeftOverlay(null);
-          toast.error("Vượt quá số lần vi phạm — hệ thống đã tự nộp bài!", { duration: 6000 });
+          toast.error(tr("Vượt quá số lần vi phạm — hệ thống đã tự nộp bài!", "Too many violations — the system submitted your exam!"), { duration: 6000 });
           await fetchPayload();
         }
       } catch {
@@ -425,7 +431,7 @@ export default function StudentDoAssignmentPage() {
         }
       }
     },
-    [submission, assignment, fetchPayload]
+    [submission, assignment, fetchPayload, tr]
   );
 
   // Flush queued offline proctor events when network comes back
@@ -490,7 +496,7 @@ export default function StudentDoAssignmentPage() {
         const elapsed = Date.now() - hiddenStartedAtRef.current;
         hiddenStartedAtRef.current = null;
         if (elapsed >= 2000 && !isLockdown) {
-          toast.warning(`Bạn vừa rời tab ${Math.round(elapsed / 1000)} giây.`);
+          toast.warning(trRef.current(`Bạn vừa rời tab ${Math.round(elapsed / 1000)} giây.`, `You left the tab for ${Math.round(elapsed / 1000)} seconds.`));
         }
       }
     };
@@ -535,14 +541,14 @@ export default function StudentDoAssignmentPage() {
     const onCopy = (e: ClipboardEvent) => {
       if (blockClipboard) {
         e.preventDefault();
-        toast.warning("Sao chép bị vô hiệu hoá trong chế độ thi.");
+        toast.warning(trRef.current("Sao chép bị vô hiệu hoá trong chế độ thi.", "Copying is disabled in exam mode."));
       }
       void sendProctorEvent({ type: "COPY", clientAt: new Date().toISOString() });
     };
     const onPaste = (e: ClipboardEvent) => {
       if (blockClipboard) {
         e.preventDefault();
-        toast.warning("Dán văn bản bị vô hiệu hoá trong chế độ thi.");
+        toast.warning(trRef.current("Dán văn bản bị vô hiệu hoá trong chế độ thi.", "Pasting is disabled in exam mode."));
       }
       void sendProctorEvent({ type: "PASTE", clientAt: new Date().toISOString() });
     };
@@ -642,9 +648,9 @@ export default function StudentDoAssignmentPage() {
   if (error || !payload || !assignment) {
     return (
       <div className="stitch-card mx-auto max-w-xl p-10 text-center space-y-3">
-        <p className="text-sm font-semibold text-red-600">{error ?? "Không tìm thấy bài tập."}</p>
+        <p className="text-sm font-semibold text-red-600">{error ?? tr("Không tìm thấy bài tập.", "Assignment not found.")}</p>
         <Button variant="outline" asChild>
-          <Link href="/student">Quay lại trang học sinh</Link>
+          <Link href="/student">{tr("Quay lại trang học sinh", "Back to student home")}</Link>
         </Button>
       </div>
     );
@@ -661,15 +667,15 @@ export default function StudentDoAssignmentPage() {
         )}
         <div className="flex flex-wrap justify-center gap-3 text-xs font-semibold text-[#464555]">
           <span className="rounded-full bg-[#F8F9FF] px-3 py-1.5 border border-slate-200">
-            {assignment.worksheet.questionCount ?? allFields.length} câu hỏi
+            {assignment.worksheet.questionCount ?? allFields.length} {tr("câu hỏi", "questions")}
           </span>
           {assignment.timeLimitMin && (
             <span className="rounded-full bg-[#FFEDD5] px-3 py-1.5 text-[#C2410C]">
-              Thời gian: {assignment.timeLimitMin} phút
+              {tr("Thời gian:", "Time:")} {assignment.timeLimitMin} {tr("phút", "min")}
             </span>
           )}
           <span className="rounded-full bg-[#F8F9FF] px-3 py-1.5 border border-slate-200">
-            Tối đa {assignment.maxAttempts} lượt
+            {tr("Tối đa", "Up to")} {assignment.maxAttempts} {tr("lượt", "attempts")}
           </span>
         </div>
         {payload.canStartNewAttempt ? (
@@ -679,11 +685,11 @@ export default function StudentDoAssignmentPage() {
             onClick={handleStartAttempt}
             disabled={startingAttempt}
           >
-            {startingAttempt ? "Đang bắt đầu…" : vi.assignments.do.start}
+            {startingAttempt ? tr("Đang bắt đầu…", "Starting…") : vi.assignments.do.start}
           </Button>
         ) : (
           <p className="text-sm font-semibold text-red-600">
-            Hiện không thể bắt đầu lượt làm bài mới (chưa mở, đã quá hạn hoặc hết lượt).
+            {tr("Hiện không thể bắt đầu lượt làm bài mới (chưa mở, đã quá hạn hoặc hết lượt).", "You cannot start a new attempt right now (not open yet, past due, or no attempts left).")}
           </p>
         )}
       </div>
@@ -712,16 +718,16 @@ export default function StudentDoAssignmentPage() {
           <div className="flex items-center gap-2">
             <ShieldAlert className="h-4 w-4 text-[#BA1A1A] shrink-0" />
             <span>
-              Chế độ thi ({vi.proctor.modes[assignment.proctorMode]}):{" "}
-              {assignment.violationAction === "LOCK" && "rời tab/vi phạm = khoá bài"}
-              {assignment.violationAction === "RESTART" && "vi phạm = huỷ đáp án làm lại từ đầu"}
-              {assignment.violationAction === "AUTO_SUBMIT" && "chạm ngưỡng = tự nộp bài"}
-              {assignment.violationAction === "WARN" && "đang giám sát trực tiếp"}
+              {tr("Chế độ thi (", "Exam mode (")}{vi.proctor.modes[assignment.proctorMode]}):{" "}
+              {assignment.violationAction === "LOCK" && tr("rời tab/vi phạm = khoá bài", "leaving the tab/violation = locked")}
+              {assignment.violationAction === "RESTART" && tr("vi phạm = huỷ đáp án làm lại từ đầu", "violation = answers cleared, restart")}
+              {assignment.violationAction === "AUTO_SUBMIT" && tr("chạm ngưỡng = tự nộp bài", "threshold reached = auto submit")}
+              {assignment.violationAction === "WARN" && tr("đang giám sát trực tiếp", "live proctoring")}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="danger" data-testid="violation-counter">
-              Vi phạm: {violationCount}/{assignment.maxViolations} (còn {remainingViolations} lần)
+              {tr("Vi phạm:", "Violations:")} {violationCount}/{assignment.maxViolations} {tr("(còn", "(")} {remainingViolations} {tr("lần)", "left)")}
             </Badge>
           </div>
         </div>
@@ -742,7 +748,7 @@ export default function StudentDoAssignmentPage() {
             onClick={() => setRestartedBanner(null)}
             className="text-xs underline"
           >
-            Đã hiểu
+            {tr("Đã hiểu", "Got it")}
           </button>
         </div>
       )}
@@ -751,7 +757,7 @@ export default function StudentDoAssignmentPage() {
       <div className="sticky top-16 z-30 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 shadow-toolbar backdrop-blur">
         <div className="flex items-center gap-3 min-w-0">
           <Button variant="ghost" size="icon" asChild>
-            <Link href="/student" title="Quay lại">
+            <Link href="/student" title={tr("Quay lại", "Back")}>
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
@@ -772,15 +778,15 @@ export default function StudentDoAssignmentPage() {
                   )}
                 >
                   {saveState === "offline" && <WifiOff className="h-3 w-3" />}
-                  {saveState === "saved" && "• Đã lưu tự động"}
-                  {saveState === "saving" && "• Đang lưu…"}
-                  {saveState === "offline" && "Ngoại tuyến"}
-                  {saveState === "error" && "Lỗi lưu"}
+                  {saveState === "saved" && tr("• Đã lưu tự động", "• Auto-saved")}
+                  {saveState === "saving" && tr("• Đang lưu…", "• Saving…")}
+                  {saveState === "offline" && tr("Ngoại tuyến", "Offline")}
+                  {saveState === "error" && tr("Lỗi lưu", "Save error")}
                 </span>
               )}
             </div>
             <p className="text-[11px] text-slate-400">
-              {assignment.class.name} • Lượt {submission.attemptNo}/{assignment.maxAttempts}
+              {assignment.class.name} {tr("• Lượt", "• Attempt")} {submission.attemptNo}/{assignment.maxAttempts}
             </p>
           </div>
         </div>
@@ -793,7 +799,7 @@ export default function StudentDoAssignmentPage() {
               data-testid="zoom-out-btn"
               onClick={() => setZoom((z) => Math.max(0.3, Math.round((z - 0.25) * 100) / 100))}
               className="p-1 text-slate-600 hover:text-indigo-600"
-              aria-label="Thu nhỏ"
+              aria-label={tr("Thu nhỏ", "Zoom out")}
             >
               <ZoomOut className="h-4 w-4" />
             </button>
@@ -808,7 +814,7 @@ export default function StudentDoAssignmentPage() {
               data-testid="zoom-in-btn"
               onClick={() => setZoom((z) => Math.min(2.0, Math.round((z + 0.25) * 100) / 100))}
               className="p-1 text-slate-600 hover:text-indigo-600"
-              aria-label="Phóng to"
+              aria-label={tr("Phóng to", "Zoom in")}
             >
               <ZoomIn className="h-4 w-4" />
             </button>
@@ -851,7 +857,7 @@ export default function StudentDoAssignmentPage() {
                   href={`/student/classes/${assignment.classId}/leaderboard?assignmentId=${assignment.id}`}
                 >
                   <Trophy className="h-4 w-4 text-[#F97316]" />
-                  Xếp hạng
+                  {tr("Xếp hạng", "Leaderboard")}
                 </Link>
               </Button>
               {payload.canStartNewAttempt && (
@@ -883,19 +889,19 @@ export default function StudentDoAssignmentPage() {
                     </span>
                   </h2>
                   {submission.status === "SUBMITTED" && (
-                    <Badge variant="orange">Chờ chấm câu tự luận</Badge>
+                    <Badge variant="orange">{tr("Chờ chấm câu tự luận", "Essay awaiting grading")}</Badge>
                   )}
-                  {submission.isLate && <Badge variant="danger">Nộp trễ</Badge>}
+                  {submission.isLate && <Badge variant="danger">{tr("Nộp trễ", "Late")}</Badge>}
                 </div>
                 {submission.teacherComment && (
                   <p className="text-sm text-[#464555]">
-                    <strong>Nhận xét của giáo viên:</strong> {submission.teacherComment}
+                    <strong>{tr("Nhận xét của giáo viên:", "Teacher's comment:")}</strong> {submission.teacherComment}
                   </p>
                 )}
               </div>
               {payload.attemptsSummary.length > 1 && (
                 <div className="text-xs text-slate-500">
-                  Tổng số lượt đã làm: {payload.attemptsSummary.length}/{assignment.maxAttempts}
+                  {tr("Tổng số lượt đã làm:", "Attempts used:")} {payload.attemptsSummary.length}/{assignment.maxAttempts}
                 </div>
               )}
             </div>
@@ -903,7 +909,7 @@ export default function StudentDoAssignmentPage() {
             <div className="flex items-center gap-2.5 text-sm font-semibold text-[#3525CD]">
               <CheckCircle2 className="h-5 w-5 text-emerald-600" />
               <span>
-                Đã nộp bài thành công!{" "}
+                {tr("Đã nộp bài thành công!", "Submitted successfully!")}{" "}
                 {assignment.showResult === "AFTER_DUE"
                   ? vi.assignments.do.resultAfterDue
                   : vi.assignments.do.resultHidden}
@@ -923,7 +929,7 @@ export default function StudentDoAssignmentPage() {
         <div className="min-w-0 flex-1 space-y-5 overflow-x-auto">
           {assignment.worksheet.instructions && (
             <div className="rounded-2xl border border-indigo-100 bg-white px-4 py-3 text-xs text-[#464555]">
-              <strong className="text-[#3525CD]">Hướng dẫn: </strong>
+              <strong className="text-[#3525CD]">{tr("Hướng dẫn:", "Instructions:")} </strong>
               {assignment.worksheet.instructions}
             </div>
           )}
@@ -968,7 +974,7 @@ export default function StudentDoAssignmentPage() {
             ))
           ) : (
             <div className="stitch-card p-10 text-center text-sm text-slate-500">
-              Bài tập này chỉ sử dụng Phiếu trả lời ở bảng bên phải.
+              {tr("Bài tập này chỉ sử dụng Phiếu trả lời ở bảng bên phải.", "This assignment only uses the answer sheet on the right.")}
             </div>
           )}
         </div>
@@ -999,10 +1005,9 @@ export default function StudentDoAssignmentPage() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/75 p-4 backdrop-blur-md"
         >
           <div className="w-full max-w-md space-y-4 rounded-3xl bg-white p-7 text-center shadow-2xl">
-            <h2 className="text-xl font-bold text-[#0B1C30]">Bài thi yêu cầu toàn màn hình</h2>
+            <h2 className="text-xl font-bold text-[#0B1C30]">{tr("Bài thi yêu cầu toàn màn hình", "This exam requires fullscreen")}</h2>
             <p className="text-sm text-[#464555]">
-              Nhấn nút bên dưới để vào chế độ toàn màn hình và tiếp tục làm bài. Đồng hồ vẫn đang
-              đếm ngược.
+              {tr("Nhấn nút bên dưới để vào chế độ toàn màn hình và tiếp tục làm bài. Đồng hồ vẫn đang đếm ngược.", "Click the button below to enter fullscreen and continue. The timer is still running.")}
             </p>
             <Button
               size="lg"
@@ -1011,12 +1016,12 @@ export default function StudentDoAssignmentPage() {
                 try {
                   await document.documentElement.requestFullscreen();
                 } catch {
-                  toast.error("Trình duyệt từ chối toàn màn hình. Vui lòng thử lại.");
+                  toast.error(tr("Trình duyệt từ chối toàn màn hình. Vui lòng thử lại.", "The browser refused fullscreen. Please try again."));
                 }
               }}
             >
               <Maximize2 className="h-4 w-4" />
-              Vào toàn màn hình
+              {tr("Vào toàn màn hình", "Enter fullscreen")}
             </Button>
           </div>
         </div>
@@ -1038,15 +1043,15 @@ export default function StudentDoAssignmentPage() {
                 {vi.proctor.leftExamTitle}
               </h2>
               <p className="text-sm text-[#464555]">
-                Hệ thống phát hiện bạn rời tab hoặc thoát toàn màn hình lúc{" "}
-                <strong>{leftOverlay.at}</strong>. Giáo viên coi thi đã nhận được cảnh báo realtime.
+                {tr("Hệ thống phát hiện bạn rời tab hoặc thoát toàn màn hình lúc", "The system detected that you left the tab or exited fullscreen at")}{" "}
+                <strong>{leftOverlay.at}</strong>{tr(". Giáo viên coi thi đã nhận được cảnh báo realtime.", ". The proctor has received a real-time alert.")}
               </p>
 
               <div className="rounded-2xl border border-red-200 bg-[#FEF2F2] p-4 space-y-2">
                 <div className="flex items-center justify-between text-xs font-bold text-[#BA1A1A]">
-                  <span>CẢNH BÁO VI PHẠM</span>
+                  <span>{tr("CẢNH BÁO VI PHẠM", "VIOLATION WARNING")}</span>
                   <span>
-                    {violationCount} / {assignment.maxViolations} lần
+                    {violationCount} / {assignment.maxViolations} {tr("lần", "times")}
                   </span>
                 </div>
                 <div className="flex gap-1.5">
@@ -1060,7 +1065,7 @@ export default function StudentDoAssignmentPage() {
                           : "bg-white text-slate-400 border border-slate-200"
                       )}
                     >
-                      Lần {i + 1}
+                      {tr("Lần", "#")} {i + 1}
                     </div>
                   ))}
                 </div>
@@ -1068,7 +1073,7 @@ export default function StudentDoAssignmentPage() {
 
               {remainingSeconds !== null && (
                 <div className="flex items-center justify-between rounded-xl bg-[#F8F9FF] px-4 py-2.5 text-xs font-semibold">
-                  <span className="text-slate-500">Thời gian vẫn đang đếm ngược:</span>
+                  <span className="text-slate-500">{tr("Thời gian vẫn đang đếm ngược:", "Time is still running:")}</span>
                   <span className="font-mono text-sm font-bold text-[#C2410C] tabular-nums">
                     {formatSecondsMMSS(remainingSeconds)}
                   </span>
@@ -1089,7 +1094,7 @@ export default function StudentDoAssignmentPage() {
                       // handled below: the overlay stays until fullscreen is really active
                     }
                     if (document.fullscreenEnabled && !document.fullscreenElement) {
-                      toast.error("Trình duyệt chưa vào chế độ toàn màn hình. Vui lòng thử lại.");
+                      toast.error(tr("Trình duyệt chưa vào chế độ toàn màn hình. Vui lòng thử lại.", "The browser is not in fullscreen yet. Please try again."));
                       return;
                     }
                   }
@@ -1121,15 +1126,15 @@ export default function StudentDoAssignmentPage() {
               </h2>
               <p className="text-sm text-[#464555]">{vi.proctor.lockedSubtitle}</p>
               <Badge variant="danger" className="px-3 py-1">
-                Số vi phạm: {violationCount} / {assignment.maxViolations}
+                {tr("Số vi phạm:", "Violations:")} {violationCount} / {assignment.maxViolations}
               </Badge>
               <div className="pt-2 flex flex-col gap-2">
                 <Button onClick={() => void fetchPayload()} className="w-full">
                   <RefreshCcw className="h-4 w-4" />
-                  Kiểm tra giáo viên đã mở khoá chưa
+                  {tr("Kiểm tra giáo viên đã mở khoá chưa", "Check whether the teacher has unlocked it")}
                 </Button>
                 <Button variant="outline" asChild className="w-full">
-                  <Link href="/student">Quay về trang chủ</Link>
+                  <Link href="/student">{tr("Quay về trang chủ", "Back to home")}</Link>
                 </Button>
               </div>
             </div>
@@ -1148,10 +1153,10 @@ export default function StudentDoAssignmentPage() {
           {unansweredFields.length > 0 && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 space-y-1">
               <p className="font-bold">
-                {vi.assignments.do.unansweredWarning} {unansweredFields.length} câu
+                {vi.assignments.do.unansweredWarning} {unansweredFields.length} {tr("câu", "questions")}
               </p>
               <p className="text-amber-800">
-                Các câu còn trống:{" "}
+                {tr("Các câu còn trống:", "Unanswered questions:")}{" "}
                 {unansweredFields
                   .slice(0, 12)
                   .map((f) => f.label)
@@ -1163,7 +1168,7 @@ export default function StudentDoAssignmentPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmSubmitOpen(false)}>
-              Kiểm tra lại
+              {tr("Kiểm tra lại", "Review")}
             </Button>
             <Button
               variant="accent"
@@ -1171,7 +1176,7 @@ export default function StudentDoAssignmentPage() {
               disabled={submitting}
               onClick={() => void handleSubmit()}
             >
-              {submitting ? "Đang nộp…" : "Xác nhận nộp bài"}
+              {submitting ? tr("Đang nộp…", "Submitting…") : tr("Xác nhận nộp bài", "Confirm submit")}
             </Button>
           </DialogFooter>
         </DialogContent>

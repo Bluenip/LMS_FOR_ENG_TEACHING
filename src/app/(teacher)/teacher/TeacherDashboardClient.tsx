@@ -19,7 +19,7 @@ import {
   Users,
 } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
-import { vi } from "@/messages/vi";
+import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -76,6 +76,7 @@ export function TeacherDashboardClient({
   classes,
   assignments,
 }: TeacherDashboardClientProps) {
+  const { m: vi, tr } = useI18n();
   const router = useRouter();
   const [createClassOpen, setCreateClassOpen] = useState(false);
   const [createWsOpen, setCreateWsOpen] = useState(false);
@@ -102,8 +103,8 @@ export function TeacherDashboardClient({
         }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Tạo lớp thất bại");
-      toast.success(`Đã tạo lớp "${json.class.name}" (Mã: ${json.class.joinCode})`);
+      if (!res.ok) throw new Error(json.error ?? tr("Tạo lớp thất bại", "Could not create the class"));
+      toast.success(tr(`Đã tạo lớp "${json.class.name}" (Mã: ${json.class.joinCode})`, `Created class "${json.class.name}" (code: ${json.class.joinCode})`));
       setCreateClassOpen(false);
       setClassName("");
       setClassDesc("");
@@ -130,8 +131,8 @@ export function TeacherDashboardClient({
         }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Tạo worksheet thất bại");
-      toast.success("Đã tạo Worksheet! Đang mở trình biên tập…");
+      if (!res.ok) throw new Error(json.error ?? tr("Tạo worksheet thất bại", "Could not create the worksheet"));
+      toast.success(tr("Đã tạo Worksheet! Đang mở trình biên tập…", "Worksheet created! Opening the editor…"));
       setCreateWsOpen(false);
       router.push(`/teacher/worksheets/${json.worksheet.id}/edit`);
     } catch (err) {
@@ -147,10 +148,10 @@ export function TeacherDashboardClient({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#0B1C30]">
-            Xin chào {teacherName}!
+            {tr("Xin chào", "Hello")} {teacherName}!
           </h1>
           <p className="mt-1 text-sm text-[#464555]">
-            Chúc bạn một ngày giảng dạy hiệu quả và nhiều cảm hứng cùng các lớp học.
+            {tr("Chúc bạn một ngày giảng dạy hiệu quả và nhiều cảm hứng cùng các lớp học.", "Have a productive and inspiring day of teaching.")}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
@@ -169,7 +170,7 @@ export function TeacherDashboardClient({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="stitch-card p-5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#464555]">Học sinh</span>
+            <span className="text-xs font-semibold text-[#464555]">{tr("Học sinh", "Students")}</span>
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#EEF2FF] text-[#4F46E5]">
               <GraduationCap className="h-5 w-5" />
             </span>
@@ -177,12 +178,12 @@ export function TeacherDashboardClient({
           <p className="mt-3 text-3xl font-bold text-[#0B1C30] tabular-nums">
             {stats.totalStudents}
           </p>
-          <p className="mt-1 text-xs font-medium text-slate-500">Đang theo học các lớp</p>
+          <p className="mt-1 text-xs font-medium text-slate-500">{tr("Đang theo học các lớp", "Enrolled in your classes")}</p>
         </div>
 
         <div className="stitch-card p-5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#464555]">Lớp đang dạy</span>
+            <span className="text-xs font-semibold text-[#464555]">{tr("Lớp đang dạy", "Classes taught")}</span>
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#E5EEFF] text-[#3525CD]">
               <BookOpen className="h-5 w-5" />
             </span>
@@ -191,13 +192,13 @@ export function TeacherDashboardClient({
             {stats.activeClassCount}
           </p>
           <p className="mt-1 flex items-center gap-1 text-xs font-medium text-[#3525CD]">
-            <CheckCircle2 className="h-3.5 w-3.5" /> Đang hoạt động
+            <CheckCircle2 className="h-3.5 w-3.5" /> {tr("Đang hoạt động", "Active")}
           </p>
         </div>
 
         <div className="stitch-card p-5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#464555]">Bài chờ chấm tay</span>
+            <span className="text-xs font-semibold text-[#464555]">{tr("Bài chờ chấm tay", "Awaiting manual grading")}</span>
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#FFEDD5] text-[#EA580C]">
               <ClipboardCheck className="h-5 w-5" />
             </span>
@@ -206,13 +207,13 @@ export function TeacherDashboardClient({
             {stats.pendingManual}
           </p>
           <p className="mt-1 text-xs font-medium text-[#EA580C]">
-            {stats.pendingManual > 0 ? "Cần chấm phần tự luận" : "Đã chấm hết bài"}
+            {stats.pendingManual > 0 ? tr("Cần chấm phần tự luận", "Essay answers to grade") : tr("Đã chấm hết bài", "All graded")}
           </p>
         </div>
 
         <div className="stitch-card p-5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#464555]">Tỉ lệ nộp bài</span>
+            <span className="text-xs font-semibold text-[#464555]">{tr("Tỉ lệ nộp bài", "Submission rate")}</span>
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#DCFCE7] text-[#15803D]">
               <PieChart className="h-5 w-5" />
             </span>
@@ -220,7 +221,7 @@ export function TeacherDashboardClient({
           <p className="mt-3 text-3xl font-bold text-[#0B1C30] tabular-nums">
             {stats.submissionRate}%
           </p>
-          <p className="mt-1 text-xs font-medium text-emerald-700">Trên các bài đã giao</p>
+          <p className="mt-1 text-xs font-medium text-emerald-700">{tr("Trên các bài đã giao", "Across assigned work")}</p>
         </div>
       </div>
 
@@ -229,13 +230,13 @@ export function TeacherDashboardClient({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <h2 className="text-xl font-bold text-[#0B1C30]">{vi.classes.title}</h2>
-            <Badge variant="neutral">{classes.length} lớp</Badge>
+            <Badge variant="neutral">{classes.length} {tr("lớp", "class(es)")}</Badge>
           </div>
         </div>
 
         {classes.length === 0 ? (
           <div className="stitch-card p-10 text-center">
-            <p className="text-sm text-slate-500">Bạn chưa có lớp học nào.</p>
+            <p className="text-sm text-slate-500">{tr("Bạn chưa có lớp học nào.", "You do not have any classes yet.")}</p>
             <Button className="mt-3" onClick={() => setCreateClassOpen(true)}>
               <Plus className="h-4 w-4" />
               {vi.classes.createClass}
@@ -250,10 +251,10 @@ export function TeacherDashboardClient({
                 >
                   <div className="flex items-center justify-between">
                     <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] font-semibold backdrop-blur">
-                      {cls.assignmentCount} bài tập
+                      {cls.assignmentCount} {tr("bài tập", "assignments")}
                     </span>
                     <span className="rounded-full bg-emerald-400/90 px-2.5 py-0.5 text-[11px] font-bold text-emerald-950">
-                      {cls.archived ? "Đã lưu trữ" : "• Đang diễn ra"}
+                      {cls.archived ? tr("Đã lưu trữ", "Archived") : tr("• Đang diễn ra", "• Running")}
                     </span>
                   </div>
                 </div>
@@ -270,12 +271,12 @@ export function TeacherDashboardClient({
                     )}
 
                     <div className="mt-3 flex items-center justify-between rounded-xl bg-[#F8F9FF] px-3 py-2 text-xs">
-                      <span className="text-slate-500">Mã tham gia lớp:</span>
+                      <span className="text-slate-500">{tr("Mã tham gia lớp:", "Join code:")}</span>
                       <button
                         type="button"
                         onClick={() => {
                           navigator.clipboard?.writeText(cls.joinCode);
-                          toast.success(`Đã sao chép mã ${cls.joinCode}`);
+                          toast.success(tr(`Đã sao chép mã ${cls.joinCode}`, `Copied code ${cls.joinCode}`));
                         }}
                         className="inline-flex items-center gap-1.5 rounded-lg bg-[#EEF2FF] px-2.5 py-1 font-mono font-bold text-[#3525CD] hover:bg-[#E2DFFF]"
                       >
@@ -288,11 +289,11 @@ export function TeacherDashboardClient({
                   <div className="flex items-center justify-between pt-1">
                     <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#464555]">
                       <Users className="h-4 w-4 text-slate-400" />
-                      {cls.studentCount} học sinh
+                      {cls.studentCount} {tr("học sinh", "students")}
                     </span>
                     <Button size="sm" asChild>
                       <Link href={`/teacher/classes/${cls.id}`}>
-                        Vào lớp <ArrowRight className="h-3.5 w-3.5" />
+                        {tr("Vào lớp", "Open class")} <ArrowRight className="h-3.5 w-3.5" />
                       </Link>
                     </Button>
                   </div>
@@ -309,29 +310,29 @@ export function TeacherDashboardClient({
           <div className="flex items-center gap-2">
             <Clock className="h-5 w-5 text-[#F97316]" />
             <h2 className="text-base font-bold text-[#0B1C30]">
-              Bài tập &amp; Worksheet gần đây
+              {tr("Bài tập & Worksheet gần đây", "Recent assignments & worksheets")}
             </h2>
           </div>
           <Button variant="secondary" size="sm" asChild>
             <Link href="/teacher/assignments/new">
               <Plus className="h-4 w-4" />
-              Giao bài mới
+              {tr("Giao bài mới", "New assignment")}
             </Link>
           </Button>
         </div>
 
         {assignments.length === 0 ? (
-          <p className="p-8 text-center text-sm text-slate-400">Chưa có bài tập nào được giao.</p>
+          <p className="p-8 text-center text-sm text-slate-400">{tr("Chưa có bài tập nào được giao.", "No assignments yet.")}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-[#F8F9FF] text-xs font-bold uppercase text-[#464555]">
                 <tr>
-                  <th className="px-6 py-3">Tên bài tập</th>
-                  <th className="px-6 py-3">Lớp</th>
-                  <th className="px-6 py-3">Hạn nộp</th>
-                  <th className="px-6 py-3">Đã nộp</th>
-                  <th className="px-6 py-3 text-right">Thao tác</th>
+                  <th className="px-6 py-3">{tr("Tên bài tập", "Assignment")}</th>
+                  <th className="px-6 py-3">{tr("Lớp", "Class")}</th>
+                  <th className="px-6 py-3">{tr("Hạn nộp", "Due")}</th>
+                  <th className="px-6 py-3">{tr("Đã nộp", "Submitted")}</th>
+                  <th className="px-6 py-3 text-right">{tr("Thao tác", "Actions")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -347,7 +348,7 @@ export function TeacherDashboardClient({
                           <span>{a.title}</span>
                           {a.proctorMode !== "OFF" && (
                             <Badge variant="danger" className="text-[10px]">
-                              Giám sát
+                              {tr("Giám sát", "Proctored")}
                             </Badge>
                           )}
                         </div>
@@ -360,7 +361,7 @@ export function TeacherDashboardClient({
                         <div className="w-36 space-y-1">
                           <div className="flex justify-between text-xs font-semibold text-[#3525CD] tabular-nums">
                             <span>
-                              {a.submittedCount}/{a.totalStudents} hs
+                              {a.submittedCount}/{a.totalStudents} {tr("hs", "students")}
                             </span>
                             <span>{pct}%</span>
                           </div>
@@ -384,7 +385,7 @@ export function TeacherDashboardClient({
                           )}
                           <Button size="sm" variant="secondary" asChild>
                             <Link href={`/teacher/assignments/${a.id}/grading`}>
-                              {a.pendingCount > 0 ? `Chấm bài (${a.pendingCount})` : "Xem kết quả"}
+                              {a.pendingCount > 0 ? tr(`Chấm bài (${a.pendingCount})`, `Grade (${a.pendingCount})`) : tr("Xem kết quả", "View results")}
                             </Link>
                           </Button>
                         </div>
@@ -411,7 +412,7 @@ export function TeacherDashboardClient({
                 required
                 value={className}
                 onChange={(e) => setClassName(e.target.value)}
-                placeholder="VD: Tiếng Anh 11 - Nâng cao"
+                placeholder={tr("VD: Tiếng Anh 11 - Nâng cao", "e.g. English 11 - Advanced")}
               />
             </div>
             <div className="space-y-1.5">
@@ -419,7 +420,7 @@ export function TeacherDashboardClient({
               <Textarea
                 value={classDesc}
                 onChange={(e) => setClassDesc(e.target.value)}
-                placeholder="Mô tả mục tiêu khoá học…"
+                placeholder={tr("Mô tả mục tiêu khoá học…", "Describe the course goals…")}
                 rows={3}
               />
             </div>
@@ -431,10 +432,10 @@ export function TeacherDashboardClient({
             </label>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setCreateClassOpen(false)}>
-                Huỷ
+                {tr("Huỷ", "Cancel")}
               </Button>
               <Button type="submit" disabled={submitting}>
-                Tạo lớp
+                {tr("Tạo lớp", "Create class")}
               </Button>
             </div>
           </form>
@@ -462,16 +463,16 @@ export function TeacherDashboardClient({
               <Textarea
                 value={wsInstructions}
                 onChange={(e) => setWsInstructions(e.target.value)}
-                placeholder="Hướng dẫn học sinh làm bài…"
+                placeholder={tr("Hướng dẫn học sinh làm bài…", "Instructions for students…")}
                 rows={3}
               />
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setCreateWsOpen(false)}>
-                Huỷ
+                {tr("Huỷ", "Cancel")}
               </Button>
               <Button type="submit" variant="accent" disabled={submitting}>
-                Tạo &amp; Mở Editor
+                {tr("Tạo & Mở Editor", "Create & open editor")}
               </Button>
             </div>
           </form>

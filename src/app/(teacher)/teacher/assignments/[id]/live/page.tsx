@@ -21,7 +21,7 @@ import {
 import type { ProctorEventType } from "@prisma/client";
 import type { LiveProctorPayload } from "@/lib/proctor-bus";
 import { cn, formatDateTime, formatSecondsMMSS } from "@/lib/utils";
-import { vi } from "@/messages/vi";
+import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -101,6 +101,10 @@ function playAlertChime() {
 }
 
 export default function TeacherLiveProctorPage() {
+  const { m: vi, tr } = useI18n();
+  // refs so long-lived effects (listeners, SSE, PDF loading) don't restart on language change
+  const trRef = useRef(tr);
+  trRef.current = tr;
   const params = useParams<{ id: string }>();
   const assignmentId = params.id;
   const queryClient = useQueryClient();
@@ -116,7 +120,7 @@ export default function TeacherLiveProctorPage() {
     queryKey: ["live-proctor", assignmentId],
     queryFn: async () => {
       const res = await fetch(`/api/assignments/${assignmentId}/live?mode=snapshot`);
-      if (!res.ok) throw new Error("Không tải được phòng giám sát trực tiếp");
+      if (!res.ok) throw new Error(tr("Không tải được phòng giám sát trực tiếp", "Could not load the live proctoring room"));
       return res.json();
     },
     refetchInterval: 8000,
@@ -142,7 +146,7 @@ export default function TeacherLiveProctorPage() {
           setLiveAlerts((prev) => [payload, ...prev].slice(0, 40));
           if (payload.kind !== "SUBMISSION_SUBMITTED") {
             if (soundRef.current) playAlertChime();
-            toast.error(payload.message ?? `${payload.studentName} có hành vi bất thường!`, {
+            toast.error(payload.message ?? trRef.current(`${payload.studentName} có hành vi bất thường!`, `${payload.studentName} shows unusual behaviour!`), {
               duration: 6000,
             });
           }
@@ -176,16 +180,16 @@ export default function TeacherLiveProctorPage() {
       }
     );
     if (!res.ok) {
-      toast.error("Thao tác thất bại");
+      toast.error(tr("Thao tác thất bại", "Action failed"));
       return;
     }
     const labels: Record<typeof action, string> = {
-      UNLOCK: "Đã mở khoá bài thi cho học sinh!",
-      LOCK: "Đã khoá bài thi!",
-      FORCE_SUBMIT: "Đã thu bài học sinh!",
-      REMIND: "Đã gửi nhắc nhở tới màn hình học sinh!",
-      FLAG: "Đã đánh dấu nghi vấn.",
-      UNFLAG: "Đã bỏ đánh dấu nghi vấn.",
+      UNLOCK: tr("Đã mở khoá bài thi cho học sinh!", "Exam unlocked for the student!"),
+      LOCK: tr("Đã khoá bài thi!", "Exam locked!"),
+      FORCE_SUBMIT: tr("Đã thu bài học sinh!", "Student's exam collected!"),
+      REMIND: tr("Đã gửi nhắc nhở tới màn hình học sinh!", "Reminder sent to the student's screen!"),
+      FLAG: tr("Đã đánh dấu nghi vấn.", "Flagged as suspicious."),
+      UNFLAG: tr("Đã bỏ đánh dấu nghi vấn.", "Flag removed."),
     };
     toast.success(labels[action]);
     queryClient.invalidateQueries({ queryKey: ["live-proctor", assignmentId] });
@@ -214,7 +218,7 @@ export default function TeacherLiveProctorPage() {
             </Button>
             <Badge variant="danger" className="gap-1.5 px-3 py-1">
               <Radio className="h-3.5 w-3.5 animate-pulse" />
-              TRỰC TIẾP (LIVE)
+              {tr("TRỰC TIẾP (LIVE)", "LIVE")}
             </Badge>
             <h1 className="text-lg sm:text-xl font-bold text-[#0B1C30]">
               {snapshot.assignment.title}
@@ -238,7 +242,7 @@ export default function TeacherLiveProctorPage() {
                   sseConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
                 )}
               />
-              {sseConnected ? "SSE Đã kết nối" : "Đang kết nối…"}
+              {sseConnected ? tr("SSE Đã kết nối", "SSE connected") : tr("Đang kết nối…", "Connecting…")}
             </span>
             <Button
               variant="outline"
@@ -250,7 +254,7 @@ export default function TeacherLiveProctorPage() {
               ) : (
                 <VolumeX className="h-4 w-4 text-slate-400" />
               )}
-              Âm thanh
+              {tr("Âm thanh", "Sound")}
             </Button>
           </div>
         </div>
@@ -258,19 +262,19 @@ export default function TeacherLiveProctorPage() {
         {/* Status Summary Pills */}
         <div className="flex flex-wrap items-center gap-2.5 text-xs font-bold">
           <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
-            • Đang làm: {snapshot.counts.inProgress}
+            {tr("• Đang làm:", "• In progress:")} {snapshot.counts.inProgress}
           </span>
           <span className="rounded-full bg-[#EEF2FF] px-3 py-1 text-[#3525CD]">
-            ✓ Đã nộp: {snapshot.counts.submitted}
+            {tr("✓ Đã nộp:", "✓ Submitted:")} {snapshot.counts.submitted}
           </span>
           <span className="rounded-full bg-orange-50 px-3 py-1 text-orange-700">
-            ⚠ Rời tab: {snapshot.counts.leftTab}
+            {tr("⚠ Rời tab:", "⚠ Left tab:")} {snapshot.counts.leftTab}
           </span>
           <span className="rounded-full bg-red-50 px-3 py-1 text-[#BA1A1A]">
-            🔒 Bị khoá: {snapshot.counts.locked}
+            {tr("🔒 Bị khoá:", "🔒 Locked:")} {snapshot.counts.locked}
           </span>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">
-            Chưa vào: {snapshot.counts.notStarted}
+            {tr("Chưa vào:", "Not joined:")} {snapshot.counts.notStarted}
           </span>
         </div>
       </div>
@@ -318,30 +322,30 @@ export default function TeacherLiveProctorPage() {
 
                   {/* Status + Violations */}
                   <div className="flex flex-wrap items-center gap-1.5">
-                    {st.liveStatus === "IN_PROGRESS" && <Badge variant="mint">Đang làm</Badge>}
-                    {st.liveStatus === "SUBMITTED" && <Badge variant="default">Đã nộp</Badge>}
-                    {st.liveStatus === "LEFT_TAB" && <Badge variant="orange">Rời tab</Badge>}
+                    {st.liveStatus === "IN_PROGRESS" && <Badge variant="mint">{tr("Đang làm", "In progress")}</Badge>}
+                    {st.liveStatus === "SUBMITTED" && <Badge variant="default">{tr("Đã nộp", "Submitted")}</Badge>}
+                    {st.liveStatus === "LEFT_TAB" && <Badge variant="orange">{tr("Rời tab", "Left tab")}</Badge>}
                     {st.liveStatus === "LOCKED" && (
                       <Badge variant="danger">
-                        <Lock className="h-3 w-3" /> Bị khoá
+                        <Lock className="h-3 w-3" /> {tr("Bị khoá", "Locked")}
                       </Badge>
                     )}
                     {st.liveStatus === "NOT_STARTED" && (
-                      <Badge variant="neutral">Chưa vào</Badge>
+                      <Badge variant="neutral">{tr("Chưa vào", "Not joined")}</Badge>
                     )}
 
                     <Badge variant={st.violationCount > 0 ? "danger" : "neutral"}>
-                      {st.violationCount} vi phạm
+                      {st.violationCount} {tr("vi phạm", "violations")}
                     </Badge>
-                    {st.flagged && <Badge variant="danger">Nghi vấn</Badge>}
+                    {st.flagged && <Badge variant="danger">{tr("Nghi vấn", "Suspicious")}</Badge>}
                   </div>
 
                   {/* Progress Bar */}
                   <div className="space-y-1">
                     <div className="flex justify-between text-[11px] font-semibold text-slate-600 tabular-nums">
-                      <span>Tiến độ</span>
+                      <span>{tr("Tiến độ", "Progress")}</span>
                       <span>
-                        {st.answeredCount}/{st.totalQuestions} câu
+                        {st.answeredCount}/{st.totalQuestions} {tr("câu", "questions")}
                       </span>
                     </div>
                     <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
@@ -384,7 +388,7 @@ export default function TeacherLiveProctorPage() {
                             onClick={() => void sendAction(st.submissionId!, "REMIND")}
                           >
                             <Bell className="h-3 w-3" />
-                            Nhắc
+                            {tr("Nhắc", "Remind")}
                           </Button>
                           <Button
                             size="sm"
@@ -393,7 +397,7 @@ export default function TeacherLiveProctorPage() {
                             onClick={() => void sendAction(st.submissionId!, "LOCK")}
                           >
                             <Lock className="h-3 w-3" />
-                            Khoá
+                            {tr("Khoá", "Lock")}
                           </Button>
                         </>
                       ) : null}
@@ -406,7 +410,7 @@ export default function TeacherLiveProctorPage() {
                           onClick={() => void sendAction(st.submissionId!, "FORCE_SUBMIT")}
                         >
                           <Send className="h-3 w-3" />
-                          Thu bài
+                          {tr("Thu bài", "Collect")}
                         </Button>
                       )}
 
@@ -445,7 +449,7 @@ export default function TeacherLiveProctorPage() {
                 </h2>
               </div>
               <Badge variant="neutral">
-                {liveAlerts.length + snapshot.recentEvents.length} sự kiện
+                {liveAlerts.length + snapshot.recentEvents.length} {tr("sự kiện", "events")}
               </Badge>
             </div>
 
@@ -463,13 +467,13 @@ export default function TeacherLiveProctorPage() {
                       {formatDateTime(al.at)}
                     </span>
                     <Badge variant="danger" className="text-[10px]">
-                      Mới
+                      {tr("Mới", "New")}
                     </Badge>
                   </div>
                   <p className="font-bold text-[#0B1C30]">{al.studentName}</p>
                   <p className="text-[#93000A]">
                     {al.message ??
-                      (al.eventType ? vi.proctor.events[al.eventType] : "Sự kiện giám sát")}
+                      (al.eventType ? vi.proctor.events[al.eventType] : tr("Sự kiện giám sát", "Proctoring event"))}
                   </p>
                 </div>
               ))}
@@ -484,7 +488,7 @@ export default function TeacherLiveProctorPage() {
                       {formatDateTime(ev.at)}
                     </span>
                     <Badge variant="orange" className="text-[10px]">
-                      {ev.type === "DEVTOOLS_SUSPECTED" ? "Nghi vấn" : "Vi phạm"}
+                      {ev.type === "DEVTOOLS_SUSPECTED" ? tr("Nghi vấn", "Suspicious") : tr("Vi phạm", "Violation")}
                     </Badge>
                   </div>
                   <p className="font-bold text-[#0B1C30]">{ev.studentName}</p>
@@ -498,7 +502,7 @@ export default function TeacherLiveProctorPage() {
               {liveAlerts.length === 0 && snapshot.recentEvents.length === 0 && (
                 <div className="py-10 text-center text-xs text-slate-400 space-y-2">
                   <CheckCircle2 className="mx-auto h-7 w-7 text-emerald-400" />
-                  <p>Chưa ghi nhận hành vi bất thường nào.</p>
+                  <p>{tr("Chưa ghi nhận hành vi bất thường nào.", "No unusual behaviour recorded yet.")}</p>
                 </div>
               )}
             </div>
@@ -514,7 +518,7 @@ export default function TeacherLiveProctorPage() {
                 <ShieldAlert className="h-4 w-4 text-[#F97316]" />
               </div>
               {inspectedStudent.events.length === 0 ? (
-                <p className="text-xs text-slate-400">Học sinh này chưa có sự kiện vi phạm nào.</p>
+                <p className="text-xs text-slate-400">{tr("Học sinh này chưa có sự kiện vi phạm nào.", "This student has no violation events.")}</p>
               ) : (
                 <div className="space-y-2 text-xs">
                   {inspectedStudent.events.map((ev) => (
