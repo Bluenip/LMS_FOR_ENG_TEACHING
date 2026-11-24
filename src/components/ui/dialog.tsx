@@ -36,11 +36,13 @@ const DialogContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, ...props }, ref) => (
   <DialogPortal>
+    {/* content uses a higher z-index than the overlay: when both share z-50 the overlay can be
+        mounted after the content and blur it (seen with the admin reset/delete dialogs) */}
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl duration-200 max-h-[90vh] overflow-y-auto",
+        "fixed left-1/2 top-1/2 z-[60] grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl duration-200 max-h-[90vh] overflow-y-auto",
         className
       )}
       {...props}
