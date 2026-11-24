@@ -47,10 +47,11 @@ export async function listTeacherWorksheets(ownerId: string) {
   });
 }
 
-export async function listSharedWorksheets(excludeOwnerId: string) {
+/** Other teachers' worksheets: only the shared ones, or all of them for an admin (`all`). */
+export async function listSharedWorksheets(excludeOwnerId: string, opts?: { all?: boolean }) {
   return prisma.worksheet.findMany({
     where: {
-      isShared: true,
+      ...(opts?.all ? {} : { isShared: true }),
       ownerId: { not: excludeOwnerId },
     },
     include: {

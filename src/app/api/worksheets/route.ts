@@ -10,11 +10,13 @@ import {
 export async function GET() {
   try {
     const user = await requireRole(["TEACHER", "ADMIN"]);
+    const isAdmin = user.role === "ADMIN";
     const [worksheets, sharedWorksheets] = await Promise.all([
       listTeacherWorksheets(user.id),
-      listSharedWorksheets(user.id),
+      // an admin sees every other teacher's worksheet, shared or not
+      listSharedWorksheets(user.id, { all: isAdmin }),
     ]);
-    return NextResponse.json({ worksheets, sharedWorksheets });
+    return NextResponse.json({ worksheets, sharedWorksheets, isAdmin });
   } catch (error) {
     return handleApiError(error);
   }

@@ -619,7 +619,11 @@ export async function importWorksheetFile(
  * Clones a shared (or own) worksheet — including PDF, audio tracks, and fields — into another
  * teacher's library so colleagues can reuse and customize it independently!
  */
-export async function cloneWorksheetForTeacher(sourceWorksheetId: string, targetOwnerId: string) {
+export async function cloneWorksheetForTeacher(
+  sourceWorksheetId: string,
+  targetOwnerId: string,
+  opts?: { isAdmin?: boolean }
+) {
   const source = await prisma.worksheet.findUnique({
     where: { id: sourceWorksheetId },
     select: { id: true, ownerId: true, isShared: true },
@@ -627,7 +631,7 @@ export async function cloneWorksheetForTeacher(sourceWorksheetId: string, target
   if (!source) {
     throw new AppError("Không tìm thấy phiếu bài tập.", 404, "NOT_FOUND");
   }
-  if (source.ownerId !== targetOwnerId && !source.isShared) {
+  if (source.ownerId !== targetOwnerId && !source.isShared && !opts?.isAdmin) {
     throw new AppError(
       "Phiếu bài tập này chưa được giáo viên chia sẻ.",
       403,

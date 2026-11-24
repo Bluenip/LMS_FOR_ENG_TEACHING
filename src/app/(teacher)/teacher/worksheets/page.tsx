@@ -90,12 +90,14 @@ export default function TeacherWorksheetsPage() {
   const { data, isLoading } = useQuery<{
     worksheets: WorksheetRow[];
     sharedWorksheets?: WorksheetRow[];
+    isAdmin?: boolean;
   }>({
     queryKey: ["teacher-worksheets"],
     queryFn: () =>
       apiFetchJson<{
         worksheets: WorksheetRow[];
         sharedWorksheets?: WorksheetRow[];
+        isAdmin?: boolean;
       }>(
         "/api/worksheets",
         undefined,
@@ -361,6 +363,8 @@ export default function TeacherWorksheetsPage() {
 
   const worksheets = data?.worksheets ?? [];
   const sharedWorksheets = data?.sharedWorksheets ?? [];
+  /** admin: the second tab lists every other teacher's worksheet, editable */
+  const isAdmin = Boolean(data?.isAdmin);
 
   return (
     <div className="space-y-6">
@@ -490,7 +494,10 @@ export default function TeacherWorksheetsPage() {
           )}
         >
           <Users className="h-3.5 w-3.5" />
-          {tr("Giáo viên khác chia sẻ", "Shared by colleagues")} ({sharedWorksheets.length})
+          {isAdmin
+            ? tr("Của giáo viên khác (tất cả)", "Other teachers' (all)")
+            : tr("Giáo viên khác chia sẻ", "Shared by colleagues")}{" "}
+          ({sharedWorksheets.length})
         </button>
       </div>
 
@@ -655,7 +662,9 @@ export default function TeacherWorksheetsPage() {
         <div className="stitch-card p-12 text-center space-y-2">
           <Users className="mx-auto h-10 w-10 text-indigo-300" />
           <p className="text-sm text-slate-500">
-            {tr(
+            {isAdmin
+              ? tr("Các giáo viên khác chưa tạo worksheet nào.", "Other teachers have not created any worksheets yet.")
+              : tr(
               "Chưa có phiếu nào được giáo viên khác chia sẻ. Bạn có thể bấm 'Chia sẻ GV' trên phiếu của mình hoặc dùng nút 'Nhập Backup' để nhận file .engclass.zip từ đồng nghiệp.",
               "No worksheets shared by colleagues yet. Click 'Share' on your worksheets or use 'Import Backup' to load a colleague's .engclass.zip file."
             )}
@@ -670,14 +679,32 @@ export default function TeacherWorksheetsPage() {
                   <Badge variant="mint">
                     <Users className="h-3 w-3" /> {ws.owner?.name ?? tr("Giáo viên", "Teacher")}
                   </Badge>
-                  <Badge variant="neutral">{ws._count.fields} {tr("câu", "Q")}</Badge>
+                  <div className="flex flex-wrap justify-end gap-1">
+                    {isAdmin && !ws.isShared && (
+                      <Badge variant="neutral">{tr("Không chia sẻ", "Private")}</Badge>
+                    )}
+                    <Badge variant="neutral">{ws._count.fields} {tr("câu", "Q")}</Badge>
+                  </div>
                 </div>
                 <h3 className="text-base font-bold text-[#0B1C30] line-clamp-2">{ws.title}</h3>
+                {isAdmin && (
+                  <p className="text-[11px] text-slate-400">
+                    {ws._count.assignments} {tr("lần giao", "assignments")} · {formatDateTime(ws.updatedAt)}
+                  </p>
+                )}
                 {ws.instructions && (
                   <p className="text-xs text-[#464555] line-clamp-2">{ws.instructions}</p>
                 )}
               </div>
               <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                {isAdmin && (
+                  <Button size="sm" variant="outline" asChild>
+                    <Link href={`/teacher/worksheets/${ws.id}/edit`}>
+                      <Edit3 className="h-3.5 w-3.5" />
+                      {tr("Sửa", "Edit")}
+                    </Link>
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="default"

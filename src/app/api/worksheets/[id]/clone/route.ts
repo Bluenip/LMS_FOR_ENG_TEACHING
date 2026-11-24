@@ -9,7 +9,7 @@ export async function POST(
   try {
     const user = await requireRole(["TEACHER", "ADMIN"]);
     const { id } = await context.params;
-    const worksheet = await cloneWorksheetForTeacher(id, user.id);
+    const worksheet = await cloneWorksheetForTeacher(id, user.id, { isAdmin: user.role === "ADMIN" });
     return NextResponse.json({ worksheet }, { status: 201 });
   } catch (error) {
     return handleApiError(error);
