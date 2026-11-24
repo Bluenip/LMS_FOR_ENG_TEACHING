@@ -11,7 +11,9 @@ export async function GET() {
   try {
     const user = await requireAuth();
     if (user.role === "TEACHER" || user.role === "ADMIN") {
-      const assignments = await listTeacherAssignments(user.id);
+      const assignments = await listTeacherAssignments(user.id, {
+        allClasses: user.role === "ADMIN",
+      });
       return NextResponse.json({ assignments });
     }
     if (user.role === "STUDENT") {

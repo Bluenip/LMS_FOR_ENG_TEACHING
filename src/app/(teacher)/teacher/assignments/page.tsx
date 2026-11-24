@@ -1,18 +1,31 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { Clock, Copy, Lock, Pencil, Plus, Radio, Trophy } from "lucide-react";
-import { auth } from "@/lib/auth";
+import { requireLayoutUser } from "@/lib/permissions";
 import { listTeacherAssignments, describeProctorRuleSummary } from "@/server/assignmentService";
 import { formatDateTime } from "@/lib/utils";
 import { getI18n } from "@/lib/i18n/server";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
-export default async function TeacherAssignmentsPage() {
+export default async function TeacherAssignmentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ teacher?: string }>;
+}) {
   const { m: vi, tr } = await getI18n();
-  const session = await auth();
-  if (!session?.user) redirect("/login");
-  const assignments = await listTeacherAssignments(session.user.id);
+  const user = await requireLayoutUser(["TEACHER", "ADMIN"]);
+  const isAdmin = user.role === "ADMIN";
+  const all = await listTeacherAssignments(user.id, { allClasses: isAdmin });
+
+  // admin: optional filter by teacher (?teacher=<id>)
+  const { teacher: teacherFilter } = await searchParams;
+  const teachers = isAdmin
+    ? [...new Map(all.map((a) => [a.class.teacher.id, a.class.teacher.name])).entries()].sort((x, y) =>
+        x[1].localeCompare(y[1], "vi")
+      )
+    : [];
+  const assignments =
+    isAdmin && teacherFilter ? all.filter((a) => a.class.teacher.id === teacherFilter) : all;
 
   return (
     <div className="space-y-6">
@@ -20,7 +33,12 @@ export default async function TeacherAssignmentsPage() {
         <div>
           <h1 className="text-2xl font-bold text-[#0B1C30]">{vi.nav.assignments}</h1>
           <p className="mt-0.5 text-sm text-[#464555]">
-            {tr("Quản lý bài tập đã giao, giám sát phòng thi trực tiếp và chấm điểm.", "Manage assigned work, run live exams and grade.")}
+            {isAdmin
+              ? tr(
+                  `Tất cả bài tập đã giao trong hệ thống (${all.length}).`,
+                  `Every assignment in the system (${all.length}).`
+                )
+              : tr("Quản lý bài tập đã giao, giám sát phòng thi trực tiếp và chấm điểm.", "Manage assigned work, run live exams and grade.")}
           </p>
         </div>
         <Button variant="accent" asChild>
@@ -30,6 +48,35 @@ export default async function TeacherAssignmentsPage() {
           </Link>
         </Button>
       </div>
+
+      {isAdmin && teachers.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-[#464555]">{tr("Giáo viên:", "Teacher:")}</span>
+          <Link
+            href="/teacher/assignments"
+            className={
+              !teacherFilter
+                ? "rounded-full bg-[#4F46E5] px-3 py-1 text-xs font-semibold text-white"
+                : "rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-[#464555] hover:bg-[#EFF4FF]"
+            }
+          >
+            {tr("Tất cả", "All")}
+          </Link>
+          {teachers.map(([id, name]) => (
+            <Link
+              key={id}
+              href={`/teacher/assignments?teacher=${id}`}
+              className={
+                teacherFilter === id
+                  ? "rounded-full bg-[#4F46E5] px-3 py-1 text-xs font-semibold text-white"
+                  : "rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-[#464555] hover:bg-[#EFF4FF]"
+              }
+            >
+              {name}
+            </Link>
+          ))}
+        </div>
+      )}
 
       {assignments.length === 0 ? (
         <div className="stitch-card p-12 text-center text-sm text-slate-400">
@@ -55,6 +102,11 @@ export default async function TeacherAssignmentsPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-base font-bold text-[#0B1C30]">{a.title}</h3>
                     <Badge variant="default">{a.class.name}</Badge>
+                    {isAdmin && a.class.teacher.id !== user.id && (
+                      <Badge variant="neutral">
+                        {tr("GV:", "Teacher:")} {a.class.teacher.name}
+                      </Badge>
+                    )}
                     {(a.proctorMode !== "OFF" || a.requireCamera) && (
                       <Badge variant="danger">
                         <Lock className="h-3 w-3" />

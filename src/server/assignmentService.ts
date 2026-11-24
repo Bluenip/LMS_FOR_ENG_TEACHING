@@ -311,14 +311,17 @@ export async function listStudentAssignments(studentId: string) {
   }));
 }
 
-export async function listTeacherAssignments(teacherId: string) {
+/** A teacher's own assignments; an admin (`allClasses`) sees every assignment in the system. */
+export async function listTeacherAssignments(teacherId: string, opts?: { allClasses?: boolean }) {
   return prisma.assignment.findMany({
-    where: { class: { teacherId } },
+    where: opts?.allClasses ? {} : { class: { teacherId } },
     include: {
       class: {
         select: {
           id: true,
           name: true,
+          teacherId: true,
+          teacher: { select: { id: true, name: true } },
           _count: { select: { enrollments: { where: { status: "ACTIVE" } } } },
         },
       },
