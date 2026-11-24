@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { cn, formatDurationMs, getInitials } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
+import { localizeApiError } from "@/lib/i18n/api-errors";
 import { Badge } from "@/components/ui/badge";
 import type {
   AssignmentLeaderboardResponse,
@@ -43,7 +44,7 @@ export function LeaderboardView({
   isTeacher,
   initialAssignmentId,
 }: LeaderboardViewProps) {
-  const { m: vi, tr } = useI18n();
+  const { m: vi, tr, locale } = useI18n();
   const [mode, setMode] = useState<"ASSIGNMENT" | "CLASS">(
     initialAssignmentId ? "ASSIGNMENT" : "ASSIGNMENT"
   );
@@ -117,7 +118,7 @@ export function LeaderboardView({
                 }
               }}
               className={cn(
-                "rounded-lg px-3.5 py-1.5 text-xs font-bold transition",
+                "min-h-[40px] rounded-lg px-3.5 py-2 text-xs font-bold transition sm:min-h-[36px]",
                 mode === "ASSIGNMENT"
                   ? "bg-[#4F46E5] text-white shadow-sm"
                   : "text-[#464555] hover:text-[#3525CD]"
@@ -129,7 +130,7 @@ export function LeaderboardView({
               type="button"
               onClick={() => setMode("CLASS")}
               className={cn(
-                "rounded-lg px-3.5 py-1.5 text-xs font-bold transition",
+                "min-h-[40px] rounded-lg px-3.5 py-2 text-xs font-bold transition sm:min-h-[36px]",
                 mode === "CLASS"
                   ? "bg-[#4F46E5] text-white shadow-sm"
                   : "text-[#464555] hover:text-[#3525CD]"
@@ -143,7 +144,7 @@ export function LeaderboardView({
             <select
               value={selectedAssignmentId}
               onChange={(e) => setSelectedAssignmentId(e.target.value)}
-              className="h-9 max-w-[260px] rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-[#0B1C30] outline-none focus:border-[#4F46E5]"
+              className="h-10 w-full max-w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-[#0B1C30] outline-none focus:border-[#4F46E5] sm:w-auto sm:max-w-[340px]"
             >
               {assignments.map((a) => (
                 <option key={a.id} value={a.id}>
@@ -190,7 +191,9 @@ export function LeaderboardView({
             {tr("Bảng xếp hạng hiện đang ẩn", "The leaderboard is hidden")}
           </h3>
           <p className="mt-1 max-w-md text-sm text-[#464555]">
-            {lb?.hiddenReason ?? vi.leaderboard.hiddenUntilDue}
+            {lb?.hiddenReason
+              ? localizeApiError(lb.hiddenReason, "", locale)
+              : vi.leaderboard.hiddenUntilDue}
           </p>
         </div>
       ) : entries.length === 0 ? (

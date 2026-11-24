@@ -119,7 +119,10 @@ export function AccountClient({
   return (
     <div className="mx-auto max-w-xl space-y-5">
         {!isForced && (
-          <Link href={homeHref} className="inline-block text-sm font-semibold text-[#4F46E5] hover:underline">
+          <Link
+            href={homeHref}
+            className="inline-flex min-h-[40px] items-center text-sm font-semibold text-[#4F46E5] hover:underline"
+          >
             ← {tr("Về trang chính", "Back to home")}
           </Link>
         )}
@@ -173,13 +176,12 @@ export function AccountClient({
                   e.target.value = "";
                 }}
               />
-              <Button type="button" size="sm" disabled={busy} onClick={() => fileRef.current?.click()}>
+              <Button type="button" disabled={busy} onClick={() => fileRef.current?.click()}>
                 {tr("Đổi ảnh đại diện", "Change picture")}
               </Button>
               {me.avatarUrl && (
                 <Button
                   type="button"
-                  size="sm"
                   variant="outline"
                   disabled={busy}
                   onClick={() =>

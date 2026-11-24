@@ -275,6 +275,16 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
   "Phiên tải lên Google Drive đã hết hạn.": "Google Drive upload session has expired.",
   "Tải tệp lên Google Drive chưa hoàn tất.": "Google Drive upload did not finish.",
 
+  // Leaderboard
+  "Giáo viên đã tắt bảng xếp hạng cho bài tập này.":
+    "The teacher has turned off the leaderboard for this assignment.",
+  "Bảng xếp hạng sẽ hiển thị sau khi hết hạn nộp bài.":
+    "The leaderboard opens after the deadline.",
+  "Hãy nộp bài trước để xem bảng xếp hạng.":
+    "Submit your work to see the leaderboard.",
+  "Giáo viên đã tắt bảng xếp hạng cho các bài tập của lớp.":
+    "The teacher has turned off the leaderboard for this class.",
+
   // Zod validator messages
   "Họ tên tối thiểu 2 ký tự": "Full name must be at least 2 characters.",
   "Email không hợp lệ": "Invalid email address.",
@@ -412,6 +422,14 @@ const NOTIFICATION_PATTERNS: Array<[RegExp, (...args: string[]) => string]> = [
     (_m, title) => `"${title}" has been unlocked. You can continue working.`,
   ],
   [/^Nhắc nhở từ giáo viên \((.+)\)$/, (_m, title) => `Reminder from teacher (${title})`],
+  [
+    /^(.+) đạt ([0-9.]+)\/10 bài (.+)$/,
+    (_m, student, score, title) => `${student} scored ${score}/10 on ${title}`,
+  ],
+  [
+    /^Xem báo cáo chi tiết và nhận xét của (.+) trong Cổng phụ huynh\.$/,
+    (_m, teacher) => `View the full report and comments from ${teacher} in the Parent Portal.`,
+  ],
   [/^Deploy thất bại \((.+)\)$/, (_m, sha) => `Deployment failed (${sha})`],
   [
     /^Triển khai phiên bản (.+) thất bại\. Hệ thống đã giữ\/khôi phục phiên bản trước\. Kiểm tra cron\.log trên máy chủ\.$/,

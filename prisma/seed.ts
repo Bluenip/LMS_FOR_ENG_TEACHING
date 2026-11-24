@@ -1098,7 +1098,11 @@ async function main() {
         targetType: "USER",
         targetId: teacher1.id,
         summary: `Tạo tài khoản Giáo viên: ${teacher1.name} (${teacher1.email})`,
-        meta: { email: teacher1.email, role: "TEACHER" },
+        meta: {
+          email: teacher1.email,
+          role: "TEACHER",
+          summaryEn: `Created TEACHER account: ${teacher1.name} (${teacher1.email})`,
+        },
         createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
       },
       {
@@ -1107,7 +1111,11 @@ async function main() {
         targetType: "USER",
         targetId: teacher2.id,
         summary: `Tạo tài khoản Giáo viên: ${teacher2.name} (${teacher2.email})`,
-        meta: { email: teacher2.email, role: "TEACHER" },
+        meta: {
+          email: teacher2.email,
+          role: "TEACHER",
+          summaryEn: `Created TEACHER account: ${teacher2.name} (${teacher2.email})`,
+        },
         createdAt: new Date(Date.now() - 36 * 60 * 60 * 1000),
       },
       {
@@ -1116,7 +1124,7 @@ async function main() {
         targetType: "ASSIGNMENT",
         targetId: asgUnit7.id,
         summary: `Cập nhật cài đặt bài tập: ${asgUnit7.title}`,
-        meta: { classId: class1.id, maxAttempts: 2 },
+        meta: { classId: class1.id, maxAttempts: 2, summaryEn: `Updated assignment: ${asgUnit7.title}` },
         createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000),
       },
     ],

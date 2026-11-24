@@ -532,7 +532,9 @@ export default function TeacherWorksheetsPage() {
                     </span>
                     <div className="flex flex-wrap justify-end gap-1.5">
                       <Badge variant={ws.pdfFileKey ? "default" : "neutral"}>
-                        {ws.pdfFileKey ? `PDF • ${ws.pageCount} trang` : tr("Phiếu trả lời", "Answer sheet")}
+                        {ws.pdfFileKey
+                          ? `PDF • ${ws.pageCount} ${tr("trang", ws.pageCount === 1 ? "page" : "pages")}`
+                          : tr("Phiếu trả lời", "Answer sheet")}
                       </Badge>
                       {(ws._count.audios ?? 0) > 0 && (
                         <Badge variant="purple">
@@ -560,9 +562,15 @@ export default function TeacherWorksheetsPage() {
                     <p className="text-xs text-[#464555] line-clamp-2">{ws.instructions}</p>
                   )}
                   <div className="flex items-center gap-3 text-xs text-slate-500">
-                    <span>{ws._count.fields} {tr("câu hỏi", "questions")}</span>
+                    <span>
+                      {ws._count.fields}{" "}
+                      {tr("câu hỏi", ws._count.fields === 1 ? "question" : "questions")}
+                    </span>
                     <span>•</span>
-                    <span>{tr("Đã giao", "Assigned")} {ws._count.assignments} {tr("lần", "times")}</span>
+                    <span>
+                      {tr("Đã giao", "Assigned")} {ws._count.assignments}{" "}
+                      {tr("lần", ws._count.assignments === 1 ? "time" : "times")}
+                    </span>
                   </div>
                   <p className="text-[11px] text-slate-400">
                     {tr("Cập nhật:", "Updated:")} {formatDateTime(ws.updatedAt, locale)}

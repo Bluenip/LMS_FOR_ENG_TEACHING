@@ -154,7 +154,7 @@ function ScoreTrendSvgChart({
                 y1={y}
                 x2={width - padR}
                 y2={y}
-                stroke="#E2E8F0"
+                className="stroke-slate-200 dark:stroke-slate-700"
                 strokeDasharray="3 3"
               />
               <text x={padL - 8} y={y + 4} textAnchor="end" fontSize="10" fill="#94A3B8">
@@ -180,14 +180,21 @@ function ScoreTrendSvgChart({
 
         {childPts.map((p, idx) => (
           <g key={idx}>
-            <circle cx={p.x} cy={p.y} r="4.5" fill="#FFFFFF" stroke="#4F46E5" strokeWidth="2.5" />
+            <circle
+              cx={p.x}
+              cy={p.y}
+              r="4.5"
+              className="fill-white dark:fill-[#111a2e]"
+              stroke="#4F46E5"
+              strokeWidth="2.5"
+            />
             <text
               x={p.x}
               y={p.y - 9}
               textAnchor="middle"
               fontSize="10"
               fontWeight="700"
-              fill="#3525CD"
+              className="fill-[#3525CD] dark:fill-[#a5b4fc]"
             >
               {p.val}
             </text>
@@ -307,18 +314,17 @@ function ParentPortalContent() {
               data-testid="parent-child-selector"
               value={selectedChildId}
               onChange={(e) => setSelectedChildId(e.target.value)}
-              className="h-10 w-full min-w-0 max-w-full truncate rounded-full border border-indigo-200 bg-[#EEF2FF] px-4 text-sm font-bold text-[#3525CD] outline-none focus:ring-2 focus:ring-indigo-400 sm:w-auto sm:max-w-md"
+              className="h-10 w-full min-w-0 max-w-full rounded-full border border-indigo-200 bg-[#EEF2FF] px-4 text-sm font-bold text-[#3525CD] outline-none focus:ring-2 focus:ring-indigo-400 sm:w-auto sm:max-w-md"
             >
               {children.map((ch) => (
                 <option key={ch.studentId} value={ch.studentId}>
                   {tr("Con:", "Child:")} {ch.studentName}
-                  {ch.classes[0] ? ` — ${ch.classes[0].name}` : ""}
                 </option>
               ))}
             </select>
           )}
 
-          <Button variant="outline" size="sm" onClick={() => setLinkDialogOpen(true)}>
+          <Button variant="outline" onClick={() => setLinkDialogOpen(true)}>
             <Plus className="h-4 w-4" />
             {tr("Liên kết thêm con", "Link another child")}
           </Button>
@@ -347,11 +353,11 @@ function ParentPortalContent() {
           {/* Student Profile Banner */}
           <div className="stitch-card flex flex-wrap items-center justify-between gap-4 p-5">
             <div className="flex items-center gap-3.5">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#4F46E5] text-base font-bold text-white">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#4F46E5] text-base font-bold text-white">
                 {getInitials(overview.student.name)}
               </div>
-              <div>
-                <div className="flex items-center gap-2">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-lg font-bold text-[#0B1C30]">{overview.student.name}</h2>
                   {overview.classes[0] && (
                     <Badge variant="default">{overview.classes[0].name}</Badge>
@@ -449,7 +455,7 @@ function ParentPortalContent() {
                 </div>
                 <div className="flex items-center gap-4 text-xs font-semibold">
                   <span className="inline-flex items-center gap-1.5 text-[#3525CD]">
-                    <span className="h-2.5 w-2.5 rounded-full bg-[#4F46E5]" /> Con (
+                    <span className="h-2.5 w-2.5 rounded-full bg-[#4F46E5]" /> {tr("Con", "Child")} (
                     {overview.kpis.childAvg10})
                   </span>
                   <span className="inline-flex items-center gap-1.5 text-slate-500">

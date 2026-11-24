@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetchJson } from "@/lib/api-client";
 import {
@@ -58,6 +58,18 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!notifOpen && !mobileOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setNotifOpen(false);
+        setMobileOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [notifOpen, mobileOpen]);
 
   const { data: notifData } = useQuery<{
     items: NotificationItem[];
@@ -114,8 +126,9 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
 
   return (
     <header data-app-navbar className="sticky top-0 z-40 border-b border-slate-200/80 bg-white pt-[env(safe-area-inset-top)] shadow-toolbar">
-      {topBanner}
-      <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between gap-2 px-3 sm:h-16 sm:gap-4 sm:px-6 lg:px-8">
+      <div className="relative z-40 bg-inherit">
+        {topBanner}
+        <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between gap-2 px-3 sm:h-16 sm:gap-4 sm:px-6 lg:px-8">
         {/* Logo + Nav */}
         <div className="flex min-w-0 items-center gap-6">
           <Link href={homeHref} className="flex min-w-0 items-center gap-2.5">
@@ -296,12 +309,13 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
           </button>
         </div>
       </div>
+      </div>
 
       {/* Mobile Nav */}
       {mobileOpen && (
         <>
           <div
-            className="fixed inset-0 top-[calc(3.5rem+env(safe-area-inset-top))] z-30 bg-slate-900/20 md:hidden"
+            className="fixed inset-0 z-30 bg-slate-900/20 md:hidden"
             onClick={() => setMobileOpen(false)}
           />
           <div className="relative z-40 max-h-[calc(100dvh-3.5rem-env(safe-area-inset-top))] overflow-y-auto border-t border-slate-100 bg-white px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 md:hidden">
