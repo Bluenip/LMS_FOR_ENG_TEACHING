@@ -9,6 +9,9 @@ import {
   changeOwnPassword,
   createAccount,
   deleteAccount,
+  purgeAccount,
+  purgeExpiredTrash,
+  restoreAccount,
   getDeletionImpact,
   getOwnProfile,
   removeOwnAvatar,
@@ -254,6 +257,10 @@ describe("Account deletion (getDeletionImpact & deleteAccount)", () => {
       emails.tempAdmin
     );
     expect(delRes.ok).toBe(true);
+    // goes to the trash first, then can be purged
+    const trashed = await prisma.user.findUnique({ where: { id: secondAdmin.user.id } });
+    expect(trashed?.deletedAt).toBeInstanceOf(Date);
+    await purgeAccount({ id: adminId, role: "ADMIN" }, secondAdmin.user.id, emails.tempAdmin);
     expect(await prisma.user.findUnique({ where: { id: secondAdmin.user.id } })).toBeNull();
   });
 
@@ -281,6 +288,23 @@ describe("Account deletion (getDeletionImpact & deleteAccount)", () => {
       `  ${emails.deletableUser.toUpperCase()}  `
     );
     expect(res.ok).toBe(true);
+
+    // in the trash: data kept and restorable
+    expect((await prisma.user.findUnique({ where: { id: created.user.id } }))?.deletedAt).toBeInstanceOf(Date);
+    expect(await storage.exists(avatarKey)).toBe(true);
+    await expect(
+      purgeAccount({ id: adminId, role: "ADMIN" }, stu1Id, emails.studentInClass1)
+    ).rejects.toMatchObject({ statusCode: 400, code: "NOT_IN_TRASH" });
+    await restoreAccount({ id: adminId, role: "ADMIN" }, created.user.id);
+    expect((await prisma.user.findUnique({ where: { id: created.user.id } }))?.deletedAt).toBeNull();
+
+    // trashed again, then the 90-day window passes -> purged with everything it owns
+    await deleteAccount({ id: adminId, role: "ADMIN" }, created.user.id, emails.deletableUser);
+    await prisma.user.update({
+      where: { id: created.user.id },
+      data: { deletedAt: new Date(Date.now() - 91 * 86_400_000) },
+    });
+    expect(await purgeExpiredTrash()).toBeGreaterThanOrEqual(1);
 
     expect(await prisma.user.findUnique({ where: { id: created.user.id } })).toBeNull();
     expect(

@@ -94,8 +94,16 @@ export async function createAccount(
 
   const existing = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, name: true, email: true, role: true },
+    select: { id: true, name: true, email: true, role: true, deletedAt: true },
   });
+
+  if (existing?.deletedAt) {
+    throw new AppError(
+      "Email này thuộc một tài khoản đang ở thùng rác. Hãy khôi phục hoặc xoá vĩnh viễn tài khoản đó trước.",
+      409,
+      "EMAIL_IN_TRASH"
+    );
+  }
 
   // Existing parent account: just link it to the child instead of failing
   if (existing && input.role === "PARENT" && existing.role === "PARENT" && childId) {
@@ -105,7 +113,8 @@ export async function createAccount(
       create: { parentId: existing.id, studentId: childId, relation: input.relation ?? "Phụ huynh", verifiedAt: now },
       update: { verifiedAt: now, ...(input.relation ? { relation: input.relation } : {}) },
     });
-    return { user: existing, temporaryPassword: null, linkedExistingParent: true };
+    return {
+      user: { id: existing.id, name: existing.name, email: existing.email, role: existing.role }, temporaryPassword: null, linkedExistingParent: true };
   }
   if (existing) {
     throw new AppError("Email này đã được đăng ký.", 409, "EMAIL_EXISTS");
@@ -224,29 +233,104 @@ export async function getDeletionImpact(targetId: string) {
   return user;
 }
 
-/** Admin deletes an account. Requires typing the email again; never self, never the last active admin. */
-export async function deleteAccount(actor: { id: string; role: Role }, targetId: string, confirmEmail: string) {
+/** Deleted accounts stay in the trash this long (restorable), then everything they own is purged. */
+export const TRASH_RETENTION_DAYS = 90;
+
+async function loadDeleteTarget(actor: { id: string; role: Role }, targetId: string, confirmEmail: string) {
   if (actor.role !== "ADMIN") throw new AppError("Chỉ quản trị viên được xoá tài khoản.", 403, "FORBIDDEN");
   if (actor.id === targetId) {
     throw new AppError("Không thể tự xoá tài khoản của chính bạn.", 400, "SELF_DELETE");
   }
   const target = await prisma.user.findUnique({
     where: { id: targetId },
-    select: { id: true, email: true, role: true, isLocked: true, avatarUrl: true },
+    select: { id: true, email: true, role: true, isLocked: true, avatarUrl: true, deletedAt: true },
   });
   if (!target) throw new AppError("Không tìm thấy người dùng.", 404, "NOT_FOUND");
   if (confirmEmail.trim().toLowerCase() !== target.email) {
     throw new AppError("Email xác nhận không khớp.", 400, "CONFIRM_MISMATCH");
   }
+  return target;
+}
+
+/**
+ * Admin deletes an account: it goes to the trash (signed out, cannot sign in, hidden from lists)
+ * and can be restored for TRASH_RETENTION_DAYS. Requires typing the email again; never self,
+ * never the last active admin.
+ */
+export async function deleteAccount(actor: { id: string; role: Role }, targetId: string, confirmEmail: string) {
+  const target = await loadDeleteTarget(actor, targetId, confirmEmail);
+  if (target.deletedAt) return { ok: true, trashed: true };
   if (target.role === "ADMIN" && !target.isLocked) {
-    const activeAdmins = await prisma.user.count({ where: { role: "ADMIN", isLocked: false } });
+    const activeAdmins = await prisma.user.count({
+      where: { role: "ADMIN", isLocked: false, deletedAt: null },
+    });
     if (activeAdmins <= 1) {
       throw new AppError("Hệ thống phải còn ít nhất một quản trị viên đang hoạt động.", 400, "LAST_ADMIN");
     }
   }
-  await prisma.user.delete({ where: { id: target.id } });
-  await removeAvatarFile(target.avatarUrl);
+  const now = new Date();
+  await prisma.user.update({
+    where: { id: target.id },
+    data: { deletedAt: now, passwordChangedAt: now },
+  });
+  return { ok: true, trashed: true };
+}
+
+/** Admin takes an account back out of the trash. */
+export async function restoreAccount(actor: { id: string; role: Role }, targetId: string) {
+  if (actor.role !== "ADMIN") throw new AppError("Chỉ quản trị viên được khôi phục tài khoản.", 403, "FORBIDDEN");
+  const target = await prisma.user.findUnique({ where: { id: targetId }, select: { deletedAt: true } });
+  if (!target) throw new AppError("Không tìm thấy người dùng.", 404, "NOT_FOUND");
+  await prisma.user.update({ where: { id: targetId }, data: { deletedAt: null } });
   return { ok: true };
+}
+
+async function hardDeleteUser(id: string, avatarUrl: string | null) {
+  await prisma.user.delete({ where: { id } });
+  await removeAvatarFile(avatarUrl);
+}
+
+/** Admin empties one account from the trash right away (cannot be undone). */
+export async function purgeAccount(actor: { id: string; role: Role }, targetId: string, confirmEmail: string) {
+  const target = await loadDeleteTarget(actor, targetId, confirmEmail);
+  if (!target.deletedAt) {
+    throw new AppError("Chỉ xoá vĩnh viễn được tài khoản đã nằm trong thùng rác.", 400, "NOT_IN_TRASH");
+  }
+  await hardDeleteUser(target.id, target.avatarUrl);
+  return { ok: true };
+}
+
+/** Permanently removes accounts that have been in the trash longer than TRASH_RETENTION_DAYS. */
+export async function purgeExpiredTrash(now = new Date()) {
+  const cutoff = new Date(now.getTime() - TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const expired = await prisma.user.findMany({
+    where: { deletedAt: { lt: cutoff } },
+    select: { id: true, avatarUrl: true },
+  });
+  for (const u of expired) {
+    await hardDeleteUser(u.id, u.avatarUrl).catch(() => undefined);
+  }
+  return expired.length;
+}
+
+export async function listTrash() {
+  const rows = await prisma.user.findMany({
+    where: { deletedAt: { not: null } },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      deletedAt: true,
+      _count: { select: { classesTaught: true, worksheets: true, submissions: true } },
+    },
+    orderBy: { deletedAt: "desc" },
+  });
+  return rows.map((r) => ({
+    ...r,
+    deletedAt: r.deletedAt!.toISOString(),
+    purgeAt: new Date(r.deletedAt!.getTime() + TRASH_RETENTION_DAYS * 86_400_000).toISOString(),
+  }));
 }
 
 export interface OwnProfileDto {

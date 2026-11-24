@@ -113,20 +113,20 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
           : "/student";
 
   return (
-    <header data-app-navbar className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 backdrop-blur-md shadow-toolbar">
+    <header data-app-navbar className="sticky top-0 z-40 border-b border-slate-200/80 bg-white pt-[env(safe-area-inset-top)] shadow-toolbar">
       {topBanner}
-      <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between gap-2 px-3 sm:h-16 sm:gap-4 sm:px-6 lg:px-8">
         {/* Logo + Nav */}
-        <div className="flex items-center gap-6">
-          <Link href={homeHref} className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#4F46E5] text-white shadow-sm">
+        <div className="flex min-w-0 items-center gap-6">
+          <Link href={homeHref} className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#4F46E5] text-white shadow-sm">
               {user.role === "TEACHER" ? (
                 <GraduationCap className="h-5 w-5" />
               ) : (
                 <BookOpen className="h-5 w-5" />
               )}
             </span>
-            <span className="text-lg font-bold tracking-tight text-[#3525CD]">
+            <span className="truncate text-base font-bold tracking-tight text-[#3525CD] sm:text-lg">
               {appName}
             </span>
           </Link>
@@ -156,13 +156,16 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
         </div>
 
         {/* Right actions */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          <ThemeLangToggle />
+        <div className="flex shrink-0 items-center gap-1 sm:gap-3">
+          <ThemeLangToggle className="hidden sm:flex" />
           {/* Notification Bell */}
           <div className="relative">
             <button
               type="button"
-              onClick={() => setNotifOpen((o) => !o)}
+              onClick={() => {
+                setNotifOpen((o) => !o);
+                setMobileOpen(false);
+              }}
               className="relative flex h-9 w-9 items-center justify-center rounded-xl text-[#464555] transition hover:bg-[#EFF4FF] hover:text-[#3525CD]"
               aria-label={vi.nav.notifications}
             >
@@ -180,7 +183,7 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
                   className="fixed inset-0 z-40"
                   onClick={() => setNotifOpen(false)}
                 />
-                <div className="absolute right-0 z-50 mt-2 w-80 sm:w-96 rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl">
+                <div className="fixed inset-x-3 top-[calc(3.75rem+env(safe-area-inset-top))] z-50 rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-96">
                   <div className="mb-2 flex items-center justify-between px-2">
                     <span className="text-sm font-bold text-[#0B1C30]">
                       {vi.notifications.title}
@@ -196,7 +199,7 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
                       </button>
                     )}
                   </div>
-                  <div className="max-h-80 space-y-1 overflow-y-auto">
+                  <div className="max-h-[60vh] space-y-1 overflow-y-auto overscroll-contain sm:max-h-80">
                     {items.length === 0 ? (
                       <p className="py-8 text-center text-xs text-slate-400">
                         {vi.notifications.empty}
@@ -272,7 +275,7 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
             variant="ghost"
             size="sm"
             onClick={() => signOut({ callbackUrl: "/login" })}
-            className="text-slate-500 hover:text-red-600"
+            className="hidden text-slate-500 hover:text-red-600 sm:inline-flex"
             title={vi.auth.logoutButton}
           >
             <LogOut className="h-4 w-4" />
@@ -281,9 +284,13 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
 
           <button
             type="button"
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100 md:hidden"
-            onClick={() => setMobileOpen((v) => !v)}
-            aria-label="Menu"
+            className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100 md:hidden"
+            onClick={() => {
+              setMobileOpen((v) => !v);
+              setNotifOpen(false);
+            }}
+            aria-label={tr("Mở menu", "Open menu")}
+            aria-expanded={mobileOpen}
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -292,25 +299,63 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
 
       {/* Mobile Nav */}
       {mobileOpen && (
-        <div className="border-t border-slate-100 bg-white px-4 py-3 md:hidden">
-          <div className="flex flex-col gap-1">
-            {links.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setMobileOpen(false)}
-                className={cn(
-                  "rounded-xl px-3.5 py-2 text-sm font-semibold",
-                  isActive(link)
-                    ? "bg-[#4F46E5] text-white"
-                    : "text-[#464555] hover:bg-[#EFF4FF]"
-                )}
+        <>
+          <div
+            className="fixed inset-0 top-[calc(3.5rem+env(safe-area-inset-top))] z-30 bg-slate-900/20 md:hidden"
+            onClick={() => setMobileOpen(false)}
+          />
+          <div className="relative z-40 max-h-[calc(100dvh-3.5rem-env(safe-area-inset-top))] overflow-y-auto border-t border-slate-100 bg-white px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 md:hidden">
+            <Link
+              href="/account"
+              onClick={() => setMobileOpen(false)}
+              className="mb-2 flex items-center gap-3 rounded-xl bg-[#F8F9FF] p-3 sm:hidden"
+            >
+              {user.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={user.avatarUrl} alt={user.name} className="h-10 w-10 rounded-full object-cover" />
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#3525CD] text-sm font-bold text-white">
+                  {getInitials(user.name)}
+                </div>
+              )}
+              <div className="min-w-0 leading-tight">
+                <p className="truncate text-sm font-semibold text-[#0B1C30]">{user.name}</p>
+                <p className="truncate text-xs text-[#464555]">
+                  {vi.roles[user.role]} · {tr("Tài khoản của tôi", "My account")}
+                </p>
+              </div>
+            </Link>
+            <nav className="flex flex-col gap-1" aria-label={tr("Điều hướng chính", "Main navigation")}>
+              {links.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    "rounded-xl px-3.5 py-3 text-sm font-semibold",
+                    isActive(link)
+                      ? "bg-[#4F46E5] text-white"
+                      : "text-[#464555] hover:bg-[#EFF4FF]"
+                  )}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+            <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 sm:hidden">
+              <ThemeLangToggle />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                className="text-slate-500 hover:text-red-600"
               >
-                {link.label}
-              </Link>
-            ))}
+                <LogOut className="h-4 w-4" />
+                {vi.auth.logoutButton}
+              </Button>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </header>
   );

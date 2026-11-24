@@ -563,7 +563,7 @@ export function AnswerSheetPanel({
       </aside>
 
       {/* Mobile bottom sheet (viewport < 1024px, incl. 375px) */}
-      <div className="fixed inset-x-0 bottom-0 z-30 lg:hidden">
+      <div className="fixed inset-x-0 bottom-0 z-30 pb-[env(safe-area-inset-bottom)] lg:hidden">
         {mobileOpen && (
           <div className="max-h-[70vh] overflow-hidden rounded-t-3xl border-t border-slate-200 bg-white shadow-2xl">
             <div className="flex justify-center pt-2">

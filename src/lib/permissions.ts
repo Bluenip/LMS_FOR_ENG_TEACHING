@@ -56,10 +56,11 @@ export async function requireLayoutUser(
       avatarUrl: true,
       mustChangePassword: true,
       passwordChangedAt: true,
+      deletedAt: true,
     },
   });
 
-  if (!dbUser) {
+  if (!dbUser || dbUser.deletedAt) {
     redirect("/api/auth/clear-session?reason=session");
   }
   if (dbUser.isLocked) {
@@ -67,6 +68,11 @@ export async function requireLayoutUser(
   }
   if (isSessionOlderThanPasswordChange(session.user.issuedAt, dbUser.passwordChangedAt)) {
     redirect("/api/auth/clear-session?reason=session");
+  }
+  // role changed by an admin after sign-in: the cookie's role would make the middleware and this
+  // check bounce between areas forever, so drop the session and sign in again with the new role
+  if (session.user.role && session.user.role !== dbUser.role) {
+    redirect("/api/auth/clear-session?reason=role");
   }
   if (dbUser.mustChangePassword && !opts?.allowPendingPasswordChange) {
     redirect("/account?force=1");
@@ -92,16 +98,27 @@ export async function requireAuth(): Promise<SessionUser> {
 
   const dbUser = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { id: true, email: true, name: true, role: true, isLocked: true, passwordChangedAt: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      isLocked: true,
+      passwordChangedAt: true,
+      deletedAt: true,
+    },
   });
 
-  if (!dbUser) {
+  if (!dbUser || dbUser.deletedAt) {
     throw new AppError("Tài khoản không tồn tại.", 401, "UNAUTHORIZED");
   }
   if (dbUser.isLocked) {
     throw new AppError("Tài khoản của bạn đã bị khoá.", 403, "ACCOUNT_LOCKED");
   }
   if (isSessionOlderThanPasswordChange(session.user.issuedAt, dbUser.passwordChangedAt)) {
+    throw new AppError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.", 401, "UNAUTHORIZED");
+  }
+  if (session.user.role !== dbUser.role) {
     throw new AppError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.", 401, "UNAUTHORIZED");
   }
 

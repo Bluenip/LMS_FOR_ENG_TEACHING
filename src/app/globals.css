@@ -340,3 +340,29 @@ html.dark .hover\:border-slate-300:hover {
 html.dark .hover\:border-orange-200:hover {
   border-color: rgba(249, 115, 22, 0.45);
 }
+
+/* ---------- Mobile (iPhone / Android) ---------- */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS Safari zooms into any focused field under 16px — keep fields at 16px on phones */
+@media (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* wide tables / toolbars scroll inside their box instead of widening the page */
+@media (max-width: 767px) {
+  main table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}

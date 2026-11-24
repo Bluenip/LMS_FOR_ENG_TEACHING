@@ -13,10 +13,10 @@ export async function getAdminSystemStats() {
     assignments,
     submissions,
   ] = await Promise.all([
-    prisma.user.count(),
-    prisma.user.count({ where: { role: "TEACHER" } }),
-    prisma.user.count({ where: { role: "STUDENT" } }),
-    prisma.user.count({ where: { role: "PARENT" } }),
+    prisma.user.count({ where: { deletedAt: null } }),
+    prisma.user.count({ where: { role: "TEACHER", deletedAt: null } }),
+    prisma.user.count({ where: { role: "STUDENT", deletedAt: null } }),
+    prisma.user.count({ where: { role: "PARENT", deletedAt: null } }),
     prisma.class.count(),
     prisma.worksheet.count(),
     prisma.assignment.count(),
@@ -38,6 +38,7 @@ export async function getAdminSystemStats() {
 export async function listAllUsers(query?: string, roleFilter?: Role) {
   return prisma.user.findMany({
     where: {
+      deletedAt: null,
       ...(roleFilter ? { role: roleFilter } : {}),
       ...(query && query.trim().length > 0
         ? {
@@ -86,12 +87,35 @@ export async function adminUpdateUser(
   if (!target) {
     throw new AppError("Không tìm thấy người dùng.", 404, "NOT_FOUND");
   }
+  const roleChanges = input.role !== undefined && input.role !== target.role;
+  // a teacher/admin who still owns classes or worksheets must not become a student/parent:
+  // they would lose access to all of it (data stays, but nobody can manage those classes)
+  if (
+    roleChanges &&
+    (target.role === "TEACHER" || target.role === "ADMIN") &&
+    input.role !== "TEACHER" &&
+    input.role !== "ADMIN"
+  ) {
+    const [classes, worksheets] = await Promise.all([
+      prisma.class.count({ where: { teacherId: targetUserId } }),
+      prisma.worksheet.count({ where: { ownerId: targetUserId } }),
+    ]);
+    if (classes > 0 || worksheets > 0) {
+      throw new AppError(
+        `Không thể đổi vai trò: tài khoản này đang sở hữu ${classes} lớp học và ${worksheets} bài tập. Hãy xoá hoặc chuyển chúng trước.`,
+        400,
+        "ROLE_HAS_CONTENT"
+      );
+    }
+  }
   const removesAdmin =
     target.role === "ADMIN" &&
     !target.isLocked &&
     ((input.role !== undefined && input.role !== "ADMIN") || input.isLocked === true);
   if (removesAdmin) {
-    const activeAdmins = await prisma.user.count({ where: { role: "ADMIN", isLocked: false } });
+    const activeAdmins = await prisma.user.count({
+      where: { role: "ADMIN", isLocked: false, deletedAt: null },
+    });
     if (activeAdmins <= 1) {
       throw new AppError("Hệ thống phải còn ít nhất một quản trị viên đang hoạt động.", 400, "LAST_ADMIN");
     }
@@ -100,6 +124,8 @@ export async function adminUpdateUser(
     where: { id: targetUserId },
     data: {
       ...(input.role !== undefined ? { role: input.role } : {}),
+      // a role change signs the user out everywhere so they come back with the new role
+      ...(roleChanges ? { passwordChangedAt: new Date() } : {}),
       ...(input.isLocked !== undefined ? { isLocked: input.isLocked } : {}),
     },
     select: {

@@ -47,6 +47,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -295,6 +296,10 @@ export function ClassDetailView({
     }
   };
 
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveConfirm, setArchiveConfirm] = useState("");
+  const archiveNameMatches = archiveConfirm.trim() === cls.name.trim();
+
   const handleToggleArchive = async () => {
     const res = await fetch(`/api/classes/${cls.id}`, {
       method: "PATCH",
@@ -302,8 +307,12 @@ export function ClassDetailView({
       body: JSON.stringify({ archived: !cls.archived }),
     });
     if (res.ok) {
+      setArchiveOpen(false);
+      setArchiveConfirm("");
       await refreshClass();
       toast.success(cls.archived ? tr("Đã khôi phục lớp học!", "Class restored!") : tr("Đã lưu trữ lớp học!", "Class archived!"));
+    } else {
+      toast.error(vi.common.errorGeneric);
     }
   };
 
@@ -1155,7 +1164,11 @@ export function ClassDetailView({
                 />
               </label>
               <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                <Button type="button" variant="outline" onClick={handleToggleArchive}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => (cls.archived ? void handleToggleArchive() : setArchiveOpen(true))}
+                >
                   <Archive className="h-4 w-4" />
                   {cls.archived ? vi.classes.unarchive : vi.classes.archive}
                 </Button>
@@ -1168,6 +1181,58 @@ export function ClassDetailView({
           </TabsContent>
         )}
       </Tabs>
+
+      {/* Confirm archiving (closing) the class: the teacher must type the class name */}
+      <Dialog
+        open={archiveOpen}
+        onOpenChange={(open) => {
+          setArchiveOpen(open);
+          if (!open) setArchiveConfirm("");
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{tr("Lưu trữ (đóng) lớp học?", "Archive (close) this class?")}</DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (archiveNameMatches) void handleToggleArchive();
+            }}
+            className="space-y-4"
+          >
+            <p className="text-sm text-[#464555]">
+              {tr(
+                "Học sinh sẽ không thể dùng mã lớp để tham gia nữa và lớp chuyển sang mục Đã lưu trữ. Bạn có thể khôi phục sau.",
+                "Students can no longer join with the class code and the class moves to Archived. You can restore it later."
+              )}
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="archive-confirm">
+                {tr("Nhập tên lớp để xác nhận:", "Type the class name to confirm:")}{" "}
+                <span className="font-bold text-[#0B1C30]">{cls.name}</span>
+              </Label>
+              <Input
+                id="archive-confirm"
+                value={archiveConfirm}
+                onChange={(e) => setArchiveConfirm(e.target.value)}
+                autoComplete="off"
+                autoFocus
+                placeholder={cls.name}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setArchiveOpen(false)}>
+                {vi.common.cancel}
+              </Button>
+              <Button type="submit" variant="destructive" disabled={!archiveNameMatches}>
+                <Archive className="h-4 w-4" />
+                {vi.classes.archive}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Lesson Item Dialog */}
       <Dialog

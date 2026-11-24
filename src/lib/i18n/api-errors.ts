@@ -278,6 +278,19 @@ const PATTERN_EN_RULES: Array<[RegExp, (...args: string[]) => string]> = [
     (_m, labels) => `Cannot delete question(s) ${labels} because students have already answered them.`,
   ],
   [
+    /^Email này thuộc một tài khoản đang ở thùng rác\. Hãy khôi phục hoặc xoá vĩnh viễn tài khoản đó trước\.$/,
+    () => "This email belongs to an account in the trash. Restore it or delete it permanently first.",
+  ],
+  [
+    /^Chỉ xoá vĩnh viễn được tài khoản đã nằm trong thùng rác\.$/,
+    () => "Only accounts that are already in the trash can be deleted permanently.",
+  ],
+  [
+    /^Không thể đổi vai trò: tài khoản này đang sở hữu (\d+) lớp học và (\d+) bài tập\. Hãy xoá hoặc chuyển chúng trước\.$/,
+    (_m, c, w) =>
+      `Cannot change the role: this account still owns ${c} class(es) and ${w} worksheet(s). Delete or transfer them first.`,
+  ],
+  [
     /^Không thể đổi loại câu (.+) vì đã có học sinh trả lời\.$/,
     (_m, labels) =>
       `Cannot change the type of question(s) ${labels} because students have already answered them.`,

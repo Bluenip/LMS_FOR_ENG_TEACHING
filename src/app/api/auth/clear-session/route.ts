@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const ALLOWED_REASONS = new Set(["session", "locked"]);
+const ALLOWED_REASONS = new Set(["session", "locked", "role"]);
 
 const SESSION_COOKIE_PREFIXES = [
   "authjs.session-token",

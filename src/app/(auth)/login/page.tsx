@@ -38,6 +38,11 @@ function LoginPageContent() {
   const sessionNotice =
     reason === "session"
       ? vi.auth.sessionExpired
+      : reason === "role"
+        ? tr(
+            "Vai trò tài khoản của bạn vừa được thay đổi. Vui lòng đăng nhập lại.",
+            "Your account role was changed. Please sign in again."
+          )
       : reason === "locked"
         ? vi.auth.accountLocked
         : reason === "no-register"

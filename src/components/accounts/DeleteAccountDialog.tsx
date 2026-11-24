@@ -35,11 +35,15 @@ export function DeleteAccountDialog({
   target,
   onClose,
   onDeleted,
+  mode = "trash",
 }: {
   target: DeleteAccountTarget | null;
   onClose: () => void;
   onDeleted: () => void;
+  /** "trash": move to the 90-day trash (restorable). "purge": delete forever from the trash. */
+  mode?: "trash" | "purge";
 }) {
+  const purge = mode === "purge";
   const { m, tr } = useI18n();
   const [counts, setCounts] = useState<ImpactCounts | null>(null);
   const [loadingImpact, setLoadingImpact] = useState(false);
@@ -80,17 +84,27 @@ export function DeleteAccountDialog({
     if (!target || !emailMatches) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/admin/users/${target.id}`, {
-        method: "DELETE",
+      const res = await fetch(
+        purge ? `/api/admin/users/${target.id}/purge` : `/api/admin/users/${target.id}`,
+        {
+        method: purge ? "POST" : "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirmEmail: confirmEmail.trim() }),
-      });
+        }
+      );
       const json = await res.json();
       if (!res.ok) {
         toast.error(json.error ?? m.common.errorGeneric);
         return;
       }
-      toast.success(tr("Đã xoá tài khoản.", "Account deleted."));
+      toast.success(
+        purge
+          ? tr("Đã xoá vĩnh viễn tài khoản.", "Account permanently deleted.")
+          : tr(
+              "Đã chuyển tài khoản vào thùng rác (khôi phục được trong 90 ngày).",
+              "Account moved to the trash (restorable for 90 days)."
+            )
+      );
       onDeleted();
       onClose();
     } catch {
@@ -109,7 +123,9 @@ export function DeleteAccountDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-red-600">
             <AlertTriangle className="h-5 w-5" />
-            {tr("Xoá vĩnh viễn tài khoản", "Permanently delete account")}
+            {purge
+              ? tr("Xoá vĩnh viễn tài khoản", "Permanently delete account")
+              : tr("Chuyển tài khoản vào thùng rác", "Move account to the trash")}
           </DialogTitle>
           {target && (
             <DialogDescription>
@@ -121,10 +137,15 @@ export function DeleteAccountDialog({
         <form onSubmit={handleDelete} className="space-y-4">
           <div className="rounded-xl border border-red-200 bg-red-50 p-3.5 text-xs text-red-800 space-y-2">
             <p className="font-semibold">
-              {tr(
-                "Hành động này không thể hoàn tác. Dữ liệu sau sẽ bị xoá theo tài khoản:",
-                "This action cannot be undone. The following linked data will also be removed:"
-              )}
+              {purge
+                ? tr(
+                    "Hành động này không thể hoàn tác. Dữ liệu sau sẽ bị xoá theo tài khoản:",
+                    "This action cannot be undone. The following linked data will also be removed:"
+                  )
+                : tr(
+                    "Tài khoản bị đăng xuất và không đăng nhập được nữa. Bạn có thể khôi phục trong 90 ngày; sau đó tài khoản và toàn bộ dữ liệu sau sẽ bị xoá vĩnh viễn:",
+                    "The account is signed out and can no longer sign in. You can restore it within 90 days; after that the account and all of this data are deleted forever:"
+                  )}
             </p>
             {loadingImpact ? (
               <p className="opacity-75">{m.common.loading}</p>
@@ -178,7 +199,9 @@ export function DeleteAccountDialog({
               <Trash2 className="h-4 w-4" />
               {deleting
                 ? tr("Đang xoá…", "Deleting…")
-                : tr("Xoá tài khoản", "Delete account")}
+                : purge
+                  ? tr("Xoá vĩnh viễn", "Delete forever")
+                  : tr("Chuyển vào thùng rác", "Move to trash")}
             </Button>
           </DialogFooter>
         </form>

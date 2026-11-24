@@ -3,8 +3,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signIn, signOut } from "next-auth/react";
-import { LogOut } from "lucide-react";
+import { signIn } from "next-auth/react";
 import { toast } from "sonner";
 import type { OwnProfileDto } from "@/server/accountService";
 import { useI18n } from "@/lib/i18n/client";
@@ -14,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ThemeLangToggle } from "@/components/layout/ThemeLangToggle";
 
 export function AccountClient({
   initialUser,
@@ -105,28 +103,12 @@ export function AccountClient({
   const isForced = forced || me.mustChangePassword;
 
   return (
-    <div className="relative min-h-screen bg-[#F8F9FF] px-4 py-10">
-      <ThemeLangToggle className="absolute right-4 top-4" />
-      <div className="mx-auto max-w-xl space-y-5">
-        <div className="flex items-center justify-between gap-3">
-          {!isForced ? (
-            <Link href={homeHref} className="text-sm font-semibold text-[#4F46E5] hover:underline">
-              ← {tr("Về trang chính", "Back to home")}
-            </Link>
-          ) : (
-            <span />
-          )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            className="text-slate-500 hover:text-red-600"
-          >
-            <LogOut className="h-4 w-4" />
-            {m.auth.logoutButton}
-          </Button>
-        </div>
+    <div className="mx-auto max-w-xl space-y-5">
+        {!isForced && (
+          <Link href={homeHref} className="inline-block text-sm font-semibold text-[#4F46E5] hover:underline">
+            ← {tr("Về trang chính", "Back to home")}
+          </Link>
+        )}
 
         <div className="flex flex-wrap items-center gap-2.5">
           <h1 className="text-2xl font-bold text-[#0B1C30]">
@@ -372,7 +354,6 @@ export function AccountClient({
             </div>
           </form>
         </section>
-      </div>
     </div>
   );
 }

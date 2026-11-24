@@ -1,3 +1,4 @@
+import { RoleShell } from "@/components/layout/RoleShell";
 import { requireLayoutUser } from "@/lib/permissions";
 import { getHomeForRole } from "@/lib/utils";
 import { getOwnProfile } from "@/server/accountService";
@@ -11,10 +12,12 @@ export default async function AccountPage({
   const user = await requireLayoutUser(undefined, { allowPendingPasswordChange: true });
   const [profile, { force }] = await Promise.all([getOwnProfile(user.id), searchParams]);
   return (
-    <AccountClient
-      initialUser={profile}
-      homeHref={getHomeForRole(user.role)}
-      forced={force === "1"}
-    />
+    <RoleShell user={user}>
+      <AccountClient
+        initialUser={profile}
+        homeHref={getHomeForRole(user.role)}
+        forced={force === "1"}
+      />
+    </RoleShell>
   );
 }

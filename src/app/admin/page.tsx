@@ -12,6 +12,7 @@ import {
   KeyRound,
   Link2,
   Lock,
+  RotateCcw,
   Shield,
   Trash2,
   Unlock,
@@ -61,6 +62,15 @@ interface AdminOverview {
     parent: { id: string; name: string; email: string };
     student: { id: string; name: string; email: string };
   }>;
+  trash: Array<{
+    id: string;
+    name: string;
+    email: string;
+    role: Role;
+    deletedAt: string;
+    purgeAt: string;
+    _count: { classesTaught: number; worksheets: number; submissions: number };
+  }>;
 }
 
 export default function AdminPortalPage() {
@@ -69,6 +79,18 @@ export default function AdminPortalPage() {
 
   const [resetTarget, setResetTarget] = useState<ResetPasswordTarget | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteAccountTarget | null>(null);
+  const [purgeTarget, setPurgeTarget] = useState<DeleteAccountTarget | null>(null);
+
+  const handleRestore = async (id: string) => {
+    const res = await fetch(`/api/admin/users/${id}/restore`, { method: "POST" });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error(json.error ?? vi.common.errorGeneric);
+      return;
+    }
+    toast.success(tr("Đã khôi phục tài khoản.", "Account restored."));
+    queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
+  };
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("");
   const [selectedParentId, setSelectedParentId] = useState("");
@@ -284,9 +306,16 @@ export default function AdminPortalPage() {
                   <td className="px-6 py-3.5">
                     <select
                       value={u.role}
-                      onChange={(e) =>
-                        void handleUpdateUser(u.id, { role: e.target.value as Role })
-                      }
+                      onChange={(e) => {
+                        const nextRole = e.target.value as Role;
+                        const ok = window.confirm(
+                          tr(
+                            `Đổi vai trò của ${u.name} (${u.email}) từ "${vi.roles[u.role]}" sang "${vi.roles[nextRole]}"? Người này sẽ bị đăng xuất và phải đăng nhập lại.`,
+                            `Change ${u.name} (${u.email}) from "${vi.roles[u.role]}" to "${vi.roles[nextRole]}"? They will be signed out and must sign in again.`
+                          )
+                        );
+                        if (ok) void handleUpdateUser(u.id, { role: nextRole });
+                      }}
                       className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold outline-none focus:border-[#4F46E5]"
                     >
                       <option value="STUDENT">{vi.roles.STUDENT}</option>
@@ -354,6 +383,62 @@ export default function AdminPortalPage() {
           </table>
         </div>
       </section>
+
+      {/* Trash: deleted accounts, restorable for 90 days */}
+      {data.trash.length > 0 && (
+        <section className="stitch-card overflow-hidden">
+          <div className="border-b border-slate-100 px-6 py-4">
+            <h2 className="flex items-center gap-2 text-base font-bold text-[#0B1C30]">
+              <Trash2 className="h-4 w-4 text-red-500" />
+              {tr("Thùng rác", "Trash")} ({data.trash.length})
+            </h2>
+            <p className="mt-1 text-xs text-[#464555]">
+              {tr(
+                "Tài khoản đã xoá được giữ 90 ngày để khôi phục, sau đó bị xoá vĩnh viễn cùng toàn bộ dữ liệu.",
+                "Deleted accounts are kept for 90 days so they can be restored, then removed forever with all their data."
+              )}
+            </p>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {data.trash.map((u) => {
+              const daysLeft = Math.max(
+                0,
+                Math.ceil((new Date(u.purgeAt).getTime() - Date.now()) / 86_400_000)
+              );
+              return (
+                <div key={u.id} className="flex flex-wrap items-center justify-between gap-3 px-6 py-3.5">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-[#0B1C30]">
+                      {u.name}{" "}
+                      <span className="text-xs font-medium text-slate-400">· {vi.roles[u.role]}</span>
+                    </p>
+                    <p className="truncate text-xs text-slate-400">{u.email}</p>
+                    <p className="mt-0.5 text-xs text-[#464555]">
+                      {tr(
+                        `${u._count.classesTaught} lớp · ${u._count.worksheets} bài tập · ${u._count.submissions} bài nộp — tự xoá sau ${daysLeft} ngày`,
+                        `${u._count.classesTaught} classes · ${u._count.worksheets} worksheets · ${u._count.submissions} submissions — deleted in ${daysLeft} days`
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => void handleRestore(u.id)}>
+                      <RotateCcw className="h-3.5 w-3.5" /> {tr("Khôi phục", "Restore")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-red-600 hover:bg-red-50"
+                      onClick={() => setPurgeTarget({ id: u.id, name: u.name, email: u.email })}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> {tr("Xoá vĩnh viễn", "Delete forever")}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Manual Parent <-> Student Linking */}
       <section className="stitch-card p-6 space-y-5">
@@ -437,6 +522,12 @@ export default function AdminPortalPage() {
       <DeleteAccountDialog
         target={deleteTarget}
         onClose={() => setDeleteTarget(null)}
+        onDeleted={() => queryClient.invalidateQueries({ queryKey: ["admin-overview"] })}
+      />
+      <DeleteAccountDialog
+        mode="purge"
+        target={purgeTarget}
+        onClose={() => setPurgeTarget(null)}
         onDeleted={() => queryClient.invalidateQueries({ queryKey: ["admin-overview"] })}
       />
     </div>

@@ -40,10 +40,12 @@ const providers: NextAuthConfig["providers"] = [
           passwordHash: true,
           avatarUrl: true,
           isLocked: true,
+          deletedAt: true,
         },
       });
 
-      if (!user) return null;
+      // accounts in the trash behave as if they no longer exist
+      if (!user || user.deletedAt) return null;
       if (user.isLocked) {
         throw new Error("ACCOUNT_LOCKED");
       }

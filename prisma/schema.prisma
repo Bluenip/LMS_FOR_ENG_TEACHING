@@ -156,6 +156,8 @@ model User {
   mustChangePassword Boolean  @default(false)
   /// sessions issued before this moment are rejected (password reset / change signs out other devices)
   passwordChangedAt  DateTime?
+  /// moved to the trash by an admin; purged permanently after TRASH_RETENTION_DAYS
+  deletedAt          DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -174,6 +176,8 @@ model User {
   driveConnectionsLinked DriveConnection[]  @relation("DriveConnectionActor")
   driveFiles             DriveFile[]        @relation("DriveFileOwner")
   driveUploads           DriveUpload[]      @relation("DriveUploadOwner")
+
+  @@index([deletedAt])
 }
 
 model ParentLink {
