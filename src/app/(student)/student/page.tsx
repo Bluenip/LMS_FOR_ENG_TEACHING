@@ -40,6 +40,7 @@ export default async function StudentDashboardPage() {
       maxAttempts: a.maxAttempts,
       questionCount: a.worksheet._count.fields,
       proctorMode: a.proctorMode,
+      requireCamera: a.requireCamera,
       proctorSummary: describeProctorRuleSummary(a, tr),
       attemptsUsed: a.submissions.length,
       latestSubmission: latestSub

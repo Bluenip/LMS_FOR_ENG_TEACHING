@@ -8,8 +8,11 @@ import { toast } from "sonner";
 import {
   ArrowLeft,
   Bell,
+  Camera,
+  CameraOff,
   CheckCircle2,
   Flag,
+  Headphones,
   Lock,
   Radio,
   Send,
@@ -24,25 +27,34 @@ import { cn, formatDateTime, formatSecondsMMSS } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface LiveStudentCard {
   studentId: string;
   studentName: string;
   studentEmail: string;
   submissionId: string | null;
-  liveStatus: "NOT_STARTED" | "IN_PROGRESS" | "LEFT_TAB" | "LOCKED" | "SUBMITTED";
+  liveStatus: "NOT_STARTED" | "IN_PROGRESS" | "LEFT_TAB" | "CAMERA_OFF" | "LOCKED" | "SUBMITTED";
   answeredCount: number;
   totalQuestions: number;
   violationCount: number;
   restartCount: number;
   flagged: boolean;
   lockedAt: string | null;
+  audioPlayCounts?: Record<string, number>;
+  totalAudioPlays?: number;
   remainingSeconds: number | null;
   events: Array<{
     id: string;
     type: ProctorEventType;
     at: string;
     durationMs: number | null;
+    meta?: Record<string, unknown> | null;
   }>;
 }
 
@@ -55,6 +67,10 @@ interface LiveSnapshot {
     proctorMode: string;
     violationAction: string;
     maxViolations: number;
+    requireCamera?: boolean;
+    cameraEnforce?: boolean;
+    audioMaxPlays?: number | null;
+    audios?: Array<{ id: string; title: string }>;
     timeLimitMin: number | null;
     totalQuestions: number;
   };
@@ -63,6 +79,7 @@ interface LiveSnapshot {
     inProgress: number;
     submitted: number;
     leftTab: number;
+    cameraOff?: number;
     locked: number;
     notStarted: number;
   };
@@ -75,9 +92,26 @@ interface LiveSnapshot {
     type: ProctorEventType;
     at: string;
     durationMs: number | null;
+    meta?: Record<string, unknown> | null;
     message?: string;
   }>;
 }
+
+function getSnapshotKey(meta: Record<string, unknown> | null | undefined): string | null {
+  if (!meta || typeof meta !== "object") return null;
+  return typeof meta.snapshotKey === "string" && meta.snapshotKey.length > 0
+    ? meta.snapshotKey
+    : null;
+}
+
+const SUSPECTED_TYPES = new Set<ProctorEventType>([
+  "DEVTOOLS_SUSPECTED",
+  "PASTE_SUSPECTED",
+  "CAMERA_LOOK_AWAY",
+  "CAMERA_NO_FACE",
+  "CAMERA_MULTI_FACE",
+  "CAMERA_PHONE",
+]);
 
 function playAlertChime() {
   try {
@@ -113,6 +147,7 @@ export default function TeacherLiveProctorPage() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [liveAlerts, setLiveAlerts] = useState<LiveProctorPayload[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [lightboxSnap, setLightboxSnap] = useState<{ url: string; caption: string } | null>(null);
   const soundRef = useRef(soundEnabled);
   soundRef.current = soundEnabled;
 
@@ -270,6 +305,12 @@ export default function TeacherLiveProctorPage() {
           <span className="rounded-full bg-orange-50 px-3 py-1 text-orange-700">
             {tr("⚠ Rời tab:", "⚠ Left tab:")} {snapshot.counts.leftTab}
           </span>
+          {snapshot.assignment.requireCamera && (
+            <span className="rounded-full bg-red-50 px-3 py-1 text-[#BA1A1A] inline-flex items-center gap-1">
+              <CameraOff className="h-3 w-3" />
+              {tr("Camera tắt:", "Cam off:")} {snapshot.counts.cameraOff ?? 0}
+            </span>
+          )}
           <span className="rounded-full bg-red-50 px-3 py-1 text-[#BA1A1A]">
             {tr("🔒 Bị khoá:", "🔒 Locked:")} {snapshot.counts.locked}
           </span>
@@ -290,7 +331,7 @@ export default function TeacherLiveProctorPage() {
                   ? Math.round((st.answeredCount / st.totalQuestions) * 100)
                   : 0;
               const borderStyle =
-                st.liveStatus === "LOCKED"
+                st.liveStatus === "LOCKED" || st.liveStatus === "CAMERA_OFF"
                   ? "border-2 border-[#BA1A1A] bg-red-50/30"
                   : st.liveStatus === "LEFT_TAB"
                     ? "border-2 border-[#F97316] bg-orange-50/30"
@@ -325,6 +366,11 @@ export default function TeacherLiveProctorPage() {
                     {st.liveStatus === "IN_PROGRESS" && <Badge variant="mint">{tr("Đang làm", "In progress")}</Badge>}
                     {st.liveStatus === "SUBMITTED" && <Badge variant="default">{tr("Đã nộp", "Submitted")}</Badge>}
                     {st.liveStatus === "LEFT_TAB" && <Badge variant="orange">{tr("Rời tab", "Left tab")}</Badge>}
+                    {st.liveStatus === "CAMERA_OFF" && (
+                      <Badge variant="danger">
+                        <CameraOff className="h-3 w-3" /> {tr("Camera tắt", "Cam off")}
+                      </Badge>
+                    )}
                     {st.liveStatus === "LOCKED" && (
                       <Badge variant="danger">
                         <Lock className="h-3 w-3" /> {tr("Bị khoá", "Locked")}
@@ -337,6 +383,12 @@ export default function TeacherLiveProctorPage() {
                     <Badge variant={st.violationCount > 0 ? "danger" : "neutral"}>
                       {st.violationCount} {tr("vi phạm", "violations")}
                     </Badge>
+                    {(snapshot.assignment.audios?.length ?? 0) > 0 && st.submissionId && (
+                      <Badge variant="outline" className="text-[10px]">
+                        <Headphones className="h-2.5 w-2.5" /> {st.totalAudioPlays ?? 0}{" "}
+                        {tr("lượt nghe", "plays")}
+                      </Badge>
+                    )}
                     {st.flagged && <Badge variant="danger">{tr("Nghi vấn", "Suspicious")}</Badge>}
                   </div>
 
@@ -379,7 +431,9 @@ export default function TeacherLiveProctorPage() {
                           <Unlock className="h-3 w-3" />
                           {vi.proctor.unlock}
                         </Button>
-                      ) : st.liveStatus === "IN_PROGRESS" || st.liveStatus === "LEFT_TAB" ? (
+                      ) : st.liveStatus === "IN_PROGRESS" ||
+                        st.liveStatus === "LEFT_TAB" ||
+                        st.liveStatus === "CAMERA_OFF" ? (
                         <>
                           <Button
                             size="sm"
@@ -478,26 +532,60 @@ export default function TeacherLiveProctorPage() {
                 </div>
               ))}
 
-              {snapshot.recentEvents.map((ev) => (
-                <div
-                  key={ev.id}
-                  className="rounded-xl border border-slate-200 bg-[#F8F9FF] p-3 text-xs space-y-1"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-[11px] text-slate-400">
-                      {formatDateTime(ev.at)}
-                    </span>
-                    <Badge variant="orange" className="text-[10px]">
-                      {ev.type === "DEVTOOLS_SUSPECTED" ? tr("Nghi vấn", "Suspicious") : tr("Vi phạm", "Violation")}
-                    </Badge>
+              {snapshot.recentEvents.map((ev) => {
+                const snapKey = getSnapshotKey(ev.meta);
+                const isSuspected =
+                  SUSPECTED_TYPES.has(ev.type) &&
+                  !(
+                    snapshot.assignment.cameraEnforce &&
+                    (ev.type === "CAMERA_NO_FACE" ||
+                      ev.type === "CAMERA_MULTI_FACE" ||
+                      ev.type === "CAMERA_PHONE")
+                  );
+                return (
+                  <div
+                    key={ev.id}
+                    className="rounded-xl border border-slate-200 bg-[#F8F9FF] p-3 text-xs space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[11px] text-slate-400">
+                        {formatDateTime(ev.at)}
+                      </span>
+                      <Badge variant={isSuspected ? "outline" : "orange"} className="text-[10px]">
+                        {ev.type.startsWith("CAMERA_") && <Camera className="h-2.5 w-2.5" />}
+                        {isSuspected ? tr("Nghi vấn", "Suspicious") : tr("Vi phạm", "Violation")}
+                      </Badge>
+                    </div>
+                    <p className="font-bold text-[#0B1C30]">{ev.studentName}</p>
+                    <p className="text-[#464555]">
+                      {vi.proctor.events[ev.type] ?? ev.type}
+                      {ev.durationMs ? ` (${Math.round(ev.durationMs / 1000)}s)` : ""}
+                    </p>
+                    {snapKey && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLightboxSnap({
+                            url: `/api/files/${snapKey}`,
+                            caption: `${ev.studentName} — ${vi.proctor.events[ev.type] ?? ev.type} (${formatDateTime(ev.at)})`,
+                          })
+                        }
+                        className="group relative block overflow-hidden rounded-lg border border-slate-200"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={`/api/files/${snapKey}`}
+                          alt={vi.proctor.events[ev.type] ?? ev.type}
+                          className="h-20 w-28 object-cover transition group-hover:opacity-90"
+                        />
+                        <span className="absolute bottom-1 right-1 rounded bg-black/65 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                          {tr("Phóng to", "Zoom")}
+                        </span>
+                      </button>
+                    )}
                   </div>
-                  <p className="font-bold text-[#0B1C30]">{ev.studentName}</p>
-                  <p className="text-[#464555]">
-                    {vi.proctor.events[ev.type] ?? ev.type}
-                    {ev.durationMs ? ` (${Math.round(ev.durationMs / 1000)}s)` : ""}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
 
               {liveAlerts.length === 0 && snapshot.recentEvents.length === 0 && (
                 <div className="py-10 text-center text-xs text-slate-400 space-y-2">
@@ -521,25 +609,66 @@ export default function TeacherLiveProctorPage() {
                 <p className="text-xs text-slate-400">{tr("Học sinh này chưa có sự kiện vi phạm nào.", "This student has no violation events.")}</p>
               ) : (
                 <div className="space-y-2 text-xs">
-                  {inspectedStudent.events.map((ev) => (
-                    <div
-                      key={ev.id}
-                      className="flex items-center justify-between rounded-lg bg-[#F8F9FF] px-3 py-2"
-                    >
-                      <span className="font-medium text-[#0B1C30]">
-                        {vi.proctor.events[ev.type] ?? ev.type}
-                      </span>
-                      <span className="text-[11px] text-slate-400 tabular-nums">
-                        {formatDateTime(ev.at)}
-                      </span>
-                    </div>
-                  ))}
+                  {inspectedStudent.events.map((ev) => {
+                    const snapKey = getSnapshotKey(ev.meta);
+                    return (
+                      <div
+                        key={ev.id}
+                        className="rounded-lg bg-[#F8F9FF] px-3 py-2 space-y-1.5"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-[#0B1C30]">
+                            {vi.proctor.events[ev.type] ?? ev.type}
+                          </span>
+                          <span className="text-[11px] text-slate-400 tabular-nums">
+                            {formatDateTime(ev.at)}
+                          </span>
+                        </div>
+                        {snapKey && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLightboxSnap({
+                                url: `/api/files/${snapKey}`,
+                                caption: `${inspectedStudent.studentName} — ${vi.proctor.events[ev.type] ?? ev.type} (${formatDateTime(ev.at)})`,
+                              })
+                            }
+                            className="overflow-hidden rounded border border-slate-200"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={`/api/files/${snapKey}`}
+                              alt={vi.proctor.events[ev.type] ?? ev.type}
+                              className="h-16 w-24 object-cover"
+                            />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
           )}
         </aside>
       </div>
+
+      {/* Snapshot Lightbox Modal */}
+      <Dialog open={Boolean(lightboxSnap)} onOpenChange={(o) => !o && setLightboxSnap(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-sm">{lightboxSnap?.caption}</DialogTitle>
+          </DialogHeader>
+          {lightboxSnap && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={lightboxSnap.url}
+              alt={lightboxSnap.caption}
+              className="w-full rounded-xl border border-slate-200"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

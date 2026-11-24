@@ -17,7 +17,7 @@ export interface CreateAssignmentInput {
   openAt?: string | null;
   dueAt?: string | null;
   timeLimitMin?: number | null;
-  maxAttempts: number;
+  maxAttempts: number | null;
   shuffle: boolean;
   showResult: ShowResultMode;
   showAnswerKey: boolean;
@@ -32,6 +32,13 @@ export interface CreateAssignmentInput {
   blockCopyPaste: boolean;
   sebConfigKeyHash?: string | null;
   shareProctorWithParent: boolean;
+  requireCamera: boolean;
+  cameraEnforce: boolean;
+  cameraSnapshots: boolean;
+  audioMaxPlays?: number | null;
+  audioBlockPause: boolean;
+  audioBlockSeek: boolean;
+  oneQuestionPerPage?: boolean;
 }
 
 export async function createAssignmentsForClasses(
@@ -46,7 +53,7 @@ export async function createAssignmentsForClasses(
   if (!worksheet) {
     throw new AppError("Không tìm thấy phiếu bài tập.", 404, "NOT_FOUND");
   }
-  if (!isAdmin && worksheet.ownerId !== teacherId) {
+  if (!isAdmin && worksheet.ownerId !== teacherId && !worksheet.isShared) {
     throw new AppError("Bạn không sở hữu phiếu bài tập này.", 403, "FORBIDDEN");
   }
 
@@ -108,6 +115,13 @@ export async function createAssignmentsForClasses(
           input.proctorMode === "LOCKDOWN" ? true : input.blockCopyPaste,
         sebConfigKeyHash: input.sebConfigKeyHash?.trim() || null,
         shareProctorWithParent: input.shareProctorWithParent,
+        requireCamera: input.requireCamera,
+        cameraEnforce: input.requireCamera ? input.cameraEnforce : false,
+        cameraSnapshots: input.requireCamera ? input.cameraSnapshots : false,
+        audioMaxPlays: input.audioMaxPlays ?? null,
+        audioBlockPause: input.audioBlockPause,
+        audioBlockSeek: input.audioBlockSeek,
+        oneQuestionPerPage: Boolean(input.oneQuestionPerPage),
       },
     });
     createdAssignments.push(assignment);
@@ -128,7 +142,7 @@ export async function createAssignmentsForClasses(
         title: `Bài tập mới: ${assignment.title}`,
         body: `Lớp ${cls.name}${dueLabel}`,
         link:
-          assignment.proctorMode !== "OFF"
+          assignment.proctorMode !== "OFF" || assignment.requireCamera
             ? `/student/assignments/${assignment.id}/rules`
             : `/student/assignments/${assignment.id}/do`,
       });

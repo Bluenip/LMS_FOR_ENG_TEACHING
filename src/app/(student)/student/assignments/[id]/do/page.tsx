@@ -7,8 +7,11 @@ import { toast } from "sonner";
 import {
   AlertTriangle,
   ArrowLeft,
+  Camera,
+  CameraOff,
   CheckCircle2,
   Clock,
+  Headphones,
   Lock,
   Maximize2,
   RefreshCcw,
@@ -21,9 +24,17 @@ import {
   ZoomOut,
 } from "lucide-react";
 import type { ProctorEventType, ProctorMode, ViolationAction } from "@prisma/client";
-import type { AnswerValue } from "@/lib/grading/types";
-import { cn, formatScore, formatSecondsMMSS } from "@/lib/utils";
+import type { AnswerValue, DictationGradeDetail } from "@/lib/grading/types";
+import {
+  cn,
+  formatAttemptsLimit,
+  formatAttemptsProgress,
+  formatScore,
+  formatSecondsMMSS,
+} from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
+import { useClipboardGuard } from "@/hooks/useClipboardGuard";
+import { useCameraProctor } from "@/hooks/useCameraProctor";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -37,9 +48,12 @@ import {
 import { PdfCanvasPage, usePdfDocument } from "@/components/worksheet/PdfCanvasPage";
 import { OverlayFieldInput } from "@/components/worksheet/OverlayFieldInput";
 import { AnswerSheetPanel } from "@/components/worksheet/AnswerSheetPanel";
+import { FocusQuestionRunner } from "@/components/worksheet/FocusQuestionRunner";
+import { LimitedAudioPlayer } from "@/components/worksheet/LimitedAudioPlayer";
 import {
   isAnswerFilled,
   type StudentFieldDTO,
+  type WorksheetAudioDTO,
   type WorksheetPageDTO,
 } from "@/components/worksheet/types";
 
@@ -52,7 +66,7 @@ interface StudentAssignmentPayload {
     openAt: string | null;
     dueAt: string | null;
     timeLimitMin: number | null;
-    maxAttempts: number;
+    maxAttempts: number | null;
     showResult: "NEVER" | "AFTER_SUBMIT" | "AFTER_DUE";
     showAnswerKey: boolean;
     showLeaderboard: string;
@@ -61,6 +75,13 @@ interface StudentAssignmentPayload {
     maxViolations: number;
     requireFullscreen: boolean;
     blockCopyPaste: boolean;
+    requireCamera: boolean;
+    cameraEnforce: boolean;
+    cameraSnapshots: boolean;
+    audioMaxPlays: number | null;
+    audioBlockPause: boolean;
+    audioBlockSeek: boolean;
+    oneQuestionPerPage?: boolean;
     class: { id: string; name: string };
     worksheet: {
       id: string;
@@ -69,7 +90,9 @@ interface StudentAssignmentPayload {
       pdfFileKey: string | null;
       pageCount: number;
       questionCount: number;
+      audioCount?: number;
       pages: WorksheetPageDTO[];
+      audios: WorksheetAudioDTO[];
       fields: StudentFieldDTO[];
     };
   };
@@ -90,7 +113,9 @@ interface StudentAssignmentPayload {
     attemptVersion: number;
     restartCount: number;
     rulesAcceptedAt: string | null;
+    cameraConsentAt: string | null;
     attemptToken: string | null;
+    audioPlayCounts?: Record<string, number>;
     remainingSeconds: number | null;
     answers: Array<{
       fieldId: string;
@@ -98,6 +123,7 @@ interface StudentAssignmentPayload {
       isCorrect: boolean | null;
       score: number | null;
       teacherNote: string | null;
+      gradeDetail?: DictationGradeDetail | null;
     }>;
   } | null;
   attemptsSummary: Array<{
@@ -135,6 +161,7 @@ export default function StudentDoAssignmentPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
+  const [audioPlayCounts, setAudioPlayCounts] = useState<Record<string, number>>({});
   const [attemptVersion, setAttemptVersion] = useState(0);
   const [violationCount, setViolationCount] = useState(0);
   const [isLocked, setIsLocked] = useState(false);
@@ -176,11 +203,15 @@ export default function StudentDoAssignmentPage() {
       if (!res.ok) throw new Error(json.error ?? tr("Không tải được bài tập", "Could not load the assignment"));
       const data = json as StudentAssignmentPayload;
 
-      // Redirect to mandatory rules page if proctored and rules not yet accepted on active submission
+      // Redirect to mandatory rules page if proctored or camera-required and rules/consent not yet accepted
+      const requiresRules =
+        data.assignment.proctorMode !== "OFF" || data.assignment.requireCamera;
       if (
-        data.assignment.proctorMode !== "OFF" &&
+        requiresRules &&
         (!data.submission ||
-          (data.submission.status === "IN_PROGRESS" && !data.submission.rulesAcceptedAt))
+          (data.submission.status === "IN_PROGRESS" &&
+            (!data.submission.rulesAcceptedAt ||
+              (data.assignment.requireCamera && !data.submission.cameraConsentAt))))
       ) {
         if (data.canStartNewAttempt || data.submission?.status === "IN_PROGRESS") {
           router.replace(`/student/assignments/${assignmentId}/rules`);
@@ -195,6 +226,7 @@ export default function StudentDoAssignmentPage() {
           map[a.fieldId] = a.value;
         }
         setAnswers(map);
+        setAudioPlayCounts(data.submission.audioPlayCounts ?? {});
         setAttemptVersion(data.submission.attemptVersion);
         setViolationCount(data.submission.violationCount);
         setIsLocked(Boolean(data.submission.lockedAt));
@@ -224,10 +256,10 @@ export default function StudentDoAssignmentPage() {
     [assignment]
   );
 
-  // Start new attempt (non-proctored direct start, or redirect to rules if proctored)
+  // Start new attempt (non-proctored direct start, or redirect to rules if proctored/camera required)
   const handleStartAttempt = async () => {
     if (!assignment) return;
-    if (assignment.proctorMode !== "OFF") {
+    if (assignment.proctorMode !== "OFF" || assignment.requireCamera) {
       router.push(`/student/assignments/${assignmentId}/rules`);
       return;
     }
@@ -375,7 +407,13 @@ export default function StudentDoAssignmentPage() {
   const sendProctorEvent = useCallback(
     async (ev: QueuedProctorEvent) => {
       if (!submission || submission.status !== "IN_PROGRESS" || !assignment) return;
-      if (assignment.proctorMode === "OFF") return;
+      if (
+        assignment.proctorMode === "OFF" &&
+        !assignment.blockCopyPaste &&
+        !assignment.requireCamera
+      ) {
+        return;
+      }
 
       const queueKey = `engclass_proctor_q_${submission.id}`;
       try {
@@ -464,12 +502,44 @@ export default function StudentDoAssignmentPage() {
     };
   }, [submission, isInProgress, sendProctorEvent]);
 
+  const isLockdownMode =
+    assignment?.proctorMode === "LOCKDOWN" || assignment?.proctorMode === "SEB";
+  const blockClipboardActive = Boolean(assignment?.blockCopyPaste || isLockdownMode);
+
+  // Hardened clipboard / drag-drop / beforeinput / indirect-paste guard
+  // Runs independently of proctorMode so homework with blockCopyPaste=true is also protected!
+  useClipboardGuard({
+    enabled: Boolean(
+      isInProgress &&
+        assignment &&
+        (blockClipboardActive || assignment.proctorMode !== "OFF")
+    ),
+    mode: blockClipboardActive ? "block" : "monitor",
+    blockSelection: blockClipboardActive,
+    tr,
+    onWarn: (msg) => toast.warning(msg),
+    onEvent: (ev) => {
+      void sendProctorEvent({
+        type: ev.type,
+        clientAt: new Date().toISOString(),
+        meta: ev.meta,
+      });
+    },
+  });
+
+  // Layer 2: Webcam AI proctoring (MediaPipe FaceLandmarker + ObjectDetector, local in browser)
+  const cameraProctor = useCameraProctor({
+    enabled: Boolean(isInProgress && assignment?.requireCamera && submission?.id),
+    submissionId: submission?.id ?? null,
+    captureSnapshots: Boolean(assignment?.cameraSnapshots),
+    onProctorEvent: sendProctorEvent,
+  });
+
   // Attach client lockdown listeners when exam is IN_PROGRESS and proctored
   useEffect(() => {
     if (!isInProgress || !assignment || assignment.proctorMode === "OFF") return;
 
     const isLockdown = assignment.proctorMode === "LOCKDOWN" || assignment.proctorMode === "SEB";
-    const blockClipboard = assignment.blockCopyPaste || isLockdown;
     const fullscreenRequired =
       (assignment.requireFullscreen || isLockdown) && Boolean(document.fullscreenEnabled);
     if (fullscreenRequired && !document.fullscreenElement) {
@@ -538,29 +608,6 @@ export default function StudentDoAssignmentPage() {
       }
     };
 
-    const onCopy = (e: ClipboardEvent) => {
-      if (blockClipboard) {
-        e.preventDefault();
-        toast.warning(trRef.current("Sao chép bị vô hiệu hoá trong chế độ thi.", "Copying is disabled in exam mode."));
-      }
-      void sendProctorEvent({ type: "COPY", clientAt: new Date().toISOString() });
-    };
-    const onPaste = (e: ClipboardEvent) => {
-      if (blockClipboard) {
-        e.preventDefault();
-        toast.warning(trRef.current("Dán văn bản bị vô hiệu hoá trong chế độ thi.", "Pasting is disabled in exam mode."));
-      }
-      void sendProctorEvent({ type: "PASTE", clientAt: new Date().toISOString() });
-    };
-    const onCut = (e: ClipboardEvent) => {
-      if (blockClipboard) e.preventDefault();
-      void sendProctorEvent({ type: "CUT", clientAt: new Date().toISOString() });
-    };
-    const onContextMenu = (e: MouseEvent) => {
-      if (blockClipboard) e.preventDefault();
-      void sendProctorEvent({ type: "CONTEXT_MENU", clientAt: new Date().toISOString() });
-    };
-
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "PrintScreen") {
         e.preventDefault();
@@ -571,12 +618,6 @@ export default function StudentDoAssignmentPage() {
         e.preventDefault();
         void sendProctorEvent({ type: "DEVTOOLS_SUSPECTED", clientAt: new Date().toISOString() });
         return;
-      }
-      if (blockClipboard && (e.ctrlKey || e.metaKey)) {
-        const k = e.key.toLowerCase();
-        if (["c", "v", "x", "p", "u"].includes(k)) {
-          e.preventDefault();
-        }
       }
     };
 
@@ -616,10 +657,6 @@ export default function StudentDoAssignmentPage() {
     document.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("blur", onWindowBlur);
     document.addEventListener("fullscreenchange", onFullscreenChange);
-    document.addEventListener("copy", onCopy);
-    document.addEventListener("paste", onPaste);
-    document.addEventListener("cut", onCut);
-    document.addEventListener("contextmenu", onContextMenu);
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("resize", onResize);
 
@@ -628,10 +665,6 @@ export default function StudentDoAssignmentPage() {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("blur", onWindowBlur);
       document.removeEventListener("fullscreenchange", onFullscreenChange);
-      document.removeEventListener("copy", onCopy);
-      document.removeEventListener("paste", onPaste);
-      document.removeEventListener("cut", onCut);
-      document.removeEventListener("contextmenu", onContextMenu);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", onResize);
     };
@@ -675,7 +708,7 @@ export default function StudentDoAssignmentPage() {
             </span>
           )}
           <span className="rounded-full bg-[#F8F9FF] px-3 py-1.5 border border-slate-200">
-            {tr("Tối đa", "Up to")} {assignment.maxAttempts} {tr("lượt", "attempts")}
+            {formatAttemptsLimit(assignment.maxAttempts, tr)}
           </span>
         </div>
         {payload.canStartNewAttempt ? (
@@ -700,12 +733,32 @@ export default function StudentDoAssignmentPage() {
   const gradeByFieldId = Object.fromEntries(
     submission.answers.map((a) => [
       a.fieldId,
-      { isCorrect: a.isCorrect, score: a.score, teacherNote: a.teacherNote },
+      {
+        isCorrect: a.isCorrect,
+        score: a.score,
+        teacherNote: a.teacherNote,
+        gradeDetail: a.gradeDetail ?? null,
+      },
     ])
   );
   const remainingViolations = Math.max(0, assignment.maxViolations - violationCount);
+  const cameraBlocked = isInProgress && assignment.requireCamera && cameraProctor.cameraOff;
   const blurContent =
-    isLocked || Boolean(leftOverlay?.visible) || (isInProgress && needsFullscreen);
+    isLocked ||
+    Boolean(leftOverlay?.visible) ||
+    (isInProgress && needsFullscreen) ||
+    cameraBlocked;
+  const worksheetAudios = assignment.worksheet.audios ?? [];
+  const boundAudioIds = new Set(
+    allFields
+      .filter((f) => f.placement === "ANSWER_SHEET" && f.audioId)
+      .map((f) => f.audioId as string)
+  );
+  // Show tracks at the top strip if they are not exclusively displayed inside an answer-sheet card
+  const topAudios = worksheetAudios.filter((a) => !boundAudioIds.has(a.id));
+  const handleAudioPlayCountChange = (audioId: string, nextPlaysUsed: number) => {
+    setAudioPlayCounts((prev) => ({ ...prev, [audioId]: nextPlaysUsed }));
+  };
 
   return (
     <div className="space-y-4 pb-20 lg:pb-8">
@@ -786,7 +839,8 @@ export default function StudentDoAssignmentPage() {
               )}
             </div>
             <p className="text-[11px] text-slate-400">
-              {assignment.class.name} {tr("• Lượt", "• Attempt")} {submission.attemptNo}/{assignment.maxAttempts}
+              {assignment.class.name} {tr("• Lượt", "• Attempt")}{" "}
+              {formatAttemptsProgress(submission.attemptNo, assignment.maxAttempts)}
             </p>
           </div>
         </div>
@@ -875,7 +929,7 @@ export default function StudentDoAssignmentPage() {
       {!isInProgress && (
         <div
           data-testid="submission-result-banner"
-          className="stitch-card border-emerald-200 bg-gradient-to-r from-[#EEF2FF] to-[#F0FDF4] p-5"
+          className="stitch-card border-emerald-200 bg-gradient-to-r from-[#EEF2FF] to-[#F0FDF4] dark:from-[#162038] dark:to-[#0F2420] p-5"
         >
           {payload.revealResult ? (
             <div className="flex flex-wrap items-center justify-between gap-4">
@@ -901,7 +955,8 @@ export default function StudentDoAssignmentPage() {
               </div>
               {payload.attemptsSummary.length > 1 && (
                 <div className="text-xs text-slate-500">
-                  {tr("Tổng số lượt đã làm:", "Attempts used:")} {payload.attemptsSummary.length}/{assignment.maxAttempts}
+                  {tr("Tổng số lượt đã làm:", "Attempts used:")}{" "}
+                  {formatAttemptsProgress(payload.attemptsSummary.length, assignment.maxAttempts)}
                 </div>
               )}
             </div>
@@ -919,84 +974,259 @@ export default function StudentDoAssignmentPage() {
         </div>
       )}
 
-      {/* Main Split View: PDF + Overlays (Left) & Answer Sheet (Right / Mobile Bottom Sheet) */}
+      {/* Main View: Focus Mode (1 question/screen) OR Split View (PDF + Overlays & Answer Sheet) */}
       <div
         className={cn(
-          "flex flex-col gap-6 lg:flex-row lg:items-start transition",
+          "transition",
+          assignment.oneQuestionPerPage
+            ? "space-y-5"
+            : "flex flex-col gap-6 lg:flex-row lg:items-start",
           blurContent && "pointer-events-none select-none blur-md opacity-40"
         )}
       >
-        <div className="min-w-0 flex-1 space-y-5 overflow-x-auto">
-          {assignment.worksheet.instructions && (
-            <div className="rounded-2xl border border-indigo-100 bg-white px-4 py-3 text-xs text-[#464555]">
-              <strong className="text-[#3525CD]">{tr("Hướng dẫn:", "Instructions:")} </strong>
-              {assignment.worksheet.instructions}
-            </div>
-          )}
-
-          {assignment.worksheet.pages.length > 0 ? (
-            assignment.worksheet.pages.map((p) => (
-              <PdfCanvasPage
-                key={p.pageIndex}
-                pdfDoc={pdfDoc}
-                pageIndex={p.pageIndex}
-                widthPt={p.widthPt}
-                heightPt={p.heightPt}
-                zoom={zoom}
-                eager={p.pageIndex === 0}
+        {assignment.oneQuestionPerPage ? (
+          <div className="space-y-5">
+            {assignment.worksheet.instructions && (
+              <div className="mx-auto max-w-3xl rounded-2xl border border-indigo-100 bg-white px-4 py-3 text-xs text-[#464555]">
+                <strong className="text-[#3525CD]">{tr("Hướng dẫn:", "Instructions:")} </strong>
+                {assignment.worksheet.instructions}
+              </div>
+            )}
+            {topAudios.length > 0 && (
+              <div
+                data-testid="worksheet-audio-strip"
+                className="stitch-card mx-auto max-w-3xl p-4 space-y-2.5"
               >
-                {({ widthPx, heightPx }) =>
-                  allFields
-                    .filter((f) => f.placement === "OVERLAY" && f.pageIndex === p.pageIndex)
-                    .map((field) => {
-                      const g = gradeByFieldId[field.id];
-                      return (
-                        <OverlayFieldInput
-                          key={field.id}
-                          field={field}
-                          pageWidthPx={widthPx}
-                          pageHeightPx={heightPx}
-                          zoom={zoom}
-                          value={answers[field.id]}
-                          onChange={(val) => handleAnswerChange(field.id, val)}
-                          disabled={!isInProgress || isLocked}
-                          revealResult={payload.revealResult}
-                          revealKey={payload.revealKey}
-                          isCorrect={g?.isCorrect}
-                          score={g?.score}
-                          teacherNote={g?.teacherNote}
-                          highlighted={highlightedFieldId === field.id}
-                        />
-                      );
-                    })
-                }
-              </PdfCanvasPage>
-            ))
-          ) : (
-            <div className="stitch-card p-10 text-center text-sm text-slate-500">
-              {tr("Bài tập này chỉ sử dụng Phiếu trả lời ở bảng bên phải.", "This assignment only uses the answer sheet on the right.")}
-            </div>
-          )}
-        </div>
+                <div className="flex items-center gap-2 text-xs font-bold text-[#0B1C30]">
+                  <Headphones className="h-4 w-4 text-[#4F46E5]" />
+                  {tr("File nghe bài tập", "Assignment audio tracks")}
+                </div>
+                <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
+                  {topAudios.map((audio) => (
+                    <LimitedAudioPlayer
+                      key={audio.id}
+                      audio={audio}
+                      submissionId={submission.id}
+                      playsUsed={audioPlayCounts[audio.id] ?? 0}
+                      maxPlays={assignment.audioMaxPlays}
+                      blockPause={assignment.audioBlockPause}
+                      blockSeek={assignment.audioBlockSeek}
+                      disabled={!isInProgress || isLocked}
+                      onPlayCountChange={handleAudioPlayCountChange}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+            <FocusQuestionRunner
+              allFields={allFields}
+              answers={answers}
+              onChange={handleAnswerChange}
+              onOpenSubmit={() => setConfirmSubmitOpen(true)}
+              disabled={!isInProgress || isLocked}
+              revealResult={payload.revealResult}
+              revealKey={payload.revealKey}
+              disableSpellcheck={blockClipboardActive}
+              audios={worksheetAudios}
+              submissionId={submission.id}
+              audioPlayCounts={audioPlayCounts}
+              audioMaxPlays={assignment.audioMaxPlays}
+              audioBlockPause={assignment.audioBlockPause}
+              audioBlockSeek={assignment.audioBlockSeek}
+              onAudioPlayCountChange={handleAudioPlayCountChange}
+              gradeByFieldId={gradeByFieldId}
+            />
+          </div>
+        ) : (
+          <>
+            <div className="min-w-0 flex-1 space-y-5 overflow-x-auto">
+              {assignment.worksheet.instructions && (
+                <div className="rounded-2xl border border-indigo-100 bg-white px-4 py-3 text-xs text-[#464555]">
+                  <strong className="text-[#3525CD]">{tr("Hướng dẫn:", "Instructions:")} </strong>
+                  {assignment.worksheet.instructions}
+                </div>
+              )}
 
-        <AnswerSheetPanel
-          allFields={allFields}
-          answers={answers}
-          onChange={handleAnswerChange}
-          onJumpToField={(field) => {
-            if (field.placement === "OVERLAY") {
-              setHighlightedFieldId(field.id);
-              const el = document.querySelector(`[data-overlay-field-id="${field.id}"]`);
-              el?.scrollIntoView({ behavior: "smooth", block: "center" });
-              setTimeout(() => setHighlightedFieldId(null), 1800);
-            }
-          }}
-          disabled={!isInProgress || isLocked}
-          revealResult={payload.revealResult}
-          revealKey={payload.revealKey}
-          gradeByFieldId={gradeByFieldId}
-        />
+              {topAudios.length > 0 && (
+                <div
+                  data-testid="worksheet-audio-strip"
+                  className="stitch-card p-4 space-y-2.5"
+                >
+                  <div className="flex items-center gap-2 text-xs font-bold text-[#0B1C30]">
+                    <Headphones className="h-4 w-4 text-[#4F46E5]" />
+                    {tr("File nghe bài tập", "Assignment audio tracks")}
+                  </div>
+                  <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
+                    {topAudios.map((audio) => (
+                      <LimitedAudioPlayer
+                        key={audio.id}
+                        audio={audio}
+                        submissionId={submission.id}
+                        playsUsed={audioPlayCounts[audio.id] ?? 0}
+                        maxPlays={assignment.audioMaxPlays}
+                        blockPause={assignment.audioBlockPause}
+                        blockSeek={assignment.audioBlockSeek}
+                        disabled={!isInProgress || isLocked}
+                        onPlayCountChange={handleAudioPlayCountChange}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {assignment.worksheet.pages.length > 0 ? (
+                assignment.worksheet.pages.map((p) => (
+                  <PdfCanvasPage
+                    key={p.pageIndex}
+                    pdfDoc={pdfDoc}
+                    pageIndex={p.pageIndex}
+                    widthPt={p.widthPt}
+                    heightPt={p.heightPt}
+                    zoom={zoom}
+                    eager={p.pageIndex === 0}
+                  >
+                    {({ widthPx, heightPx }) =>
+                      allFields
+                        .filter((f) => f.placement === "OVERLAY" && f.pageIndex === p.pageIndex)
+                        .map((field) => {
+                          const g = gradeByFieldId[field.id];
+                          return (
+                            <OverlayFieldInput
+                              key={field.id}
+                              field={field}
+                              pageWidthPx={widthPx}
+                              pageHeightPx={heightPx}
+                              zoom={zoom}
+                              value={answers[field.id]}
+                              onChange={(val) => handleAnswerChange(field.id, val)}
+                              disabled={!isInProgress || isLocked}
+                              revealResult={payload.revealResult}
+                              revealKey={payload.revealKey}
+                              isCorrect={g?.isCorrect}
+                              score={g?.score}
+                              teacherNote={g?.teacherNote}
+                              highlighted={highlightedFieldId === field.id}
+                              disableSpellcheck={blockClipboardActive}
+                            />
+                          );
+                        })
+                    }
+                  </PdfCanvasPage>
+                ))
+              ) : (
+                <div className="stitch-card p-10 text-center text-sm text-slate-500">
+                  {tr("Bài tập này chỉ sử dụng Phiếu trả lời ở bảng bên phải.", "This assignment only uses the answer sheet on the right.")}
+                </div>
+              )}
+            </div>
+
+            <AnswerSheetPanel
+              allFields={allFields}
+              answers={answers}
+              onChange={handleAnswerChange}
+              onJumpToField={(field) => {
+                if (field.placement === "OVERLAY") {
+                  setHighlightedFieldId(field.id);
+                  const el = document.querySelector(`[data-overlay-field-id="${field.id}"]`);
+                  el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  setTimeout(() => setHighlightedFieldId(null), 1800);
+                }
+              }}
+              disabled={!isInProgress || isLocked}
+              revealResult={payload.revealResult}
+              revealKey={payload.revealKey}
+              disableSpellcheck={blockClipboardActive}
+              audios={worksheetAudios}
+              submissionId={submission.id}
+              audioPlayCounts={audioPlayCounts}
+              audioMaxPlays={assignment.audioMaxPlays}
+              audioBlockPause={assignment.audioBlockPause}
+              audioBlockSeek={assignment.audioBlockSeek}
+              onAudioPlayCountChange={handleAudioPlayCountChange}
+              gradeByFieldId={gradeByFieldId}
+            />
+          </>
+        )}
       </div>
+
+      {/* Floating Camera AI Preview Badge (Bottom-Left) */}
+      {isInProgress && assignment.requireCamera && (
+        <div
+          data-testid="camera-proctor-preview"
+          className="fixed bottom-4 left-4 z-40 w-44 overflow-hidden rounded-2xl border-2 border-slate-200 bg-slate-950 shadow-xl"
+        >
+          <div className="relative h-28 w-full bg-slate-900">
+            <video
+              ref={cameraProctor.attachVideoRef}
+              muted
+              playsInline
+              className="h-full w-full object-cover scale-x-[-1]"
+            />
+            <span
+              className={cn(
+                "absolute left-2 top-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-white shadow",
+                cameraProctor.status === "ok" && "bg-emerald-600/90",
+                cameraProctor.status === "warning" && "bg-amber-500/90",
+                cameraProctor.status === "off" && "bg-red-600/90",
+                cameraProctor.status === "initializing" && "bg-slate-700/90"
+              )}
+            >
+              <span
+                className={cn(
+                  "h-1.5 w-1.5 rounded-full bg-white",
+                  cameraProctor.status === "ok" && "animate-pulse"
+                )}
+              />
+              {cameraProctor.status === "ok" && tr("Camera AI", "AI Cam OK")}
+              {cameraProctor.status === "warning" && tr("Đang chú ý", "Attention")}
+              {cameraProctor.status === "off" && tr("Camera tắt", "Cam off")}
+              {cameraProctor.status === "initializing" && tr("Đang tải AI…", "Loading AI…")}
+            </span>
+          </div>
+          <div className="flex items-center justify-between bg-slate-900 px-2.5 py-1 text-[10px] text-slate-300">
+            <span className="inline-flex items-center gap-1">
+              <Camera className="h-3 w-3 text-indigo-400" />
+              {tr("Khuôn mặt:", "Faces:")} {cameraProctor.faceCount}
+            </span>
+            <span>{cameraProctor.modelReady ? "AI ✓" : "…"}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Camera Off / Denied Blocking Overlay */}
+      {cameraBlocked && !isLocked && (
+        <div
+          data-testid="camera-off-overlay"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 p-4 backdrop-blur-md"
+        >
+          <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="h-1.5 w-full bg-gradient-to-r from-[#BA1A1A] to-[#F97316]" />
+            <div className="p-7 text-center space-y-4">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-[#BA1A1A]">
+                <CameraOff className="h-7 w-7" />
+              </div>
+              <h2 className="text-xl font-bold text-[#0B1C30]">
+                {tr("Camera đã bị tắt hoặc mất kết nối!", "Camera is turned off or disconnected!")}
+              </h2>
+              <p className="text-sm text-[#464555]">
+                {cameraProctor.error ??
+                  tr(
+                    "Bài thi yêu cầu bật camera liên tục. Vui lòng bật lại camera để tiếp tục làm bài. Đồng hồ vẫn đang đếm ngược.",
+                    "This exam requires an active webcam. Please re-enable your camera to continue. The timer is still running."
+                  )}
+              </p>
+              <Button
+                size="lg"
+                className="w-full"
+                onClick={cameraProctor.retryCamera}
+              >
+                <Camera className="h-4 w-4" />
+                {tr("Bật lại camera để tiếp tục", "Re-enable camera to continue")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Fullscreen required gate (no violation recorded: shown when not yet in fullscreen) */}
       {isInProgress && !isLocked && needsFullscreen && !leftOverlay?.visible && (

@@ -29,6 +29,7 @@ export default async function WorksheetEditPage({
       prompt: f.prompt,
       explanation: f.explanation,
       skillTag: f.skillTag,
+      audioId: f.audioId,
       order: f.order,
       points: f.points,
       pageIndex: f.pageIndex,
@@ -50,8 +51,18 @@ export default async function WorksheetEditPage({
           instructions: ws.instructions,
           pdfFileKey: ws.pdfFileKey,
           pageCount: ws.pageCount,
+          isShared: ws.isShared,
           pages: ws.pages,
           fields,
+          audios: ws.audios.map((a) => ({
+            id: a.id,
+            title: a.title,
+            fileKey: a.fileKey,
+            mimeType: a.mimeType,
+            sizeBytes: a.sizeBytes,
+            durationSec: a.durationSec,
+            order: a.order,
+          })),
         }}
       />
     );

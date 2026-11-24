@@ -2,7 +2,12 @@ import crypto from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { gradeSubmission, type AnswerValue, type GradingOptions } from "@/lib/grading";
+import {
+  gradeSubmission,
+  sanitizeDictationDetail,
+  type AnswerValue,
+  type GradingOptions,
+} from "@/lib/grading";
 import { STUDENT_FIELD_SELECT } from "./worksheetService";
 import { createNotificationsBulk } from "./notificationService";
 import { invalidateLeaderboardCache } from "./leaderboardService";
@@ -66,7 +71,7 @@ export function canRevealResult(
 export async function startOrResumeSubmission(
   assignmentId: string,
   studentId: string,
-  opts?: { rulesAccepted?: boolean; attemptToken?: string }
+  opts?: { rulesAccepted?: boolean; cameraConsent?: boolean; attemptToken?: string }
 ) {
   const now = new Date();
 
@@ -130,6 +135,9 @@ export async function startOrResumeSubmission(
         ...(opts?.rulesAccepted && !inProgress.rulesAcceptedAt
           ? { rulesAcceptedAt: now }
           : {}),
+        ...(opts?.cameraConsent && !inProgress.cameraConsentAt
+          ? { cameraConsentAt: now }
+          : {}),
       },
     });
 
@@ -167,7 +175,7 @@ export async function startOrResumeSubmission(
     throw new AppError("Đã quá hạn nộp bài tập này.", 403, "PAST_DUE");
   }
 
-  if (existingSubmissions.length >= assignment.maxAttempts) {
+  if (assignment.maxAttempts !== null && existingSubmissions.length >= assignment.maxAttempts) {
     throw new AppError(
       `Bạn đã dùng hết ${assignment.maxAttempts} lượt làm bài cho phép.`,
       403,
@@ -175,11 +183,20 @@ export async function startOrResumeSubmission(
     );
   }
 
-  if (assignment.proctorMode !== "OFF" && !opts?.rulesAccepted) {
+  const requiresRules = assignment.proctorMode !== "OFF" || assignment.requireCamera;
+  if (requiresRules && !opts?.rulesAccepted) {
     throw new AppError(
       "Bạn cần đọc và đồng ý nội quy phòng thi trước khi bắt đầu.",
       400,
       "RULES_NOT_ACCEPTED"
+    );
+  }
+
+  if (assignment.requireCamera && !opts?.cameraConsent) {
+    throw new AppError(
+      "Bài thi yêu cầu kiểm tra và đồng ý bật camera AI trước khi bắt đầu.",
+      400,
+      "CAMERA_CONSENT_REQUIRED"
     );
   }
 
@@ -209,6 +226,7 @@ export async function startOrResumeSubmission(
       maxScore: Math.round(maxScore * 100) / 100,
       questionOrder: questionOrder ? (questionOrder as Prisma.InputJsonValue) : undefined,
       rulesAcceptedAt: opts?.rulesAccepted ? now : null,
+      cameraConsentAt: opts?.cameraConsent ? now : null,
       attemptToken,
       lastHeartbeatAt: now,
     },
@@ -264,6 +282,13 @@ export async function getStudentAssignmentPayload(
       maxViolations: true,
       requireFullscreen: true,
       blockCopyPaste: true,
+      requireCamera: true,
+      cameraEnforce: true,
+      cameraSnapshots: true,
+      audioMaxPlays: true,
+      audioBlockPause: true,
+      audioBlockSeek: true,
+      oneQuestionPerPage: true,
       class: { select: { id: true, name: true } },
       worksheet: {
         select: {
@@ -275,6 +300,15 @@ export async function getStudentAssignmentPayload(
           pages: {
             select: { id: true, pageIndex: true, widthPt: true, heightPt: true },
             orderBy: { pageIndex: "asc" },
+          },
+          audios: {
+            select: {
+              id: true,
+              title: true,
+              durationSec: true,
+              order: true,
+            },
+            orderBy: { order: "asc" },
           },
           fields: {
             select: STUDENT_FIELD_SELECT,
@@ -310,6 +344,7 @@ export async function getStudentAssignmentPayload(
       attemptVersion: true,
       restartCount: true,
       rulesAcceptedAt: true,
+      cameraConsentAt: true,
       attemptToken: true,
       answers: {
         select: {
@@ -319,6 +354,12 @@ export async function getStudentAssignmentPayload(
           isCorrect: true,
           score: true,
           teacherNote: true,
+          gradeDetail: true,
+        },
+      },
+      audioPlays: {
+        select: {
+          audioId: true,
         },
       },
     },
@@ -343,7 +384,7 @@ export async function getStudentAssignmentPayload(
   // Never reveal the answer key while the student can still start another attempt,
   // otherwise they could copy the key into the next attempt.
   const canStillAttempt =
-    submissions.length < assignment.maxAttempts &&
+    (assignment.maxAttempts === null || submissions.length < assignment.maxAttempts) &&
     (!assignment.dueAt || now <= assignment.dueAt || assignment.allowLate);
   const revealKey = revealResult && assignment.showAnswerKey && !canStillAttempt;
 
@@ -372,6 +413,13 @@ export async function getStudentAssignmentPayload(
     orderedFields = [...overlays, ...sheetFields];
   }
 
+  const audioPlayCounts: Record<string, number> = {};
+  if (activeSubmission) {
+    for (const p of activeSubmission.audioPlays) {
+      audioPlayCounts[p.audioId] = (audioPlayCounts[p.audioId] ?? 0) + 1;
+    }
+  }
+
   const sanitizedSubmission = activeSubmission
     ? {
         id: activeSubmission.id,
@@ -390,7 +438,9 @@ export async function getStudentAssignmentPayload(
         attemptVersion: activeSubmission.attemptVersion,
         restartCount: activeSubmission.restartCount,
         rulesAcceptedAt: activeSubmission.rulesAcceptedAt?.toISOString() ?? null,
+        cameraConsentAt: activeSubmission.cameraConsentAt?.toISOString() ?? null,
         attemptToken: activeSubmission.attemptToken,
+        audioPlayCounts,
         remainingSeconds:
           activeSubmission.status === "IN_PROGRESS"
             ? computeRemainingSeconds(activeSubmission, assignment, now)
@@ -401,11 +451,14 @@ export async function getStudentAssignmentPayload(
           isCorrect: revealResult ? a.isCorrect : null,
           score: revealResult ? a.score : null,
           teacherNote: revealResult ? a.teacherNote : null,
+          gradeDetail: revealResult
+            ? sanitizeDictationDetail(a.gradeDetail, revealKey)
+            : null,
         })),
       }
     : null;
 
-  // Do not expose any exam content (questions, options, PDF) until the student has actually
+  // Do not expose any exam content (questions, options, PDF, audio) until the student has actually
   // started an attempt; before that only metadata (title, question count, time limit) is returned.
   const contentUnlocked = submissions.length > 0;
 
@@ -418,8 +471,10 @@ export async function getStudentAssignmentPayload(
       worksheet: {
         ...assignment.worksheet,
         questionCount: assignment.worksheet.fields.length,
+        audioCount: assignment.worksheet.audios.length,
         pdfFileKey: contentUnlocked ? assignment.worksheet.pdfFileKey : null,
         pages: contentUnlocked ? assignment.worksheet.pages : [],
+        audios: contentUnlocked ? assignment.worksheet.audios : [],
         fields: (contentUnlocked ? orderedFields : []).map((f) => ({
           ...f,
           ...(revealKey && revealedKeysByFieldId[f.id]
@@ -445,7 +500,7 @@ export async function getStudentAssignmentPayload(
     revealKey,
     canStartNewAttempt:
       submissions.every((s) => s.status !== "IN_PROGRESS") &&
-      submissions.length < assignment.maxAttempts &&
+      (assignment.maxAttempts === null || submissions.length < assignment.maxAttempts) &&
       (!assignment.dueAt || now <= assignment.dueAt || assignment.allowLate) &&
       (!assignment.openAt || now >= assignment.openAt),
   };
@@ -666,6 +721,9 @@ export async function finalizeSubmissionInternal(
     for (const f of fields) {
       const val = answerMap[f.id];
       const res = graded.fieldResults[f.id] ?? { isCorrect: false, score: 0 };
+      const gradeDetail = res.detail
+        ? (res.detail as unknown as Prisma.InputJsonValue)
+        : undefined;
       await tx.answer.upsert({
         where: { submissionId_fieldId: { submissionId: submission.id, fieldId: f.id } },
         create: {
@@ -674,11 +732,13 @@ export async function finalizeSubmissionInternal(
           value: (val ?? "") as Prisma.InputJsonValue,
           isCorrect: res.isCorrect,
           score: res.score,
+          gradeDetail,
         },
         update: {
           value: (val ?? "") as Prisma.InputJsonValue,
           isCorrect: res.isCorrect,
           score: res.score,
+          ...(gradeDetail !== undefined ? { gradeDetail } : {}),
         },
       });
     }
@@ -790,12 +850,14 @@ export async function getSubmissionForTeacherReview(submissionId: string) {
             include: {
               pages: { orderBy: { pageIndex: "asc" } },
               fields: { orderBy: { order: "asc" } },
+              audios: { orderBy: { order: "asc" } },
             },
           },
         },
       },
       answers: true,
       proctorEvents: { orderBy: { at: "desc" } },
+      audioPlays: { orderBy: { startedAt: "asc" } },
     },
   });
 

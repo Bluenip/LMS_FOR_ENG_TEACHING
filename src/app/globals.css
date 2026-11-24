@@ -131,6 +131,8 @@ html.dark .bg-slate-300 {
 html.dark .bg-\[\#EEF2FF\],
 html.dark .bg-\[\#EEF2FF\]\/70,
 html.dark .bg-\[\#EEF2FF\]\/60,
+html.dark .bg-\[\#EEF2FF\]\/80,
+html.dark .bg-\[\#EEF2FF\]\/95,
 html.dark .bg-indigo-50,
 html.dark .bg-\[\#E2DFFF\],
 html.dark .bg-indigo-100,
@@ -143,13 +145,36 @@ html.dark .bg-red-100 {
   background-color: rgba(239, 68, 68, 0.14);
 }
 html.dark .bg-\[\#FFEDD5\],
-html.dark .bg-orange-50 {
+html.dark .bg-orange-50,
+html.dark .bg-orange-50\/30,
+html.dark .bg-orange-50\/40 {
   background-color: rgba(249, 115, 22, 0.14);
 }
 html.dark .bg-amber-50,
 html.dark .bg-amber-50\/40,
+html.dark .bg-amber-100,
+html.dark .bg-amber-200,
+html.dark .bg-\[\#FFFBEB\]\/60,
 html.dark .bg-yellow-50 {
-  background-color: rgba(245, 158, 11, 0.12);
+  background-color: rgba(245, 158, 11, 0.16);
+}
+html.dark .bg-\[\#E0F2FE\],
+html.dark .bg-sky-50 {
+  background-color: rgba(14, 165, 233, 0.16);
+}
+html.dark .bg-\[\#EDE9FE\],
+html.dark .bg-purple-50 {
+  background-color: rgba(139, 92, 246, 0.16);
+}
+html.dark .text-orange-950,
+html.dark .text-amber-950 {
+  color: #fed7aa;
+}
+html.dark .text-\[\#0369A1\] {
+  color: #38bdf8;
+}
+html.dark .text-\[\#6D28D9\] {
+  color: #c4b5fd;
 }
 html.dark .bg-\[\#DCFCE7\],
 html.dark .bg-emerald-50,
@@ -245,8 +270,19 @@ html.dark .border-red-200 {
   border-color: rgba(239, 68, 68, 0.4);
 }
 html.dark .border-amber-200,
+html.dark .border-amber-200\/70,
 html.dark .border-amber-300 {
-  border-color: rgba(245, 158, 11, 0.4);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+html.dark .border-orange-100,
+html.dark .border-orange-200 {
+  border-color: rgba(249, 115, 22, 0.35);
+}
+html.dark .ring-white {
+  --tw-ring-color: #0f172a;
+}
+html.dark .ring-orange-100 {
+  --tw-ring-color: rgba(249, 115, 22, 0.25);
 }
 html.dark .border-emerald-200 {
   border-color: rgba(16, 185, 129, 0.4);

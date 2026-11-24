@@ -9,10 +9,12 @@ import {
   AlertTriangle,
   ArrowLeft,
   BarChart3,
+  Camera,
   CheckCircle2,
   ClipboardEdit,
   Download,
   Flag,
+  Headphones,
   Radio,
   ShieldAlert,
   Trophy,
@@ -34,7 +36,13 @@ import {
 } from "@/components/ui/dialog";
 import { PdfCanvasPage, usePdfDocument } from "@/components/worksheet/PdfCanvasPage";
 import { OverlayFieldInput } from "@/components/worksheet/OverlayFieldInput";
-import type { AnswerValue, FieldOption, FieldStyle } from "@/lib/grading/types";
+import { DictationDiffView } from "@/components/worksheet/DictationDiffView";
+import type {
+  AnswerValue,
+  DictationGradeDetail,
+  FieldOption,
+  FieldStyle,
+} from "@/lib/grading/types";
 import type { StudentFieldDTO } from "@/components/worksheet/types";
 import type { FieldPlacement, FieldType, ProctorEventType, SkillTag } from "@prisma/client";
 
@@ -105,6 +113,7 @@ interface ReviewSubmissionDetail {
       id: string;
       pdfFileKey: string | null;
       pages: Array<{ id: string; pageIndex: number; widthPt: number; heightPt: number }>;
+      audios?: Array<{ id: string; title: string }>;
       fields: Array<{
         id: string;
         worksheetId: string;
@@ -133,12 +142,19 @@ interface ReviewSubmissionDetail {
     isCorrect: boolean | null;
     score: number | null;
     teacherNote: string | null;
+    gradeDetail?: DictationGradeDetail | null;
   }>;
   proctorEvents: Array<{
     id: string;
     type: ProctorEventType;
     at: string;
     durationMs: number | null;
+    meta?: Record<string, unknown> | null;
+  }>;
+  audioPlays?: Array<{
+    id: string;
+    audioId: string;
+    startedAt: string;
   }>;
 }
 
@@ -274,6 +290,29 @@ function SubmissionReviewModal({
                 </div>
               )}
 
+              {/* Audio Play Log for this submission */}
+              {(sub.assignment.worksheet.audios?.length ?? 0) > 0 && (
+                <div className="rounded-xl border border-indigo-200 bg-[#F8F9FF] p-4 space-y-2">
+                  <p className="flex items-center gap-1.5 text-xs font-bold text-[#3525CD]">
+                    <Headphones className="h-4 w-4" />
+                    {tr("Lượt nghe file âm thanh", "Audio playback count")}
+                  </p>
+                  <div className="space-y-1 text-xs">
+                    {(sub.assignment.worksheet.audios ?? []).map((a) => {
+                      const count = (sub.audioPlays ?? []).filter((p) => p.audioId === a.id).length;
+                      return (
+                        <div key={a.id} className="flex justify-between text-[#0B1C30]">
+                          <span>{a.title}</span>
+                          <span className="font-bold tabular-nums">
+                            {count} {tr("lần", "play(s)")}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Proctor Timeline beside submission (PLAN 6C) */}
               {sub.proctorEvents.length > 0 && (
                 <div className="rounded-xl border border-red-200 bg-[#FEF2F2]/70 p-4 space-y-2">
@@ -281,18 +320,42 @@ function SubmissionReviewModal({
                     <ShieldAlert className="h-4 w-4" />
                     {tr("Nhật ký giám sát thi (", "Proctoring log (")}{sub.violationCount} {tr("vi phạm)", "violations)")}
                   </p>
-                  <div className="max-h-40 space-y-1 overflow-y-auto text-xs">
-                    {sub.proctorEvents.map((ev) => (
-                      <div key={ev.id} className="flex justify-between text-[#93000A]">
-                        <span>
-                          {vi.proctor.events[ev.type] ?? ev.type}
-                          {ev.durationMs ? ` (${Math.round(ev.durationMs / 1000)}s)` : ""}
-                        </span>
-                        <span className="tabular-nums text-[11px] opacity-80">
-                          {formatDateTime(ev.at)}
-                        </span>
-                      </div>
-                    ))}
+                  <div className="max-h-56 space-y-2 overflow-y-auto text-xs">
+                    {sub.proctorEvents.map((ev) => {
+                      const snapKey =
+                        ev.meta && typeof ev.meta === "object" && typeof ev.meta.snapshotKey === "string"
+                          ? ev.meta.snapshotKey
+                          : null;
+                      return (
+                        <div key={ev.id} className="space-y-1">
+                          <div className="flex justify-between text-[#93000A]">
+                            <span className="inline-flex items-center gap-1">
+                              {ev.type.startsWith("CAMERA_") && <Camera className="h-3 w-3" />}
+                              {vi.proctor.events[ev.type] ?? ev.type}
+                              {ev.durationMs ? ` (${Math.round(ev.durationMs / 1000)}s)` : ""}
+                            </span>
+                            <span className="tabular-nums text-[11px] opacity-80">
+                              {formatDateTime(ev.at)}
+                            </span>
+                          </div>
+                          {snapKey && (
+                            <a
+                              href={`/api/files/${snapKey}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-block overflow-hidden rounded border border-red-200"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={`/api/files/${snapKey}`}
+                                alt={vi.proctor.events[ev.type] ?? ev.type}
+                                className="h-16 w-24 object-cover"
+                              />
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -341,6 +404,9 @@ function SubmissionReviewModal({
                               : String(ans.value)
                             : tr("(Bỏ trống)", "(Blank)")}
                         </p>
+                        {f.type === "DICTATION" && ans?.gradeDetail && (
+                          <DictationDiffView detail={ans.gradeDetail} showExpected={true} />
+                        )}
                       </div>
 
                       <div className="grid grid-cols-3 gap-2">

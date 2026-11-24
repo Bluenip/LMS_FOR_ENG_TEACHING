@@ -1,11 +1,27 @@
 import type { FieldPlacement, FieldType, SkillTag } from "@prisma/client";
-import type { AnswerValue, FieldOption, FieldStyle, GradingOptions } from "@/lib/grading/types";
+import type {
+  AnswerValue,
+  DictationGradeDetail,
+  FieldOption,
+  FieldStyle,
+  GradingOptions,
+} from "@/lib/grading/types";
 
 export interface WorksheetPageDTO {
   id: string;
   pageIndex: number;
   widthPt: number;
   heightPt: number;
+}
+
+export interface WorksheetAudioDTO {
+  id: string;
+  title: string;
+  fileKey?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  durationSec: number | null;
+  order: number;
 }
 
 export interface EditorFieldDTO {
@@ -17,6 +33,7 @@ export interface EditorFieldDTO {
   prompt?: string | null;
   explanation?: string | null;
   skillTag?: SkillTag | null;
+  audioId?: string | null;
   order: number;
   points: number;
   pageIndex?: number | null;
@@ -38,6 +55,7 @@ export interface StudentFieldDTO {
   label: string;
   prompt?: string | null;
   skillTag?: SkillTag | null;
+  audioId?: string | null;
   order: number;
   points: number;
   pageIndex?: number | null;
@@ -58,6 +76,7 @@ export interface StudentAnswerState {
   isCorrect?: boolean | null;
   score?: number | null;
   teacherNote?: string | null;
+  gradeDetail?: DictationGradeDetail | null;
 }
 
 export function isAnswerFilled(value: AnswerValue): boolean {
@@ -104,6 +123,8 @@ export function formatRevealedAnswer(
         : tr("Không đánh dấu", "Not ticked");
     case "ESSAY":
       return String(revealedAnswer.rubric ?? tr("Chấm tự luận", "Essay (manual grading)"));
+    case "DICTATION":
+      return String(revealedAnswer.transcript ?? "");
     default:
       return "";
   }

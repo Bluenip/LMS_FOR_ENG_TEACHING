@@ -46,9 +46,10 @@ interface StudentDashboardProps {
     teacherName: string;
     dueAt: string | null;
     timeLimitMin: number | null;
-    maxAttempts: number;
+    maxAttempts: number | null;
     questionCount: number;
     proctorMode: string;
+    requireCamera?: boolean;
     proctorSummary: string | null;
     attemptsUsed: number;
     latestSubmission: {
@@ -174,8 +175,9 @@ export function StudentDashboardClient({
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {pendingAssignments.map((a) => {
+              const needsRules = a.proctorMode !== "OFF" || Boolean(a.requireCamera);
               const targetHref =
-                a.proctorMode !== "OFF" && !a.latestSubmission
+                needsRules && !a.latestSubmission
                   ? `/student/assignments/${a.id}/rules`
                   : `/student/assignments/${a.id}/do`;
               return (
@@ -186,7 +188,7 @@ export function StudentDashboardClient({
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="default">{a.className}</Badge>
-                      {a.proctorMode !== "OFF" && (
+                      {needsRules && (
                         <Badge variant="danger">
                           <Lock className="h-3 w-3" />
                           {vi.proctor.badge}

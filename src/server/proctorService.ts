@@ -8,13 +8,40 @@ import { vi } from "@/messages/vi";
 import { invalidateLeaderboardCache } from "./leaderboardService";
 
 /**
- * Events that do NOT increment auto-enforcement violation count (heuristic / informational only).
- * Per PLAN.md 6C: "Phát hiện devtools chỉ là heuristic, có thể báo sai, nên chỉ hiển thị 'nghi vấn' và không tự khoá vì sự kiện này."
+ * Events that NEVER increment auto-enforcement violation count (heuristic / informational only).
+ * Per PLAN.md 6C: devtools, indirect paste spikes, and looking-away gaze can false-positive
+ * (e.g. writing on scratch paper), so they are surfaced as "suspected" without auto-locking.
  */
-const HEURISTIC_ONLY_EVENTS = new Set<ProctorEventType>([
+const ALWAYS_HEURISTIC_EVENTS = new Set<ProctorEventType>([
   "DEVTOOLS_SUSPECTED",
   "NETWORK_OFFLINE",
+  "PASTE_SUSPECTED",
+  "CAMERA_LOOK_AWAY",
 ]);
+
+const CAMERA_AI_EVENTS = new Set<ProctorEventType>([
+  "CAMERA_NO_FACE",
+  "CAMERA_MULTI_FACE",
+  "CAMERA_PHONE",
+]);
+
+export function isHeuristicProctorEvent(
+  type: ProctorEventType,
+  assignment: { proctorMode: string; requireCamera: boolean; cameraEnforce: boolean }
+): boolean {
+  if (ALWAYS_HEURISTIC_EVENTS.has(type)) return true;
+  if (CAMERA_AI_EVENTS.has(type)) {
+    return !assignment.cameraEnforce;
+  }
+  if (type === "CAMERA_OFF") {
+    return !assignment.requireCamera;
+  }
+  // When browser proctoring is OFF (e.g. homework with blockCopyPaste only), log without enforcing
+  if (assignment.proctorMode === "OFF") {
+    return true;
+  }
+  return false;
+}
 
 export interface RecordProctorEventResult {
   eventId: string;
@@ -59,6 +86,8 @@ export async function recordProctorEvent(
           proctorMode: true,
           violationAction: true,
           maxViolations: true,
+          requireCamera: true,
+          cameraEnforce: true,
         },
       },
     },
@@ -84,10 +113,10 @@ export async function recordProctorEvent(
     };
   }
 
-  const isHeuristicOnly = HEURISTIC_ONLY_EVENTS.has(input.type);
+  const isHeuristicOnly = isHeuristicProctorEvent(input.type, submission.assignment);
   const enforceAction =
     !isHeuristicOnly &&
-    submission.assignment.proctorMode !== "OFF";
+    (submission.assignment.proctorMode !== "OFF" || submission.assignment.requireCamera);
 
   let shouldAutoSubmit = false;
   let clearedAnswersCount = 0;
@@ -355,14 +384,20 @@ export async function getLiveProctoringSnapshot(assignmentId: string) {
         },
       },
       worksheet: {
-        select: { id: true, title: true, _count: { select: { fields: true } } },
+        select: {
+          id: true,
+          title: true,
+          _count: { select: { fields: true } },
+          audios: { select: { id: true, title: true }, orderBy: { order: "asc" } },
+        },
       },
       submissions: {
         orderBy: { attemptNo: "desc" },
         include: {
           student: { select: { id: true, name: true } },
           answers: { select: { fieldId: true, value: true } },
-          proctorEvents: { orderBy: { at: "desc" }, take: 20 },
+          proctorEvents: { orderBy: { at: "desc" }, take: 30 },
+          audioPlays: { select: { audioId: true } },
         },
       },
     },
@@ -395,6 +430,12 @@ export async function getLiveProctoringSnapshot(assignmentId: string) {
       : 0;
 
     const latestEvent = sub?.proctorEvents[0] ?? null;
+    const recentlyCameraOff =
+      latestEvent &&
+      latestEvent.type === "CAMERA_OFF" &&
+      now.getTime() - latestEvent.at.getTime() < 60_000 &&
+      sub?.status === "IN_PROGRESS" &&
+      !sub?.lockedAt;
     const recentlyLeft =
       latestEvent &&
       (latestEvent.type === "TAB_HIDDEN" ||
@@ -404,13 +445,24 @@ export async function getLiveProctoringSnapshot(assignmentId: string) {
       sub?.status === "IN_PROGRESS" &&
       !sub?.lockedAt;
 
-    let liveStatus: "NOT_STARTED" | "IN_PROGRESS" | "LEFT_TAB" | "LOCKED" | "SUBMITTED" =
-      "NOT_STARTED";
+    let liveStatus:
+      | "NOT_STARTED"
+      | "IN_PROGRESS"
+      | "LEFT_TAB"
+      | "CAMERA_OFF"
+      | "LOCKED"
+      | "SUBMITTED" = "NOT_STARTED";
     if (sub) {
       if (sub.status !== "IN_PROGRESS") liveStatus = "SUBMITTED";
       else if (sub.lockedAt) liveStatus = "LOCKED";
+      else if (recentlyCameraOff) liveStatus = "CAMERA_OFF";
       else if (recentlyLeft) liveStatus = "LEFT_TAB";
       else liveStatus = "IN_PROGRESS";
+    }
+
+    const audioPlayCounts: Record<string, number> = {};
+    for (const p of sub?.audioPlays ?? []) {
+      audioPlayCounts[p.audioId] = (audioPlayCounts[p.audioId] ?? 0) + 1;
     }
 
     return {
@@ -425,6 +477,8 @@ export async function getLiveProctoringSnapshot(assignmentId: string) {
       restartCount: sub?.restartCount ?? 0,
       flagged: sub?.flagged ?? false,
       lockedAt: sub?.lockedAt?.toISOString() ?? null,
+      audioPlayCounts,
+      totalAudioPlays: sub?.audioPlays.length ?? 0,
       remainingSeconds:
         sub && sub.status === "IN_PROGRESS"
           ? computeRemainingSeconds(sub, assignment, now)
@@ -464,6 +518,10 @@ export async function getLiveProctoringSnapshot(assignmentId: string) {
       proctorMode: assignment.proctorMode,
       violationAction: assignment.violationAction,
       maxViolations: assignment.maxViolations,
+      requireCamera: assignment.requireCamera,
+      cameraEnforce: assignment.cameraEnforce,
+      audioMaxPlays: assignment.audioMaxPlays,
+      audios: assignment.worksheet.audios,
       timeLimitMin: assignment.timeLimitMin,
       dueAt: assignment.dueAt?.toISOString() ?? null,
       totalQuestions,
@@ -473,6 +531,7 @@ export async function getLiveProctoringSnapshot(assignmentId: string) {
       inProgress: students.filter((s) => s.liveStatus === "IN_PROGRESS").length,
       submitted: students.filter((s) => s.liveStatus === "SUBMITTED").length,
       leftTab: students.filter((s) => s.liveStatus === "LEFT_TAB").length,
+      cameraOff: students.filter((s) => s.liveStatus === "CAMERA_OFF").length,
       locked: students.filter((s) => s.liveStatus === "LOCKED").length,
       notStarted: students.filter((s) => s.liveStatus === "NOT_STARTED").length,
     },

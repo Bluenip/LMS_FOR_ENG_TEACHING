@@ -65,6 +65,7 @@ export const createWorksheetSchema = z.object({
 export const updateWorksheetSchema = z.object({
   title: z.string().trim().min(2).max(200).optional(),
   instructions: z.string().trim().max(3000).optional().nullable(),
+  isShared: z.boolean().optional(),
 });
 
 export const fieldOptionSchema = z.object({
@@ -88,6 +89,7 @@ export const gradingOptsSchema = z
     ignorePunctuation: z.boolean().optional(),
     ignoreExtraSpaces: z.boolean().optional(),
     partialCredit: z.boolean().optional(),
+    scoring: z.enum(["WORD_ACCURACY", "ALL_OR_NOTHING"]).optional(),
   })
   .optional()
   .nullable();
@@ -101,6 +103,7 @@ export const fieldItemSchema = z
     prompt: z.string().trim().max(2000).optional().nullable(),
     explanation: z.string().trim().max(2000).optional().nullable(),
     skillTag: z.nativeEnum(SkillTag).optional().nullable(),
+    audioId: z.string().trim().min(1).max(64).optional().nullable(),
     order: z.number().int().min(0),
     points: z.number().min(0).max(1000).default(1),
     pageIndex: z.number().int().min(0).optional().nullable(),
@@ -139,6 +142,12 @@ export const saveWorksheetFieldsSchema = z.object({
   fields: z.array(fieldItemSchema).max(500),
 });
 
+export const updateWorksheetAudioSchema = z.object({
+  title: z.string().trim().min(1, "Tên file nghe không được để trống").max(200).optional(),
+  order: z.number().int().min(0).optional(),
+  durationSec: z.number().int().min(0).max(86400).optional().nullable(),
+});
+
 // ===== Assignment =====
 export const createAssignmentSchema = z.object({
   worksheetId: z.string().min(1),
@@ -147,7 +156,7 @@ export const createAssignmentSchema = z.object({
   openAt: z.string().datetime().optional().nullable().or(z.literal("")),
   dueAt: z.string().datetime().optional().nullable().or(z.literal("")),
   timeLimitMin: z.number().int().min(1).max(600).optional().nullable(),
-  maxAttempts: z.number().int().min(1).max(20).default(1),
+  maxAttempts: z.number().int().min(1).max(50).nullable().default(1),
   shuffle: z.boolean().default(false),
   showResult: z.nativeEnum(ShowResultMode).default("AFTER_SUBMIT"),
   showAnswerKey: z.boolean().default(false),
@@ -162,11 +171,19 @@ export const createAssignmentSchema = z.object({
   blockCopyPaste: z.boolean().default(false),
   sebConfigKeyHash: z.string().trim().max(256).optional().nullable(),
   shareProctorWithParent: z.boolean().default(false),
+  requireCamera: z.boolean().default(false),
+  cameraEnforce: z.boolean().default(false),
+  cameraSnapshots: z.boolean().default(true),
+  audioMaxPlays: z.number().int().min(1).max(20).optional().nullable(),
+  audioBlockPause: z.boolean().default(false),
+  audioBlockSeek: z.boolean().default(false),
+  oneQuestionPerPage: z.boolean().default(false),
 });
 
 // ===== Submission & Grading =====
 export const startSubmissionSchema = z.object({
   rulesAccepted: z.boolean().optional(),
+  cameraConsent: z.boolean().optional(),
   attemptToken: z.string().max(128).optional(),
 });
 

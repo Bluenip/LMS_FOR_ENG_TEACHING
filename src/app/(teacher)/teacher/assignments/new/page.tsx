@@ -7,8 +7,11 @@ import { toast } from "sonner";
 import {
   AlertTriangle,
   Bell,
+  Camera,
   CheckCircle2,
+  ClipboardX,
   Clock,
+  Headphones,
   Info,
   Lock,
   RefreshCcw,
@@ -24,7 +27,7 @@ import type {
   ShowResultMode,
   ViolationAction,
 } from "@prisma/client";
-import { cn } from "@/lib/utils";
+import { cn, formatAttemptsLimit } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +38,8 @@ import { Badge } from "@/components/ui/badge";
 interface WorksheetOption {
   id: string;
   title: string;
-  _count: { fields: number };
+  owner?: { name: string };
+  _count: { fields: number; audios?: number };
 }
 
 interface ClassOption {
@@ -51,7 +55,10 @@ function NewAssignmentForm() {
   const preWorksheetId = searchParams.get("worksheetId") ?? "";
   const preClassId = searchParams.get("classId") ?? "";
 
-  const { data: wsData } = useQuery<{ worksheets: WorksheetOption[] }>({
+  const { data: wsData } = useQuery<{
+    worksheets: WorksheetOption[];
+    sharedWorksheets?: WorksheetOption[];
+  }>({
     queryKey: ["teacher-worksheets"],
     queryFn: async () => (await fetch("/api/worksheets")).json(),
   });
@@ -60,7 +67,12 @@ function NewAssignmentForm() {
     queryFn: async () => (await fetch("/api/classes")).json(),
   });
 
-  const worksheets = useMemo(() => wsData?.worksheets ?? [], [wsData]);
+  const ownWorksheets = useMemo(() => wsData?.worksheets ?? [], [wsData]);
+  const sharedWorksheets = useMemo(() => wsData?.sharedWorksheets ?? [], [wsData]);
+  const worksheets = useMemo(
+    () => [...ownWorksheets, ...sharedWorksheets],
+    [ownWorksheets, sharedWorksheets]
+  );
   const classes = useMemo(() => clsData?.classes ?? [], [clsData]);
 
   const [worksheetId, setWorksheetId] = useState(preWorksheetId);
@@ -71,9 +83,17 @@ function NewAssignmentForm() {
   const [openAt, setOpenAt] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [timeLimitMin, setTimeLimitMin] = useState<string>("45");
+  const [unlimitedAttempts, setUnlimitedAttempts] = useState(false);
   const [maxAttempts, setMaxAttempts] = useState(1);
   const [shuffle, setShuffle] = useState(false);
   const [allowLate, setAllowLate] = useState(false);
+  const [oneQuestionPerPage, setOneQuestionPerPage] = useState(false);
+
+  // Audio playback settings (default: unlimited, allow pause, allow seek)
+  const [limitAudioPlays, setLimitAudioPlays] = useState(false);
+  const [audioMaxPlays, setAudioMaxPlays] = useState(2);
+  const [audioBlockPause, setAudioBlockPause] = useState(false);
+  const [audioBlockSeek, setAudioBlockSeek] = useState(false);
 
   // Results & Leaderboard
   const [showResult, setShowResult] = useState<ShowResultMode>("AFTER_SUBMIT");
@@ -90,6 +110,11 @@ function NewAssignmentForm() {
   const [blockCopyPaste, setBlockCopyPaste] = useState(false);
   const [sebConfigKeyHash, setSebConfigKeyHash] = useState("");
   const [shareProctorWithParent, setShareProctorWithParent] = useState(false);
+
+  // Camera AI proctoring (Layer 2)
+  const [requireCamera, setRequireCamera] = useState(false);
+  const [cameraEnforce, setCameraEnforce] = useState(false);
+  const [cameraSnapshots, setCameraSnapshots] = useState(true);
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -114,8 +139,25 @@ function NewAssignmentForm() {
   };
 
   const applyPreset = (
-    preset: "WARN" | "LOCK_1" | "RESTART_1" | "AUTO_SUBMIT_3"
+    preset: "WARN" | "LOCK_1" | "RESTART_1" | "AUTO_SUBMIT_3" | "DICTATION" | "MEMORIZE"
   ) => {
+    if (preset === "DICTATION") {
+      setProctorMode("MONITOR");
+      setViolationAction("WARN");
+      setMaxViolations(3);
+      setRequireFullscreen(true);
+      setBlockCopyPaste(true);
+      return;
+    }
+    if (preset === "MEMORIZE") {
+      setProctorMode("LOCKDOWN");
+      setViolationAction("WARN");
+      setMaxViolations(3);
+      setRequireFullscreen(true);
+      setBlockCopyPaste(true);
+      setOneQuestionPerPage(true);
+      return;
+    }
     if (proctorMode === "OFF") setProctorMode("LOCKDOWN");
     if (preset === "WARN") {
       setViolationAction("WARN");
@@ -160,7 +202,7 @@ function NewAssignmentForm() {
           openAt: openAt ? new Date(openAt).toISOString() : null,
           dueAt: dueAt ? new Date(dueAt).toISOString() : null,
           timeLimitMin: timeLimitMin ? Number(timeLimitMin) : null,
-          maxAttempts,
+          maxAttempts: unlimitedAttempts ? null : maxAttempts,
           shuffle,
           showResult,
           showAnswerKey,
@@ -175,6 +217,13 @@ function NewAssignmentForm() {
           blockCopyPaste,
           sebConfigKeyHash: sebConfigKeyHash.trim() || null,
           shareProctorWithParent,
+          requireCamera,
+          cameraEnforce: requireCamera ? cameraEnforce : false,
+          cameraSnapshots: requireCamera ? cameraSnapshots : false,
+          audioMaxPlays: limitAudioPlays ? audioMaxPlays : null,
+          audioBlockPause,
+          audioBlockSeek,
+          oneQuestionPerPage,
         }),
       });
       const json = await res.json();
@@ -242,11 +291,24 @@ function NewAssignmentForm() {
                   className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium outline-none focus:border-[#4F46E5]"
                 >
                   <option value="">{tr("— Chọn phiếu bài tập —", "— Choose a worksheet —")}</option>
-                  {worksheets.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.title} ({w._count.fields} {tr("câu)", "questions)")}
-                    </option>
-                  ))}
+                  {ownWorksheets.length > 0 && (
+                    <optgroup label={tr("Phiếu bài tập của tôi", "My worksheets")}>
+                      {ownWorksheets.map((w) => (
+                        <option key={w.id} value={w.id}>
+                          {w.title} ({w._count.fields} {tr("câu)", "questions)")}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {sharedWorksheets.length > 0 && (
+                    <optgroup label={tr("Giáo viên khác chia sẻ", "Shared by colleagues")}>
+                      {sharedWorksheets.map((w) => (
+                        <option key={w.id} value={w.id}>
+                          [{w.owner?.name ?? "GV"}] {w.title} ({w._count.fields} {tr("câu)", "questions)")}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               </div>
 
@@ -318,14 +380,106 @@ function NewAssignmentForm() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">{vi.assignments.maxAttempts}</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={maxAttempts}
-                    onChange={(e) => setMaxAttempts(Number(e.target.value) || 1)}
-                    className="text-xs"
-                  />
+                  <div className="space-y-1.5">
+                    <Input
+                      type="number"
+                      min={1}
+                      max={50}
+                      disabled={unlimitedAttempts}
+                      value={unlimitedAttempts ? "" : maxAttempts}
+                      placeholder={unlimitedAttempts ? tr("Không giới hạn (∞)", "Unlimited (∞)") : undefined}
+                      onChange={(e) => setMaxAttempts(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+                      className="text-xs"
+                      data-testid="max-attempts-input"
+                    />
+                    <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-[#464555]">
+                      <input
+                        type="checkbox"
+                        checked={unlimitedAttempts}
+                        onChange={(e) => setUnlimitedAttempts(e.target.checked)}
+                        className="h-3.5 w-3.5 rounded border-slate-300 text-[#4F46E5] focus:ring-[#4F46E5]"
+                        data-testid="unlimited-attempts-checkbox"
+                      />
+                      {tr("Không giới hạn lượt làm", "Unlimited attempts")}
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Audio playback settings (per assignment, default = unlimited + allow pause + allow seek) */}
+              <div className="rounded-xl border border-slate-200 bg-[#F8F9FF] p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Headphones className="h-4 w-4 text-[#4F46E5]" />
+                    <span className="text-xs font-bold text-[#0B1C30]">
+                      {tr("Cài đặt file nghe (Listening / Chép chính tả)", "Listening audio settings")}
+                    </span>
+                  </div>
+                  {selectedWs && (
+                    <Badge variant={(selectedWs._count.audios ?? 0) > 0 ? "default" : "neutral"}>
+                      {(selectedWs._count.audios ?? 0) > 0
+                        ? tr(`${selectedWs._count.audios} file nghe`, `${selectedWs._count.audios} audio track(s)`)
+                        : tr("Phiếu chưa có file nghe", "No audio attached")}
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-[11px] text-[#464555]">
+                  {tr(
+                    "Mặc định học sinh được nghe không giới hạn, được dừng và được tua. Tích vào các ô bên dưới nếu muốn siết chặt (áp dụng cho từng file nghe trong lượt làm).",
+                    "By default students can play unlimited times, pause and seek. Tick the boxes below to restrict playback (applied per track in each attempt)."
+                  )}
+                </p>
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                  <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
+                    <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-[#0B1C30]">
+                      <input
+                        type="checkbox"
+                        checked={limitAudioPlays}
+                        onChange={(e) => setLimitAudioPlays(e.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-[#4F46E5]"
+                        data-testid="audio-limit-checkbox"
+                      />
+                      {tr("Giới hạn số lần nghe", "Limit play count")}
+                    </label>
+                    {limitAudioPlays && (
+                      <div className="flex items-center gap-2 pl-6">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={20}
+                          value={audioMaxPlays}
+                          onChange={(e) =>
+                            setAudioMaxPlays(Math.max(1, Math.min(20, Number(e.target.value) || 1)))
+                          }
+                          className="h-8 w-20 text-xs"
+                          data-testid="audio-max-plays-input"
+                        />
+                        <span className="text-[11px] text-[#464555]">
+                          {tr("lần / file", "plays / track")}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-xs font-semibold text-[#0B1C30]">
+                    <input
+                      type="checkbox"
+                      checked={audioBlockPause}
+                      onChange={(e) => setAudioBlockPause(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-[#4F46E5]"
+                      data-testid="audio-block-pause-checkbox"
+                    />
+                    {tr("Không cho dừng (Pause)", "Disable pause")}
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-xs font-semibold text-[#0B1C30]">
+                    <input
+                      type="checkbox"
+                      checked={audioBlockSeek}
+                      onChange={(e) => setAudioBlockSeek(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-[#4F46E5]"
+                      data-testid="audio-block-seek-checkbox"
+                    />
+                    {tr("Không cho tua (Seek)", "Disable seeking")}
+                  </label>
                 </div>
               </div>
             </div>
@@ -413,6 +567,24 @@ function NewAssignmentForm() {
                   <Switch checked={leaderboardAnon} onCheckedChange={setLeaderboardAnon} />
                 </label>
                 <label className="flex items-center justify-between rounded-xl bg-[#F8F9FF] px-4 py-3">
+                  <div>
+                    <span className="block text-xs font-semibold text-[#0B1C30]">
+                      {tr("Hiển thị từng câu một trên màn hình (Chế độ tập trung / Học thuộc)", "One question per screen (Focus / Memorization mode)")}
+                    </span>
+                    <span className="text-[11px] text-[#464555]">
+                      {tr(
+                        "Giúp học sinh tập trung cao độ, điền từ trực tiếp trong câu và nhấn Enter sang câu tiếp theo.",
+                        "Shows one clean card at a time with inline fill-in-the-blank inputs and Enter-to-advance."
+                      )}
+                    </span>
+                  </div>
+                  <Switch
+                    checked={oneQuestionPerPage}
+                    onCheckedChange={setOneQuestionPerPage}
+                    data-testid="one-question-per-page-switch"
+                  />
+                </label>
+                <label className="flex items-center justify-between rounded-xl bg-[#F8F9FF] px-4 py-3">
                   <span className="text-xs font-semibold text-[#0B1C30]">
                     {vi.assignments.shuffle}
                   </span>
@@ -424,6 +596,33 @@ function NewAssignmentForm() {
                   </span>
                   <Switch checked={allowLate} onCheckedChange={setAllowLate} />
                 </label>
+                <label className="flex items-center justify-between rounded-xl bg-[#F8F9FF] px-4 py-3">
+                  <div>
+                    <span className="block text-xs font-semibold text-[#0B1C30]">
+                      {tr("Chặn Copy / Paste / Kéo thả / Chuột phải (dùng được cả khi tắt chế độ thi)", "Block copy / paste / drag-drop / right-click (works even without proctoring)")}
+                    </span>
+                    <span className="text-[11px] text-[#464555]">
+                      {tr(
+                        "Tắt kiểm tra chính tả & gợi ý sửa từ trên ô trả lời — rất phù hợp bài chép chính tả tiếng Anh.",
+                        "Also disables spellcheck & autocorrect on inputs — ideal for English dictation."
+                      )}
+                    </span>
+                  </div>
+                  <Switch
+                    checked={blockCopyPaste}
+                    onCheckedChange={setBlockCopyPaste}
+                    data-testid="block-copy-paste-switch"
+                  />
+                </label>
+                {unlimitedAttempts && showLeaderboard !== "OFF" && leaderboardScoreRule === "BEST" && (
+                  <p className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[11px] text-amber-800">
+                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    {tr(
+                      "Lưu ý: Khi bật không giới hạn lượt kết hợp quy tắc lấy điểm cao nhất, học sinh có thể làm đi làm lại đến khi đạt điểm tuyệt đối trên bảng xếp hạng.",
+                      "Note: Unlimited attempts combined with 'Best attempt' lets students retry until they reach a perfect leaderboard score."
+                    )}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -451,7 +650,27 @@ function NewAssignmentForm() {
 
             {/* Proctor Mode selector */}
             <div className="space-y-1.5">
-              <Label className="text-xs">{tr("Cấp độ bảo mật tổng thể", "Overall security level")}</Label>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label className="text-xs">{tr("Cấp độ bảo mật tổng thể", "Overall security level")}</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => applyPreset("DICTATION")}
+                    className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-[#EEF2FF] px-2.5 py-1 text-[11px] font-bold text-[#3525CD] hover:bg-indigo-100 transition"
+                  >
+                    <ClipboardX className="h-3.5 w-3.5" />
+                    {tr("Preset: Chép chính tả", "Preset: Dictation")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPreset("MEMORIZE")}
+                    className="inline-flex items-center gap-1 rounded-lg border border-orange-200 bg-[#FFEDD5] px-2.5 py-1 text-[11px] font-bold text-[#C2410C] hover:bg-orange-100 transition"
+                  >
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    {tr("Preset: Học thuộc (1 câu/màn + Khoá màn)", "Preset: Memorization (Focus + Lockdown)")}
+                  </button>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-2 rounded-xl bg-[#EFF4FF] p-1 sm:grid-cols-4">
                 {(["OFF", "MONITOR", "LOCKDOWN", "SEB"] as const).map((m) => (
                   <button
@@ -639,6 +858,75 @@ function NewAssignmentForm() {
                 </div>
               </>
             )}
+
+            {/* Layer 2: Webcam AI Proctoring (independent toggle, works with or without lockdown) */}
+            <div className="rounded-2xl border border-indigo-200 bg-[#F8F9FF] p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#EEF2FF] text-[#4F46E5]">
+                    <Camera className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <h3 className="text-xs font-bold text-[#0B1C30]">
+                      {tr("Lớp 2: Giám sát bằng Camera AI (Webcam)", "Layer 2: AI Webcam Proctoring")}
+                    </h3>
+                    <p className="text-[11px] text-[#464555]">
+                      {tr(
+                        "Phát hiện rời chỗ, có từ 2 người, nhìn ra ngoài / cúi đầu lâu và phát hiện điện thoại — chạy trực tiếp trên trình duyệt, không truyền video lên server.",
+                        "Detects missing face, multiple faces, prolonged looking away, and phones — runs locally in browser without streaming video."
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={requireCamera}
+                  onCheckedChange={setRequireCamera}
+                  data-testid="require-camera-switch"
+                />
+              </div>
+
+              {requireCamera && (
+                <div className="space-y-2.5 pt-1">
+                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                    <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3.5 py-2.5">
+                      <div>
+                        <span className="block text-xs font-semibold text-[#0B1C30]">
+                          {tr("Chụp ảnh bằng chứng khi có sự kiện", "Capture snapshot on events")}
+                        </span>
+                        <span className="text-[10px] text-[#464555]">
+                          {tr("Ảnh nhỏ 320×240, tự xoá sau 30 ngày", "Small 320×240 JPEG, auto-purged after 30 days")}
+                        </span>
+                      </div>
+                      <Switch
+                        checked={cameraSnapshots}
+                        onCheckedChange={setCameraSnapshots}
+                      />
+                    </label>
+                    <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3.5 py-2.5">
+                      <div>
+                        <span className="block text-xs font-semibold text-[#0B1C30]">
+                          {tr("Tính sự kiện AI vào số lần vi phạm", "Count AI events toward violations")}
+                        </span>
+                        <span className="text-[10px] text-[#464555]">
+                          {tr("Tắt (khuyên dùng): chỉ gắn cờ nghi vấn", "Off (recommended): flag as suspicious only")}
+                        </span>
+                      </div>
+                      <Switch
+                        checked={cameraEnforce}
+                        onCheckedChange={setCameraEnforce}
+                      />
+                    </label>
+                  </div>
+                  <p className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    {tr(
+                      "AI có thể báo nhầm khi phòng tối hoặc học sinh cúi viết nháp. Riêng hành vi tắt/chặn camera luôn bị ghi nhận và che đề thi. Chế độ SEB mặc định chặn camera trừ khi bật trong file .seb.",
+                      "AI may produce false positives in dim lighting or when taking notes. Turning off camera is always enforced. SEB blocks camera unless allowed in .seb config."
+                    )}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -677,8 +965,20 @@ function NewAssignmentForm() {
                   {timeLimitMin ? tr(`${timeLimitMin} phút`, `${timeLimitMin} min`) : tr("Không giới hạn", "Unlimited")}
                 </span>
                 <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 border border-slate-200">
-                  {maxAttempts} {tr("lượt làm", "attempt(s)")}
+                  {formatAttemptsLimit(unlimitedAttempts ? null : maxAttempts, tr)}
                 </span>
+                {limitAudioPlays && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 border border-slate-200">
+                    <Headphones className="h-3 w-3 text-[#4F46E5]" />
+                    {tr(`Nghe tối đa ${audioMaxPlays} lần`, `Max ${audioMaxPlays} plays`)}
+                  </span>
+                )}
+                {requireCamera && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 border border-red-200 text-[#BA1A1A]">
+                    <Camera className="h-3 w-3" />
+                    {tr("Camera AI", "AI Camera")}
+                  </span>
+                )}
                 {showLeaderboard !== "OFF" && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 border border-slate-200">
                     <Trophy className="h-3 w-3 text-[#F97316]" />
@@ -714,7 +1014,30 @@ function NewAssignmentForm() {
                 )}
                 {blockCopyPaste && (
                   <li className="flex items-center gap-1.5">
-                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> {tr("Chặn Copy/Paste & chuột phải", "Copy/paste & right-click blocked")}
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> {tr("Chặn Copy/Paste, kéo thả & chuột phải", "Copy/paste, drag-drop & right-click blocked")}
+                  </li>
+                )}
+                {(limitAudioPlays || audioBlockPause || audioBlockSeek) && (
+                  <li className="flex items-center gap-1.5">
+                    <Headphones className="h-3.5 w-3.5 text-[#4F46E5]" />{" "}
+                    {[
+                      limitAudioPlays ? tr(`Tối đa ${audioMaxPlays} lượt nghe`, `Max ${audioMaxPlays} plays`) : null,
+                      audioBlockPause ? tr("không dừng", "no pause") : null,
+                      audioBlockSeek ? tr("không tua", "no seek") : null,
+                    ]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </li>
+                )}
+                {requireCamera && (
+                  <li className="flex items-center gap-1.5">
+                    <Camera className="h-3.5 w-3.5 text-[#BA1A1A]" />{" "}
+                    {tr("Bắt buộc bật camera AI giám sát", "AI webcam monitoring required")}
+                  </li>
+                )}
+                {oneQuestionPerPage && (
+                  <li className="flex items-center gap-1.5">
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> {tr("Chế độ tập trung: hiển thị từng câu một", "Focus mode: one question per screen")}
                   </li>
                 )}
                 {shuffle && (

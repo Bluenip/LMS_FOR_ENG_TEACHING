@@ -160,6 +160,7 @@ export const vi = {
       DROPDOWN: "Dropdown",
       CHECKBOX: "Checkbox",
       ESSAY: "Tự luận",
+      DICTATION: "Chép chính tả",
     },
     editor: {
       drawHint: "Chọn công cụ rồi kéo chuột vẽ hình chữ nhật trực tiếp lên trang PDF.",
@@ -350,6 +351,13 @@ export const vi = {
       MULTI_SESSION: "Mở bài ở tab/thiết bị khác",
       NETWORK_OFFLINE: "Mất kết nối mạng",
       RESIZE_SUSPICIOUS: "Thu nhỏ / chia đôi màn hình",
+      DROP: "Kéo thả văn bản vào ô làm bài",
+      PASTE_SUSPECTED: "Nghi vấn dán nội dung gián tiếp",
+      CAMERA_NO_FACE: "Camera không thấy khuôn mặt",
+      CAMERA_MULTI_FACE: "Camera phát hiện từ 2 người trở lên",
+      CAMERA_LOOK_AWAY: "Camera phát hiện nhìn ra ngoài / cúi đầu lâu",
+      CAMERA_PHONE: "Camera phát hiện điện thoại",
+      CAMERA_OFF: "Camera bị tắt hoặc mất tín hiệu",
     },
   },
   lessons: {

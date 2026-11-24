@@ -164,6 +164,7 @@ export const en: Messages = {
       DROPDOWN: "Dropdown",
       CHECKBOX: "Checkbox",
       ESSAY: "Essay",
+      DICTATION: "Dictation",
     },
     editor: {
       drawHint: "Pick a tool, then drag to draw a rectangle directly on the PDF page.",
@@ -358,6 +359,13 @@ export const en: Messages = {
       MULTI_SESSION: "Opened in another tab/device",
       NETWORK_OFFLINE: "Network offline",
       RESIZE_SUSPICIOUS: "Shrunk / split the screen",
+      DROP: "Dragged & dropped text into answer box",
+      PASTE_SUSPECTED: "Suspected indirect paste",
+      CAMERA_NO_FACE: "Camera: no face detected",
+      CAMERA_MULTI_FACE: "Camera: multiple faces detected",
+      CAMERA_LOOK_AWAY: "Camera: prolonged looking away / looking down",
+      CAMERA_PHONE: "Camera: phone detected",
+      CAMERA_OFF: "Camera turned off or disconnected",
     },
   },
   lessons: {

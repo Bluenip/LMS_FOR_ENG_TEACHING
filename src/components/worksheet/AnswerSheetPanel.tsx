@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, ChevronUp, ClipboardList, Flag, XCircle } from "lucide-react";
-import type { AnswerValue } from "@/lib/grading/types";
+import { CheckCircle2, ChevronUp, ClipboardList, ClipboardX, Flag, XCircle } from "lucide-react";
+import type { AnswerValue, DictationGradeDetail } from "@/lib/grading/types";
 import { cn, compareQuestionLabels } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,10 @@ import {
   formatRevealedAnswer,
   isAnswerFilled,
   type StudentFieldDTO,
+  type WorksheetAudioDTO,
 } from "./types";
+import { LimitedAudioPlayer } from "./LimitedAudioPlayer";
+import { DictationDiffView } from "./DictationDiffView";
 
 interface AnswerSheetPanelProps {
   allFields: StudentFieldDTO[];
@@ -20,9 +23,23 @@ interface AnswerSheetPanelProps {
   disabled?: boolean;
   revealResult?: boolean;
   revealKey?: boolean;
+  disableSpellcheck?: boolean;
+  audios?: WorksheetAudioDTO[];
+  submissionId?: string | null;
+  audioPlayCounts?: Record<string, number>;
+  audioMaxPlays?: number | null;
+  audioBlockPause?: boolean;
+  audioBlockSeek?: boolean;
+  audioPreviewMode?: boolean;
+  onAudioPlayCountChange?: (audioId: string, nextPlaysUsed: number) => void;
   gradeByFieldId?: Record<
     string,
-    { isCorrect?: boolean | null; score?: number | null; teacherNote?: string | null }
+    {
+      isCorrect?: boolean | null;
+      score?: number | null;
+      teacherNote?: string | null;
+      gradeDetail?: DictationGradeDetail | null;
+    }
   >;
 }
 
@@ -34,6 +51,15 @@ export function AnswerSheetPanel({
   disabled = false,
   revealResult = false,
   revealKey = false,
+  disableSpellcheck = false,
+  audios = [],
+  submissionId,
+  audioPlayCounts = {},
+  audioMaxPlays = null,
+  audioBlockPause = false,
+  audioBlockSeek = false,
+  audioPreviewMode = false,
+  onAudioPlayCountChange,
   gradeByFieldId = {},
 }: AnswerSheetPanelProps) {
   const { m: vi, tr } = useI18n();
@@ -232,6 +258,31 @@ export function AnswerSheetPanel({
                   </p>
                 )}
 
+                {field.audioId && (() => {
+                  const linkedAudio = audios.find((a) => a.id === field.audioId);
+                  if (!linkedAudio) return null;
+                  return (
+                    <div className="mt-2">
+                      <LimitedAudioPlayer
+                        audio={linkedAudio}
+                        submissionId={audioPreviewMode ? null : submissionId}
+                        previewUrl={
+                          audioPreviewMode && linkedAudio.fileKey
+                            ? `/api/files/${linkedAudio.fileKey}`
+                            : null
+                        }
+                        playsUsed={audioPlayCounts[linkedAudio.id] ?? 0}
+                        maxPlays={audioMaxPlays}
+                        blockPause={audioBlockPause}
+                        blockSeek={audioBlockSeek}
+                        disabled={disabled}
+                        compact
+                        onPlayCountChange={onAudioPlayCountChange}
+                      />
+                    </div>
+                  );
+                })()}
+
                 {/* Input control per FieldType */}
                 <div className="mt-2.5">
                   {field.type === "MULTIPLE_CHOICE" && (
@@ -380,6 +431,11 @@ export function AnswerSheetPanel({
                       disabled={disabled}
                       value={val !== null && val !== undefined ? String(val) : ""}
                       onChange={(e) => onChange?.(field.id, e.target.value)}
+                      spellCheck={disableSpellcheck ? false : undefined}
+                      autoComplete={disableSpellcheck ? "off" : undefined}
+                      autoCorrect={disableSpellcheck ? "off" : undefined}
+                      autoCapitalize={disableSpellcheck ? "off" : undefined}
+                      data-gramm={disableSpellcheck ? "false" : undefined}
                       placeholder={
                         field.type === "NUMBER" ? tr("Nhập số…", "Enter a number…") : tr("Nhập câu trả lời ngắn…", "Enter a short answer…")
                       }
@@ -393,9 +449,55 @@ export function AnswerSheetPanel({
                       rows={3}
                       value={typeof val === "string" ? val : ""}
                       onChange={(e) => onChange?.(field.id, e.target.value)}
+                      spellCheck={disableSpellcheck ? false : undefined}
+                      autoComplete={disableSpellcheck ? "off" : undefined}
+                      autoCorrect={disableSpellcheck ? "off" : undefined}
+                      autoCapitalize={disableSpellcheck ? "off" : undefined}
+                      data-gramm={disableSpellcheck ? "false" : undefined}
                       placeholder={tr("Nhập bài viết tự luận…", "Write your essay…")}
                       className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs outline-none focus:border-[#4F46E5]"
                     />
+                  )}
+
+                  {field.type === "DICTATION" && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-[10px] font-semibold text-indigo-600">
+                        <span className="inline-flex items-center gap-1">
+                          <ClipboardX className="h-3 w-3" />
+                          {tr("Chép chính tả — tự gõ, chặn dán & gợi ý chính tả", "Dictation — type manually, paste & spellcheck disabled")}
+                        </span>
+                      </div>
+                      <textarea
+                        disabled={disabled}
+                        rows={4}
+                        data-dictation-field-id={field.id}
+                        value={typeof val === "string" ? val : ""}
+                        onChange={(e) => onChange?.(field.id, e.target.value)}
+                        onPaste={(e) => e.preventDefault()}
+                        onDrop={(e) => e.preventDefault()}
+                        onDragOver={(e) => e.preventDefault()}
+                        onBeforeInput={(e) => {
+                          const native = e.nativeEvent as InputEvent;
+                          if (
+                            native.inputType === "insertFromPaste" ||
+                            native.inputType === "insertFromDrop" ||
+                            native.inputType === "insertFromYank" ||
+                            native.inputType === "insertReplacementText"
+                          ) {
+                            e.preventDefault();
+                          }
+                        }}
+                        spellCheck={false}
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        data-gramm="false"
+                        data-gramm_editor="false"
+                        data-enable-grammarly="false"
+                        placeholder={tr("Nghe file âm thanh và chép lại chính xác những gì bạn nghe được…", "Listen to the audio and type exactly what you hear…")}
+                        className="w-full rounded-xl border border-indigo-200 bg-white p-2.5 text-xs leading-relaxed outline-none focus:border-[#4F46E5]"
+                      />
+                    </div>
                   )}
                 </div>
 
@@ -407,9 +509,17 @@ export function AnswerSheetPanel({
                         {tr("Điểm câu này:", "Score for this question:")} {grade.score}/{field.points}
                       </p>
                     )}
-                    {revealedText && (
+                    {field.type === "DICTATION" && grade?.gradeDetail && (
+                      <DictationDiffView detail={grade.gradeDetail} showExpected={revealKey} />
+                    )}
+                    {revealedText && !(field.type === "DICTATION" && grade?.gradeDetail) && (
                       <p className="font-semibold text-emerald-700">
                         {vi.assignments.do.correctAnswer}: {revealedText}
+                      </p>
+                    )}
+                    {revealedText && field.type === "DICTATION" && grade?.gradeDetail && (
+                      <p className="font-semibold text-emerald-700">
+                        {tr("Transcript chuẩn:", "Expected transcript:")} {revealedText}
                       </p>
                     )}
                     {field.explanation && (

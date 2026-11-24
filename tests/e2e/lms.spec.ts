@@ -448,4 +448,254 @@ test.describe("Phase 8: Anti-Cheat Proctoring (Rules, SSE Live, LOCK, RESTART, A
 
     await studentCtx.close();
   });
+
+  test("Flow 7: Audio play limits, Dictation anti-paste (proctor OFF) & unlimited attempts", async ({
+    browser,
+  }) => {
+    const studentCtx = await browser.newContext();
+    const page = await studentCtx.newPage();
+    await loginAs(page, "student5@engclass.vn");
+
+    // Navigate to seeded Dictation Demo assignment (proctorMode=OFF, blockCopyPaste=true, audioMaxPlays=2, maxAttempts=null)
+    await page.goto("/student");
+    await page.getByText("Luyện Chép Chính Tả Tiếng Anh").click();
+    // Click the assignment start button inside that card
+    const card = page.locator("div.stitch-card-hover", {
+      hasText: "Luyện Chép Chính Tả Tiếng Anh",
+    });
+    await card.getByRole("link").click();
+    await page.waitForURL(/\/student\/assignments\/.+\/do/);
+
+    // Verify unlimited attempts label and start
+    await expect(page.getByText(/Không giới hạn lượt|Unlimited attempts/)).toBeVisible();
+    await page.getByRole("button", { name: /Bắt đầu làm bài|Start/ }).click();
+
+    // Wait for audio player & dictation textarea
+    const dictationArea = page.locator("textarea[data-dictation-field-id]").first();
+    await expect(dictationArea).toBeVisible({ timeout: 15000 });
+
+    // Verify spellcheck is disabled and paste + drop are blocked even when proctorMode === "OFF"
+    expect(await dictationArea.getAttribute("spellcheck")).toBe("false");
+    const blockedFlags = await dictationArea.evaluate((el) => {
+      const pasteEv = new Event("paste", { bubbles: true, cancelable: true });
+      const dropEv = new Event("drop", { bubbles: true, cancelable: true });
+      el.dispatchEvent(pasteEv);
+      el.dispatchEvent(dropEv);
+      return { pasteBlocked: pasteEv.defaultPrevented, dropBlocked: dropEv.defaultPrevented };
+    });
+    expect(blockedFlags.pasteBlocked).toBe(true);
+    expect(blockedFlags.dropBlocked).toBe(true);
+
+    // Check Limited Audio Player: initially 2/2 plays left
+    const playBadge = page.locator('[data-testid^="audio-plays-badge-"]').first();
+    await expect(playBadge).toContainText(/2\/2/);
+
+    // Play #1
+    const playBtn = page.locator('[data-testid^="audio-play-btn-"]').first();
+    await playBtn.click();
+    await expect(playBadge).toContainText(/1\/2/, { timeout: 10000 });
+
+    // Reload page -> play count MUST persist from server (still 1/2 left!)
+    await page.reload();
+    await expect(page.locator('[data-testid^="audio-plays-badge-"]').first()).toContainText(
+      /1\/2/,
+      { timeout: 15000 }
+    );
+
+    // Stream without token MUST return 403
+    const urlMatch = page.url().match(/\/assignments\/([^/]+)\/do/);
+    const assignmentId = urlMatch![1]!;
+    const payload = await page.evaluate(async (aid) => {
+      const r = await fetch(`/api/assignments/${aid}`);
+      return r.json();
+    }, assignmentId);
+    const subId = payload.submission.id as string;
+    const audioId = payload.assignment.worksheet.audios[0].id as string;
+
+    const noTokenStatus = await page.evaluate(
+      async ({ sid, aid }) => {
+        const r = await fetch(`/api/submissions/${sid}/audio/${aid}/stream`);
+        return r.status;
+      },
+      { sid: subId, aid: audioId }
+    );
+    expect(noTokenStatus).toBe(403);
+
+    // Last play shows confirmation banner before playing
+    await page.locator('[data-testid^="audio-play-btn-"]').first().click();
+    await expect(page.locator('[data-testid^="audio-last-play-confirm-"]').first()).toBeVisible();
+    await page.locator('[data-testid^="audio-confirm-last-btn-"]').first().click();
+    await expect(page.locator('[data-testid^="audio-plays-badge-"]').first()).toContainText(
+      /0\/2|hết lượt|No plays left/i,
+      { timeout: 10000 }
+    );
+
+    await studentCtx.close();
+  });
+
+  test("Flow 8: Word auto-create (__answer__), Backup .zip export & Focus Mode (1 question/screen)", async ({
+    browser,
+  }) => {
+    const teacherCtx = await browser.newContext();
+    const page = await teacherCtx.newPage();
+    await loginAs(page, "teacher1@engclass.vn");
+
+    // 1. Open Word auto-create modal & paste real multi-blank + multi-answer content
+    await page.goto("/teacher/worksheets");
+    await page.getByTestId("open-word-import-btn").click();
+    await page.getByTestId("word-import-title-input").fill("E2E Word Auto Fill");
+    await page.getByTestId("word-import-textarea").fill(
+      [
+        "Câu 1: 1. How many __planets are there in the universe/stars are there in the universe__?",
+        "Câu 2: 2. (1) __Find a hill__. Climb __a hill so that you can see over the top__.",
+      ].join("\n")
+    );
+    await page.getByTestId("parse-word-text-btn").click();
+    await expect(page.getByTestId("word-import-preview")).toContainText(/3 ô điền|3 blank/);
+    await page.getByTestId("confirm-word-import-btn").click();
+    await page.waitForURL(/\/teacher\/worksheets\/.+\/edit/, { timeout: 15000 });
+
+    // Extract newly created worksheetId and test Export .zip + .docx endpoints
+    const wsId = page.url().match(/\/worksheets\/([^/]+)\/edit/)![1]!;
+    const exportChecks = await page.evaluate(async (id) => {
+      const zipRes = await fetch(`/api/worksheets/${id}/export?format=zip`);
+      const docxRes = await fetch(`/api/worksheets/${id}/export?format=docx`);
+      return {
+        zipStatus: zipRes.status,
+        zipType: zipRes.headers.get("content-type"),
+        docxStatus: docxRes.status,
+      };
+    }, wsId);
+    expect(exportChecks.zipStatus).toBe(200);
+    expect(exportChecks.zipType).toContain("application/zip");
+    expect(exportChecks.docxStatus).toBe(200);
+    await teacherCtx.close();
+
+    // 2. Verify Focus Mode (1 question per screen with inline fill-in-the-blank!) as student
+    const studentCtx = await browser.newContext();
+    const sPage = await studentCtx.newPage();
+    await loginAs(sPage, "student5@engclass.vn");
+    await sPage.goto("/student");
+    const survivalCard = sPage.locator("div.stitch-card-hover", {
+      hasText: "Bài học thuộc Unit 17: Survival Tips",
+    });
+    await survivalCard.getByRole("link").click();
+    await sPage.waitForURL(/\/student\/assignments\/.+\/do/);
+    await sPage.getByRole("button", { name: /Bắt đầu làm bài|Start/ }).click();
+
+    // Focus runner displays 1 sentence at a time with inline input box
+    await expect(sPage.getByTestId("focus-question-runner")).toBeVisible({ timeout: 15000 });
+    await expect(sPage.getByTestId("focus-inline-sentence")).toContainText("What");
+    const firstInput = sPage.locator("input[data-focus-field-id]").first();
+    await firstInput.fill("do you know about jungles");
+
+    // Advance to Question 2, then Question 3 (grouped multi-blank sentence: 2 inline inputs!)
+    await sPage.getByTestId("focus-next-btn").click();
+    await expect(sPage.getByTestId("focus-inline-sentence")).toContainText("Have you");
+    await sPage.getByTestId("focus-next-btn").click();
+    await expect(sPage.locator("input[data-focus-field-id]")).toHaveCount(2);
+
+    await studentCtx.close();
+  });
+
+  test("Flow 9: Camera AI Proctoring consent gate & mock AI event (heuristic default)", async ({
+    browser,
+  }) => {
+    const teacherCtx = await browser.newContext();
+    const teacherPage = await teacherCtx.newPage();
+    await loginAs(teacherPage, "teacher1@engclass.vn");
+
+    const [clsRes, wsRes] = await Promise.all([
+      teacherPage.evaluate(async () => (await fetch("/api/classes")).json()),
+      teacherPage.evaluate(async () => (await fetch("/api/worksheets")).json()),
+    ]);
+    const classId = clsRes.classes[0].id as string;
+    const wsId = wsRes.worksheets.find((w: { title: string }) => w.title.includes("Unit 6")).id as string;
+
+    const camAsgId = await teacherPage.evaluate(
+      async (payload) => {
+        const r = await fetch("/api/assignments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const j = await r.json();
+        return j.assignments[0].id as string;
+      },
+      {
+        worksheetId: wsId,
+        classIds: [classId],
+        title: "E2E Camera AI Exam",
+        timeLimitMin: 30,
+        maxAttempts: 1,
+        shuffle: false,
+        showResult: "AFTER_SUBMIT",
+        showAnswerKey: false,
+        allowLate: false,
+        showLeaderboard: "OFF",
+        leaderboardAnon: false,
+        leaderboardScoreRule: "BEST",
+        proctorMode: "MONITOR",
+        violationAction: "LOCK",
+        maxViolations: 1,
+        requireFullscreen: false,
+        blockCopyPaste: true,
+        shareProctorWithParent: false,
+        requireCamera: true,
+        cameraEnforce: false,
+        cameraSnapshots: true,
+      }
+    );
+
+    const studentCtx = await browser.newContext({ permissions: ["camera"] });
+    const sPage = await studentCtx.newPage();
+    // Inject deterministic camera mock BEFORE page scripts run
+    await sPage.addInitScript(() => {
+      (window as unknown as { __engclassCameraMock: { observation: { faces: number } } }).__engclassCameraMock = {
+        observation: { faces: 0 },
+      };
+    });
+    await loginAs(sPage, "student6@engclass.vn");
+
+    // Going to /do redirects to /rules with camera check & consent gate
+    await sPage.goto(`/student/assignments/${camAsgId}/do`);
+    await sPage.waitForURL(new RegExp(`/student/assignments/${camAsgId}/rules`));
+    await expect(sPage.getByTestId("camera-check-box")).toBeVisible();
+
+    // Start button must stay disabled until camera checked + camera consent + rules agreed
+    await sPage.getByTestId("rules-agree-checkbox").check();
+    await expect(sPage.getByTestId("start-proctored-btn")).toBeDisabled();
+
+    await sPage.getByTestId("check-camera-btn").click();
+    await expect(sPage.getByTestId("camera-ready-badge")).toBeVisible({ timeout: 10000 });
+    await sPage.getByTestId("camera-consent-checkbox").check();
+    await expect(sPage.getByTestId("start-proctored-btn")).toBeEnabled();
+    await sPage.getByTestId("start-proctored-btn").click();
+    await sPage.waitForURL(new RegExp(`/student/assignments/${camAsgId}/do`));
+
+    // Floating corner camera preview is visible
+    await expect(sPage.getByTestId("camera-proctor-preview")).toBeVisible({ timeout: 15000 });
+
+    // Wait > 5.5s for mock faces=0 to fire CAMERA_NO_FACE -> teacher live snapshot sees it,
+    // AND because cameraEnforce=false, student is NOT locked!
+    await sPage.waitForTimeout(6500);
+    await expect(sPage.getByTestId("locked-exam-overlay")).not.toBeVisible();
+
+    const liveSnap = await teacherPage.evaluate(async (aid) => {
+      const r = await fetch(`/api/assignments/${aid}/live?mode=snapshot`);
+      return r.json();
+    }, camAsgId);
+    const hasNoFaceEvent = (liveSnap.recentEvents as Array<{ type: string }>).some(
+      (ev) => ev.type === "CAMERA_NO_FACE"
+    );
+    expect(hasNoFaceEvent).toBe(true);
+
+    // Cleanup created exam
+    await teacherPage.evaluate(async (aid) => {
+      await fetch(`/api/assignments/${aid}`, { method: "DELETE" });
+    }, camAsgId);
+
+    await studentCtx.close();
+    await teacherCtx.close();
+  });
 });

@@ -1,6 +1,7 @@
 import type {
   AnswerValue,
   CheckboxAnswerKey,
+  DictationAnswerKey,
   FieldForGrading,
   GradeResult,
   GradingOptions,
@@ -11,8 +12,10 @@ import type {
   TextAnswerKey,
   TrueFalseAnswerKey,
 } from "./types";
+import { gradeDictationText } from "./dictation";
 
 export * from "./types";
+export * from "./dictation";
 
 const CURLY_APOSTROPHE_REGEX = /[\u2018\u2019\u201A\u201B\u2032\u0060]/g;
 const CURLY_DOUBLE_QUOTE_REGEX = /[\u201C\u201D\u201E\u201F\u2033]/g;
@@ -201,6 +204,18 @@ export function gradeField(field: FieldForGrading, value: AnswerValue): GradeRes
       }
       const matched = actual === expected;
       return { isCorrect: matched, score: matched ? roundScore(maxPoints) : 0 };
+    }
+
+    case "DICTATION": {
+      const dictKey = key as unknown as DictationAnswerKey;
+      const transcript = typeof dictKey.transcript === "string" ? dictKey.transcript : "";
+      const studentText = typeof value === "string" ? value : "";
+      const res = gradeDictationText(transcript, studentText, maxPoints, field.gradingOpts);
+      return {
+        isCorrect: res.isCorrect,
+        score: res.score,
+        detail: res.detail,
+      };
     }
 
     default:

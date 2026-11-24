@@ -180,17 +180,45 @@ async function generateSimpleWorksheetPdf(title: string, subtitle: string): Prom
   return Buffer.from(await doc.save());
 }
 
+/** Generates a tiny playable 16-bit mono PCM WAV tone for the Dictation Demo seed. */
+function generateSampleWavBuffer(durationSec = 2, freqHz = 440): Buffer {
+  const sampleRate = 8000;
+  const numSamples = sampleRate * durationSec;
+  const dataSize = numSamples * 2;
+  const buf = Buffer.alloc(44 + dataSize);
+  buf.write("RIFF", 0);
+  buf.writeUInt32LE(36 + dataSize, 4);
+  buf.write("WAVE", 8);
+  buf.write("fmt ", 12);
+  buf.writeUInt32LE(16, 16); // PCM chunk size
+  buf.writeUInt16LE(1, 20); // PCM format
+  buf.writeUInt16LE(1, 22); // mono
+  buf.writeUInt32LE(sampleRate, 24);
+  buf.writeUInt32LE(sampleRate * 2, 28);
+  buf.writeUInt16LE(2, 32);
+  buf.writeUInt16LE(16, 34);
+  buf.write("data", 36);
+  buf.writeUInt32LE(dataSize, 40);
+  for (let i = 0; i < numSamples; i++) {
+    const sample = Math.round(Math.sin((2 * Math.PI * freqHz * i) / sampleRate) * 6000);
+    buf.writeInt16LE(sample, 44 + i * 2);
+  }
+  return buf;
+}
+
 async function main() {
   console.log("Seeding EngClass LMS database...");
   const passwordHash = await bcrypt.hash("password123", 10);
 
   // Clean existing data in dependency order for idempotent re-seeding
   await prisma.notification.deleteMany();
+  await prisma.audioPlay.deleteMany();
   await prisma.proctorEvent.deleteMany();
   await prisma.answer.deleteMany();
   await prisma.submission.deleteMany();
   await prisma.assignment.deleteMany();
   await prisma.field.deleteMany();
+  await prisma.worksheetAudio.deleteMany();
   await prisma.worksheetPage.deleteMany();
   await prisma.worksheet.deleteMany();
   await prisma.lessonItem.deleteMany();
@@ -860,6 +888,174 @@ async function main() {
       requireFullscreen: true,
       blockCopyPaste: true,
       shareProctorWithParent: true,
+    },
+  });
+
+  // Worksheet 3: Dictation & Listening Demo (with sample WAV audio + DICTATION fields)
+  const wsDictation = await prisma.worksheet.create({
+    data: {
+      ownerId: teacher1.id,
+      title: "Dictation Demo — Unit 8: Listening & Chép chính tả",
+      instructions:
+        "Nghe kỹ từng đoạn audio (giới hạn số lần nghe) và tự gõ lại chính xác nội dung. Dán văn bản và kiểm tra chính tả bị tắt.",
+      isShared: true,
+    },
+  });
+
+  const sampleWav = generateSampleWavBuffer(2, 440);
+  const sampleAudioKey = `worksheets/${wsDictation.id}/audio/seed-dictation-part1.wav`;
+  await storage.put(sampleAudioKey, sampleWav, "audio/wav");
+
+  const audioTrack1 = await prisma.worksheetAudio.create({
+    data: {
+      worksheetId: wsDictation.id,
+      title: "Part 1 — Daily Routine (Audio mẫu)",
+      fileKey: sampleAudioKey,
+      mimeType: "audio/wav",
+      sizeBytes: sampleWav.length,
+      durationSec: 2,
+      order: 0,
+    },
+  });
+
+  await prisma.field.createMany({
+    data: [
+      {
+        worksheetId: wsDictation.id,
+        placement: "ANSWER_SHEET",
+        type: "DICTATION",
+        label: "1",
+        prompt: "Nghe Part 1 và chép lại chính xác câu tiếng Anh bạn nghe được:",
+        skillTag: "LISTENING",
+        audioId: audioTrack1.id,
+        order: 0,
+        points: 2,
+        answerKey: {
+          transcript: "Good morning everyone, today we will practice English listening skills.",
+        },
+        gradingOpts: {
+          caseSensitive: false,
+          ignorePunctuation: true,
+          scoring: "WORD_ACCURACY",
+        },
+      },
+      {
+        worksheetId: wsDictation.id,
+        placement: "ANSWER_SHEET",
+        type: "DICTATION",
+        label: "2",
+        prompt: "Chép chính tả câu thứ hai:",
+        skillTag: "LISTENING",
+        audioId: audioTrack1.id,
+        order: 1,
+        points: 2,
+        answerKey: {
+          transcript: "Please listen carefully and type every single word without copying.",
+        },
+        gradingOpts: {
+          caseSensitive: false,
+          ignorePunctuation: true,
+          scoring: "WORD_ACCURACY",
+        },
+      },
+    ],
+  });
+
+  await prisma.assignment.create({
+    data: {
+      classId: class1.id,
+      worksheetId: wsDictation.id,
+      title: "Luyện Chép Chính Tả Tiếng Anh (Giới hạn 2 lượt nghe, không giới hạn lượt làm)",
+      openAt: new Date(Date.now() - 60 * 60 * 1000),
+      dueAt: nextWeek,
+      timeLimitMin: 20,
+      maxAttempts: null, // unlimited attempts!
+      shuffle: false,
+      showResult: "AFTER_SUBMIT",
+      showAnswerKey: true,
+      showLeaderboard: "AFTER_SUBMIT",
+      proctorMode: "OFF",
+      blockCopyPaste: true,
+      audioMaxPlays: 2,
+      audioBlockPause: false,
+      audioBlockSeek: true,
+    },
+  });
+
+  // Worksheet 4: Shared Memorization Focus Mode Demo (Unit 17 Survival Tips)
+  const wsSurvival = await prisma.worksheet.create({
+    data: {
+      ownerId: teacher1.id,
+      title: "Unit 17: Survival Tips — Học thuộc (Chế độ tập trung 1 câu/màn)",
+      instructions: "Điền từ/cụm từ chính xác vào chỗ trống. Nhấn Enter để chuyển nhanh sang câu tiếp theo.",
+      isShared: true,
+      fields: {
+        create: [
+          {
+            placement: "ANSWER_SHEET",
+            type: "TEXT",
+            label: "1",
+            prompt: "What ________?",
+            skillTag: "VOCABULARY",
+            order: 0,
+            points: 1,
+            answerKey: { accepted: ["do you know about jungles"] },
+            gradingOpts: { caseSensitive: false, ignorePunctuation: true, ignoreExtraSpaces: true },
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "TEXT",
+            label: "2",
+            prompt: "Have you ________?",
+            skillTag: "VOCABULARY",
+            order: 1,
+            points: 1,
+            answerKey: { accepted: ["ever been in the jungle"] },
+            gradingOpts: { caseSensitive: false, ignorePunctuation: true, ignoreExtraSpaces: true },
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "TEXT",
+            label: "3a",
+            prompt: "(1) ____ [3a] ____. Climb ________.",
+            skillTag: "VOCABULARY",
+            order: 2,
+            points: 0.5,
+            answerKey: { accepted: ["Find a hill"] },
+            gradingOpts: { caseSensitive: false, ignorePunctuation: true, ignoreExtraSpaces: true },
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "TEXT",
+            label: "3b",
+            prompt: "(1) ________. Climb ____ [3b] ____.",
+            skillTag: "VOCABULARY",
+            order: 3,
+            points: 0.5,
+            answerKey: { accepted: ["a hill so that you can see over the top of the trees"] },
+            gradingOpts: { caseSensitive: false, ignorePunctuation: true, ignoreExtraSpaces: true },
+          },
+        ],
+      },
+    },
+  });
+
+  await prisma.assignment.create({
+    data: {
+      classId: class1.id,
+      worksheetId: wsSurvival.id,
+      title: "Bài học thuộc Unit 17: Survival Tips (1 câu/màn hình)",
+      openAt: new Date(Date.now() - 60 * 60 * 1000),
+      dueAt: nextWeek,
+      timeLimitMin: 15,
+      maxAttempts: null,
+      shuffle: false,
+      showResult: "AFTER_SUBMIT",
+      showAnswerKey: true,
+      showLeaderboard: "AFTER_SUBMIT",
+      proctorMode: "OFF",
+      blockCopyPaste: true,
+      oneQuestionPerPage: true,
     },
   });
 

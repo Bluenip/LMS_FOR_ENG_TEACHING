@@ -59,6 +59,9 @@ export async function regradeWorksheetSubmissions(worksheetId: string): Promise<
         (ans?.value ?? undefined) as AnswerValue
       );
       autoScore += res.score ?? 0;
+      const gradeDetail = res.detail
+        ? (res.detail as unknown as Prisma.InputJsonValue)
+        : undefined;
       updates.push(
         prisma.answer.upsert({
           where: { submissionId_fieldId: { submissionId: sub.id, fieldId: f.id } },
@@ -68,8 +71,13 @@ export async function regradeWorksheetSubmissions(worksheetId: string): Promise<
             value: "",
             isCorrect: res.isCorrect,
             score: res.score,
+            gradeDetail,
           },
-          update: { isCorrect: res.isCorrect, score: res.score },
+          update: {
+            isCorrect: res.isCorrect,
+            score: res.score,
+            ...(gradeDetail !== undefined ? { gradeDetail } : {}),
+          },
         })
       );
     }

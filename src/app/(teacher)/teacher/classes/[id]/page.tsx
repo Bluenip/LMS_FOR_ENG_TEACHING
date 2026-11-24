@@ -64,6 +64,7 @@ export default async function TeacherClassDetailPage({
         dueAt: a.dueAt?.toISOString() ?? null,
         timeLimitMin: a.timeLimitMin,
         proctorMode: a.proctorMode,
+        requireCamera: a.requireCamera,
         violationAction: a.violationAction,
         maxViolations: a.maxViolations,
         worksheet: a.worksheet,

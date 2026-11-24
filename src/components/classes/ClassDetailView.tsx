@@ -95,6 +95,7 @@ export interface ClassDetailData {
     dueAt: string | null;
     timeLimitMin: number | null;
     proctorMode: ProctorMode;
+    requireCamera?: boolean;
     violationAction: ViolationAction;
     maxViolations: number;
     worksheet: { id: string; title: string; _count: { fields: number } };
@@ -605,10 +606,10 @@ export function ClassDetailView({
           ) : (
             cls.assignments.map((asg) => {
               const proctorSummary = describeProctorRuleSummary(asg, tr);
-              const studentTarget =
-                asg.proctorMode !== "OFF"
-                  ? `/student/assignments/${asg.id}/rules`
-                  : `/student/assignments/${asg.id}/do`;
+              const needsRules = asg.proctorMode !== "OFF" || Boolean(asg.requireCamera);
+              const studentTarget = needsRules
+                ? `/student/assignments/${asg.id}/rules`
+                : `/student/assignments/${asg.id}/do`;
 
               return (
                 <div
@@ -618,7 +619,7 @@ export function ClassDetailView({
                   <div className="space-y-1.5">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-base font-bold text-[#0B1C30]">{asg.title}</h3>
-                      {asg.proctorMode !== "OFF" && (
+                      {needsRules && (
                         <Badge variant="danger">
                           <Lock className="h-3 w-3" />
                           {vi.proctor.badge}
@@ -652,7 +653,7 @@ export function ClassDetailView({
                     </Button>
                     {isTeacher ? (
                       <>
-                        {asg.proctorMode !== "OFF" && (
+                        {(asg.proctorMode !== "OFF" || asg.requireCamera) && (
                           <Button variant="secondary" size="sm" asChild>
                             <Link href={`/teacher/assignments/${asg.id}/live`}>
                               <Radio className="h-3.5 w-3.5 text-red-500" />

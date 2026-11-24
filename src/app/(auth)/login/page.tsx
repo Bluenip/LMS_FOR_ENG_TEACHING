@@ -72,7 +72,7 @@ export default function LoginPage() {
       <div className="grid w-full max-w-5xl grid-cols-1 items-center gap-8 lg:grid-cols-12">
         {/* Left Stitch Hero Preview */}
         <div className="hidden lg:col-span-7 lg:block">
-          <div className="rounded-3xl bg-gradient-to-br from-[#EEF2FF] via-[#F4F6FF] to-[#FFF5EE] p-8 shadow-sm border border-indigo-100/70">
+          <div className="rounded-3xl bg-gradient-to-br from-[#EEF2FF] via-[#F4F6FF] to-[#FFF5EE] dark:from-[#162038] dark:via-[#111A2E] dark:to-[#1E1B2E] p-8 shadow-sm border border-indigo-100/70">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#4F46E5] text-white shadow-md">
                 <BookOpen className="h-6 w-6" />

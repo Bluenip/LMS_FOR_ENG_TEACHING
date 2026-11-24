@@ -22,6 +22,7 @@ export const STUDENT_FIELD_SELECT = {
   label: true,
   prompt: true,
   skillTag: true,
+  audioId: true,
   order: true,
   points: true,
   pageIndex: true,
@@ -38,7 +39,23 @@ export async function listTeacherWorksheets(ownerId: string) {
     where: { ownerId },
     include: {
       _count: {
-        select: { fields: true, assignments: true },
+        select: { fields: true, assignments: true, audios: true },
+      },
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+}
+
+export async function listSharedWorksheets(excludeOwnerId: string) {
+  return prisma.worksheet.findMany({
+    where: {
+      isShared: true,
+      ownerId: { not: excludeOwnerId },
+    },
+    include: {
+      owner: { select: { id: true, name: true, email: true } },
+      _count: {
+        select: { fields: true, assignments: true, audios: true },
       },
     },
     orderBy: { updatedAt: "desc" },
@@ -58,19 +75,21 @@ export async function createWorksheet(
     include: {
       pages: { orderBy: { pageIndex: "asc" } },
       fields: { orderBy: { order: "asc" } },
+      audios: { orderBy: { order: "asc" } },
     },
   });
 }
 
 export async function updateWorksheet(
   worksheetId: string,
-  input: { title?: string; instructions?: string | null }
+  input: { title?: string; instructions?: string | null; isShared?: boolean }
 ) {
   return prisma.worksheet.update({
     where: { id: worksheetId },
     data: {
       ...(input.title !== undefined ? { title: input.title } : {}),
       ...(input.instructions !== undefined ? { instructions: input.instructions } : {}),
+      ...(input.isShared !== undefined ? { isShared: input.isShared } : {}),
     },
   });
 }
@@ -78,7 +97,7 @@ export async function updateWorksheet(
 export async function deleteWorksheet(worksheetId: string) {
   const ws = await prisma.worksheet.findUnique({
     where: { id: worksheetId },
-    select: { pdfFileKey: true },
+    select: { pdfFileKey: true, audios: { select: { fileKey: true } } },
   });
   if (!ws) {
     throw new AppError("Không tìm thấy phiếu bài tập.", 404, "NOT_FOUND");
@@ -92,12 +111,12 @@ export async function deleteWorksheet(worksheetId: string) {
     );
   }
   await prisma.worksheet.delete({ where: { id: worksheetId } });
+  const storage = getStorageProvider();
   if (ws.pdfFileKey) {
-    try {
-      await getStorageProvider().delete(ws.pdfFileKey);
-    } catch {
-      // ignore orphaned file delete errors
-    }
+    await storage.delete(ws.pdfFileKey).catch(() => undefined);
+  }
+  for (const a of ws.audios) {
+    await storage.delete(a.fileKey).catch(() => undefined);
   }
 }
 
@@ -107,6 +126,7 @@ export async function getWorksheetForTeacher(worksheetId: string) {
     include: {
       pages: { orderBy: { pageIndex: "asc" } },
       fields: { orderBy: { order: "asc" } },
+      audios: { orderBy: { order: "asc" } },
     },
   });
   if (!worksheet) {
@@ -186,11 +206,13 @@ export interface SaveFieldPayload {
     | "TRUE_FALSE"
     | "DROPDOWN"
     | "CHECKBOX"
-    | "ESSAY";
+    | "ESSAY"
+    | "DICTATION";
   label: string;
   prompt?: string | null;
   explanation?: string | null;
   skillTag?: "GRAMMAR" | "VOCABULARY" | "READING" | "LISTENING" | "WRITING" | "SPEAKING" | null;
+  audioId?: string | null;
   order: number;
   points: number;
   pageIndex?: number | null;
@@ -250,9 +272,16 @@ export async function saveWorksheetFields(worksheetId: string, fields: SaveField
       });
     }
 
+    const existingAudios = await tx.worksheetAudio.findMany({
+      where: { worksheetId },
+      select: { id: true },
+    });
+    const validAudioIds = new Set(existingAudios.map((a) => a.id));
+
     const saved = [];
     for (let i = 0; i < fields.length; i++) {
       const f = fields[i]!;
+      const safeAudioId = f.audioId && validAudioIds.has(f.audioId) ? f.audioId : null;
       const data = {
         placement: f.placement,
         type: f.type,
@@ -260,6 +289,7 @@ export async function saveWorksheetFields(worksheetId: string, fields: SaveField
         prompt: f.prompt ?? null,
         explanation: f.explanation ?? null,
         skillTag: f.skillTag ?? null,
+        audioId: safeAudioId,
         order: i,
         points: f.points,
         pageIndex: f.placement === "OVERLAY" ? (f.pageIndex ?? 0) : null,
@@ -357,6 +387,45 @@ export async function authorizeFileDownload(
         select: { id: true },
       });
       return Boolean(assignedToChild);
+    }
+    return false;
+  }
+
+  // Check if worksheet audio (ONLY teacher owner or admin may access directly; students MUST use play-limited stream route)
+  const worksheetAudio = await prisma.worksheetAudio.findFirst({
+    where: { fileKey },
+    include: { worksheet: { select: { ownerId: true } } },
+  });
+  if (worksheetAudio) {
+    if (role === "TEACHER" && worksheetAudio.worksheet.ownerId === userId) return true;
+    return false;
+  }
+
+  // Check if camera proctor snapshot (proctor/{submissionId}/{filename}.jpg)
+  if (fileKey.startsWith("proctor/")) {
+    const parts = fileKey.split("/");
+    const submissionId = parts[1];
+    if (!submissionId) return false;
+    const sub = await prisma.submission.findUnique({
+      where: { id: submissionId },
+      select: {
+        studentId: true,
+        assignment: {
+          select: {
+            shareProctorWithParent: true,
+            class: { select: { teacherId: true } },
+          },
+        },
+      },
+    });
+    if (!sub) return false;
+    if (role === "TEACHER" && sub.assignment.class.teacherId === userId) return true;
+    if (role === "PARENT" && sub.assignment.shareProctorWithParent) {
+      const linked = await prisma.parentLink.findFirst({
+        where: { parentId: userId, studentId: sub.studentId, verifiedAt: { not: null } },
+        select: { id: true },
+      });
+      return Boolean(linked);
     }
     return false;
   }

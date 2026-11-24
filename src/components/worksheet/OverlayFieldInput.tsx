@@ -20,6 +20,7 @@ interface OverlayFieldInputProps {
   score?: number | null;
   teacherNote?: string | null;
   highlighted?: boolean;
+  disableSpellcheck?: boolean;
 }
 
 export function OverlayFieldInput({
@@ -35,6 +36,7 @@ export function OverlayFieldInput({
   isCorrect,
   teacherNote,
   highlighted = false,
+  disableSpellcheck = false,
 }: OverlayFieldInputProps) {
   const { tr } = useI18n();
   const x = field.x ?? 0;
@@ -105,6 +107,11 @@ export function OverlayFieldInput({
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange?.(e.target.value)}
           placeholder={tr("Nhập đáp án…", "Enter answer…")}
+          spellCheck={disableSpellcheck ? false : undefined}
+          autoComplete={disableSpellcheck ? "off" : undefined}
+          autoCorrect={disableSpellcheck ? "off" : undefined}
+          autoCapitalize={disableSpellcheck ? "off" : undefined}
+          data-gramm={disableSpellcheck ? "false" : undefined}
           style={{ textAlign: align, fontSize: "inherit" }}
           className="h-full w-full rounded bg-transparent px-1.5 outline-none placeholder:text-slate-400"
         />
@@ -252,6 +259,44 @@ export function OverlayFieldInput({
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange?.(e.target.value)}
           placeholder={tr("Nhập câu trả lời tự luận của bạn…", "Write your essay answer…")}
+          spellCheck={disableSpellcheck ? false : undefined}
+          autoComplete={disableSpellcheck ? "off" : undefined}
+          autoCorrect={disableSpellcheck ? "off" : undefined}
+          autoCapitalize={disableSpellcheck ? "off" : undefined}
+          data-gramm={disableSpellcheck ? "false" : undefined}
+          style={{ textAlign: align, fontSize: "inherit" }}
+          className="h-full w-full resize-none rounded bg-transparent p-1.5 leading-snug outline-none placeholder:text-slate-400"
+        />
+      )}
+
+      {field.type === "DICTATION" && (
+        <textarea
+          aria-label={tr(`Câu chép chính tả ${field.label}`, `Dictation question ${field.label}`)}
+          disabled={disabled}
+          value={typeof value === "string" ? value : ""}
+          onChange={(e) => onChange?.(e.target.value)}
+          onPaste={(e) => e.preventDefault()}
+          onDrop={(e) => e.preventDefault()}
+          onDragOver={(e) => e.preventDefault()}
+          onBeforeInput={(e) => {
+            const native = e.nativeEvent as InputEvent;
+            if (
+              native.inputType === "insertFromPaste" ||
+              native.inputType === "insertFromDrop" ||
+              native.inputType === "insertFromYank" ||
+              native.inputType === "insertReplacementText"
+            ) {
+              e.preventDefault();
+            }
+          }}
+          spellCheck={false}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          data-gramm="false"
+          data-gramm_editor="false"
+          data-enable-grammarly="false"
+          placeholder={tr("Nghe và gõ lại nội dung…", "Listen and type what you hear…")}
           style={{ textAlign: align, fontSize: "inherit" }}
           className="h-full w-full resize-none rounded bg-transparent p-1.5 leading-snug outline-none placeholder:text-slate-400"
         />

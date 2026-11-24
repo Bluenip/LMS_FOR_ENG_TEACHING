@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -8,14 +8,18 @@ import { toast } from "sonner";
 import {
   AlertTriangle,
   ArrowLeft,
+  Camera,
+  CheckCircle2,
   ClipboardX,
   Clock,
   FileQuestion,
+  Headphones,
   Maximize2,
   MonitorOff,
   Radio,
   ShieldCheck,
 } from "lucide-react";
+import { formatAttemptsLimit } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,19 +29,26 @@ interface RulesPayload {
     id: string;
     title: string;
     timeLimitMin: number | null;
-    maxAttempts: number;
+    maxAttempts: number | null;
     proctorMode: "OFF" | "MONITOR" | "LOCKDOWN" | "SEB";
     violationAction: "WARN" | "LOCK" | "RESTART" | "AUTO_SUBMIT";
     maxViolations: number;
     requireFullscreen: boolean;
     blockCopyPaste: boolean;
+    requireCamera: boolean;
+    cameraEnforce: boolean;
+    cameraSnapshots: boolean;
+    audioMaxPlays: number | null;
+    audioBlockPause: boolean;
+    audioBlockSeek: boolean;
     class: { id: string; name: string };
-    worksheet: { fields: Array<{ id: string }>; questionCount?: number };
+    worksheet: { fields: Array<{ id: string }>; questionCount?: number; audioCount?: number };
   };
   submission: {
     id: string;
     status: string;
     rulesAcceptedAt: string | null;
+    cameraConsentAt: string | null;
   } | null;
 }
 
@@ -48,7 +59,63 @@ export default function StudentAssignmentRulesPage() {
   const router = useRouter();
 
   const [agreed, setAgreed] = useState(false);
+  const [cameraConsent, setCameraConsent] = useState(false);
+  const [cameraChecked, setCameraChecked] = useState(false);
+  const [checkingCamera, setCheckingCamera] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+
+  const previewVideoRef = useRef<HTMLVideoElement | null>(null);
+  const previewStreamRef = useRef<MediaStream | null>(null);
+
+  const stopPreviewCamera = () => {
+    if (previewStreamRef.current) {
+      previewStreamRef.current.getTracks().forEach((t) => t.stop());
+      previewStreamRef.current = null;
+    }
+    if (previewVideoRef.current) {
+      previewVideoRef.current.srcObject = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => stopPreviewCamera();
+  }, []);
+
+  const handleCheckCamera = async () => {
+    setCameraError(null);
+    setCheckingCamera(true);
+    stopPreviewCamera();
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error(
+          tr(
+            "Trình duyệt không hỗ trợ camera hoặc trang chưa chạy trên HTTPS.",
+            "Camera is not supported in this browser or requires HTTPS."
+          )
+        );
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+        audio: false,
+      });
+      previewStreamRef.current = stream;
+      if (previewVideoRef.current) {
+        previewVideoRef.current.srcObject = stream;
+        await previewVideoRef.current.play().catch(() => undefined);
+      }
+      setCameraChecked(true);
+    } catch (err) {
+      setCameraChecked(false);
+      setCameraError(
+        err instanceof Error
+          ? err.message
+          : tr("Không thể mở camera. Vui lòng cấp quyền camera.", "Could not open camera. Please allow camera permission.")
+      );
+    } finally {
+      setCheckingCamera(false);
+    }
+  };
 
   const { data, isLoading, error } = useQuery<RulesPayload>({
     queryKey: ["assignment-rules", assignmentId],
@@ -89,10 +156,14 @@ export default function StudentAssignmentRulesPage() {
     assignment.violationAction === "RESTART" ||
     assignment.violationAction === "AUTO_SUBMIT";
 
+  const canStart =
+    agreed && (!assignment.requireCamera || (cameraChecked && cameraConsent));
+
   const handleStartExam = async () => {
-    if (!agreed) return;
+    if (!canStart) return;
     setStarting(true);
     try {
+      stopPreviewCamera();
       const attemptToken =
         typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
@@ -117,7 +188,11 @@ export default function StudentAssignmentRulesPage() {
       const res = await fetch(`/api/assignments/${assignmentId}/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rulesAccepted: true, attemptToken }),
+        body: JSON.stringify({
+          rulesAccepted: true,
+          cameraConsent: assignment.requireCamera ? cameraConsent : undefined,
+          attemptToken,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? tr("Không thể bắt đầu bài thi", "Could not start the exam"));
@@ -155,9 +230,18 @@ export default function StudentAssignmentRulesPage() {
                 <FileQuestion className="h-3 w-3" /> {assignment.worksheet.questionCount ?? assignment.worksheet.fields.length} {tr("câu hỏi", "questions")}
               </Badge>
               <Badge variant="danger">
-                • {vi.proctor.badge} ({vi.proctor.modes[assignment.proctorMode]})
+                • {vi.proctor.badge} (
+                {assignment.proctorMode !== "OFF"
+                  ? vi.proctor.modes[assignment.proctorMode]
+                  : tr("Camera AI", "AI Camera")}
+                )
               </Badge>
-              <Badge variant="neutral">{assignment.maxAttempts} {tr("lượt làm", "attempt(s)")}</Badge>
+              {assignment.requireCamera && (
+                <Badge variant="orange">
+                  <Camera className="h-3 w-3" /> {tr("Bắt buộc Camera AI", "AI Camera required")}
+                </Badge>
+              )}
+              <Badge variant="neutral">{formatAttemptsLimit(assignment.maxAttempts, tr)}</Badge>
             </div>
           </div>
 
@@ -194,7 +278,31 @@ export default function StudentAssignmentRulesPage() {
                     {tr("Vô hiệu hoá sao chép & dán", "Copy & paste disabled")}
                   </p>
                   <p className="text-xs text-[#464555]">
-                    {tr("Không được sao chép (Copy), dán (Paste), cắt hoặc mở menu chuột phải.", "No copying, pasting, cutting or right-click menu.")}
+                    {tr("Không được sao chép (Copy), dán (Paste), kéo thả, cắt hoặc mở menu chuột phải.", "No copying, pasting, drag-and-drop, cutting or right-click menu.")}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {(assignment.audioMaxPlays !== null || assignment.audioBlockPause || assignment.audioBlockSeek) && (
+              <div className="flex items-start gap-3 rounded-2xl bg-[#F8F9FF] p-3.5 border border-slate-100">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[#4F46E5] shadow-sm">
+                  <Headphones className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-sm font-bold text-[#0B1C30]">
+                    {tr("Quy định phát file nghe", "Audio playback rules")}
+                  </p>
+                  <p className="text-xs text-[#464555]">
+                    {[
+                      assignment.audioMaxPlays !== null
+                        ? tr(`Tối đa ${assignment.audioMaxPlays} lượt nghe cho mỗi file`, `Up to ${assignment.audioMaxPlays} play(s) per track`)
+                        : tr("Nghe không giới hạn", "Unlimited plays"),
+                      assignment.audioBlockPause ? tr("không cho dừng", "pausing disabled") : null,
+                      assignment.audioBlockSeek ? tr("không cho tua", "seeking disabled") : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" • ")}
                   </p>
                 </div>
               </div>
@@ -274,6 +382,94 @@ export default function StudentAssignmentRulesPage() {
             </ul>
           </div>
 
+          {/* Camera Check & Privacy Consent Step (when requireCamera = true) */}
+          {assignment.requireCamera && (
+            <div
+              data-testid="camera-check-box"
+              className="rounded-2xl border-2 border-indigo-200 bg-[#F8F9FF] p-4 space-y-3"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Camera className="h-4 w-4 text-[#4F46E5]" />
+                  <p className="text-sm font-bold text-[#0B1C30]">
+                    {tr("Kiểm tra Camera trước khi vào thi", "Camera check before starting")}
+                  </p>
+                </div>
+                {cameraChecked && (
+                  <Badge variant="mint" data-testid="camera-ready-badge">
+                    <CheckCircle2 className="h-3 w-3" /> {tr("Camera sẵn sàng", "Camera ready")}
+                  </Badge>
+                )}
+              </div>
+
+              <div className="flex flex-col items-center gap-3 sm:flex-row">
+                <div className="relative h-32 w-44 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-900">
+                  <video
+                    ref={previewVideoRef}
+                    muted
+                    playsInline
+                    className="h-full w-full object-cover scale-x-[-1]"
+                  />
+                  {!cameraChecked && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-[11px] text-slate-300 px-2">
+                      <Camera className="h-5 w-5 mb-1 opacity-70" />
+                      {tr("Chưa bật camera", "Camera off")}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1 space-y-2 text-xs text-[#464555]">
+                  <p>
+                    {tr(
+                      "Hình ảnh từ webcam được xử lý AI trực tiếp trên trình duyệt của bạn (không phát trực tiếp video lên máy chủ). ",
+                      "Webcam frames are processed locally in your browser (no live video is streamed to the server). "
+                    )}
+                    {assignment.cameraSnapshots
+                      ? tr(
+                          "Chỉ chụp ảnh bằng chứng nhỏ (320×240) khi phát hiện sự kiện bất thường; chỉ giáo viên lớp được xem và ảnh tự động xoá sau 30 ngày.",
+                          "Only small 320×240 snapshots are saved on alert events; only your teacher can view them and they are auto-deleted after 30 days."
+                        )
+                      : tr("Bài thi này không lưu ảnh chụp.", "Snapshots are disabled for this exam.")}
+                  </p>
+                  {cameraError && (
+                    <p className="font-semibold text-[#BA1A1A]">{cameraError}</p>
+                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={cameraChecked ? "secondary" : "default"}
+                    disabled={checkingCamera}
+                    data-testid="check-camera-btn"
+                    onClick={() => void handleCheckCamera()}
+                  >
+                    <Camera className="h-3.5 w-3.5" />
+                    {checkingCamera
+                      ? tr("Đang mở camera…", "Opening camera…")
+                      : cameraChecked
+                        ? tr("Kiểm tra lại camera", "Recheck camera")
+                        : tr("Bật & kiểm tra camera", "Enable & test camera")}
+                  </Button>
+                </div>
+              </div>
+
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200 bg-white p-3">
+                <input
+                  type="checkbox"
+                  data-testid="camera-consent-checkbox"
+                  checked={cameraConsent}
+                  onChange={(e) => setCameraConsent(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-[#4F46E5]"
+                />
+                <span className="text-xs font-semibold text-[#0B1C30]">
+                  {tr(
+                    "Tôi đồng ý bật camera giám sát AI và hiểu rõ mục đích, phạm vi lưu trữ dữ liệu hình ảnh theo quy định bảo vệ dữ liệu cá nhân.",
+                    "I consent to AI webcam monitoring and understand how snapshot data is stored and purged."
+                  )}
+                </span>
+              </label>
+            </div>
+          )}
+
           {/* Agreement Checkbox */}
           <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white p-3.5 hover:border-indigo-300">
             <input
@@ -294,7 +490,7 @@ export default function StudentAssignmentRulesPage() {
               type="button"
               size="lg"
               className="w-full"
-              disabled={!agreed || starting}
+              disabled={!canStart || starting}
               data-testid="start-proctored-btn"
               onClick={handleStartExam}
             >

@@ -4,6 +4,7 @@
 /build
 /uploads/
 /public/pdf.worker.min.mjs
+/public/mediapipe/
 /playwright-report/
 /test-results/
 .DS_Store

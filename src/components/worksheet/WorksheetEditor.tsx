@@ -15,16 +15,22 @@ import {
   CheckSquare,
   ChevronDownSquare,
   Copy,
+  Download,
   Eye,
+  FileDown,
   FileText,
+  FileUp,
   Grid,
   Hash,
+  Headphones,
   ListChecks,
   ListOrdered,
+  Mic,
   MousePointer2,
   Plus,
   Save,
   Send,
+  Share2,
   Sparkles,
   Trash2,
   Type,
@@ -46,7 +52,13 @@ import { Badge } from "@/components/ui/badge";
 import { PdfCanvasPage, usePdfDocument } from "./PdfCanvasPage";
 import { OverlayFieldInput } from "./OverlayFieldInput";
 import { AnswerSheetPanel } from "./AnswerSheetPanel";
-import type { EditorFieldDTO, StudentFieldDTO, WorksheetPageDTO } from "./types";
+import { LimitedAudioPlayer } from "./LimitedAudioPlayer";
+import type {
+  EditorFieldDTO,
+  StudentFieldDTO,
+  WorksheetAudioDTO,
+  WorksheetPageDTO,
+} from "./types";
 
 interface WorksheetEditorProps {
   initialWorksheet: {
@@ -55,8 +67,10 @@ interface WorksheetEditorProps {
     instructions: string | null;
     pdfFileKey: string | null;
     pageCount: number;
+    isShared?: boolean;
     pages: WorksheetPageDTO[];
     fields: EditorFieldDTO[];
+    audios?: WorksheetAudioDTO[];
   };
 }
 
@@ -71,6 +85,7 @@ const TOOL_COLORS: Record<FieldType, { border: string; bg: string; badge: string
   MULTI_SELECT: { border: "border-amber-500", bg: "bg-amber-50/75", badge: "bg-amber-600" },
   TRUE_FALSE: { border: "border-teal-500", bg: "bg-teal-50/75", badge: "bg-teal-600" },
   ESSAY: { border: "border-rose-500", bg: "bg-rose-50/75", badge: "bg-rose-600" },
+  DICTATION: { border: "border-purple-500", bg: "bg-purple-50/75", badge: "bg-purple-600" },
 };
 
 const SKILL_VALUES: SkillTag[] = ["GRAMMAR", "VOCABULARY", "READING", "LISTENING", "WRITING", "SPEAKING"];
@@ -185,6 +200,21 @@ function createDefaultFieldPayload(
         gradingOpts: null,
         style: baseStyle,
       };
+    case "DICTATION":
+      return {
+        type,
+        label,
+        order,
+        points: 2,
+        options: null,
+        answerKey: { transcript: "" },
+        gradingOpts: {
+          caseSensitive: false,
+          ignorePunctuation: true,
+          scoring: "WORD_ACCURACY",
+        },
+        style: baseStyle,
+      };
   }
 }
 
@@ -198,6 +228,11 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
   const [title, setTitle] = useState(initialWorksheet.title);
   const [pdfFileKey, setPdfFileKey] = useState<string | null>(initialWorksheet.pdfFileKey);
   const [pages, setPages] = useState<WorksheetPageDTO[]>(initialWorksheet.pages);
+  const [audios, setAudios] = useState<WorksheetAudioDTO[]>(initialWorksheet.audios ?? []);
+  const [isShared, setIsShared] = useState(Boolean(initialWorksheet.isShared));
+  const [uploadingAudio, setUploadingAudio] = useState(false);
+  const [importingWord, setImportingWord] = useState(false);
+  const wordAppendInputRef = useRef<HTMLInputElement | null>(null);
   const [fields, setFields] = useState<EditorFieldDTO[]>(
     initialWorksheet.fields.map((f) => ({ ...f, isPersisted: true }))
   );
@@ -241,6 +276,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
   const isInitialMount = useRef(true);
   const skipNextAutosaveRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const audioInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedField = useMemo(() => {
     const firstId = selectedIds[0];
@@ -278,6 +314,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
               prompt: f.prompt ?? null,
               explanation: f.explanation ?? null,
               skillTag: f.skillTag ?? null,
+              audioId: f.audioId ?? null,
               order: idx,
               points: Number(f.points) || 0,
               pageIndex: f.placement === "OVERLAY" ? (f.pageIndex ?? 0) : null,
@@ -387,6 +424,139 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
       toast.error(err instanceof Error ? err.message : tr("Tải PDF thất bại", "PDF upload failed"));
     } finally {
       setUploadingPdf(false);
+    }
+  };
+
+  const handleUploadAudio = async (file: File) => {
+    setUploadingAudio(true);
+    try {
+      // Best-effort client-side duration probe so server knows track length for stream token TTL
+      const durationSec = await new Promise<number | null>((resolve) => {
+        const url = URL.createObjectURL(file);
+        const el = new Audio();
+        el.preload = "metadata";
+        const cleanup = () => URL.revokeObjectURL(url);
+        el.onloadedmetadata = () => {
+          const d = Number.isFinite(el.duration) && el.duration > 0 ? Math.round(el.duration) : null;
+          cleanup();
+          resolve(d);
+        };
+        el.onerror = () => {
+          cleanup();
+          resolve(null);
+        };
+        el.src = url;
+      });
+
+      const formData = new FormData();
+      formData.append("file", file);
+      if (durationSec !== null) formData.append("durationSec", String(durationSec));
+      const res = await fetch(`/api/worksheets/${worksheetId}/audio`, {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? tr("Tải file nghe thất bại", "Audio upload failed"));
+      setAudios((prev) => [...prev, json.audio]);
+      toast.success(tr(`Đã tải lên file nghe "${json.audio.title}"`, `Uploaded audio "${json.audio.title}"`));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : tr("Tải file nghe thất bại", "Audio upload failed"));
+    } finally {
+      setUploadingAudio(false);
+    }
+  };
+
+  const handleRenameAudio = async (audioId: string, nextTitle: string) => {
+    const trimmed = nextTitle.trim();
+    if (!trimmed) return;
+    const res = await fetch(`/api/worksheets/${worksheetId}/audio/${audioId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: trimmed }),
+    });
+    if (res.ok) {
+      setAudios((prev) => prev.map((a) => (a.id === audioId ? { ...a, title: trimmed } : a)));
+    }
+  };
+
+  const handleDeleteAudio = async (audioId: string) => {
+    const res = await fetch(`/api/worksheets/${worksheetId}/audio/${audioId}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      toast.error(tr("Xoá file nghe thất bại", "Failed to delete audio"));
+      return;
+    }
+    setAudios((prev) => prev.filter((a) => a.id !== audioId));
+    setFields((prev) => prev.map((f) => (f.audioId === audioId ? { ...f, audioId: null } : f)));
+    toast.success(tr("Đã xoá file nghe.", "Audio deleted."));
+  };
+
+  const handleToggleShare = async () => {
+    const next = !isShared;
+    const res = await fetch(`/api/worksheets/${worksheetId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isShared: next }),
+    });
+    if (res.ok) {
+      setIsShared(next);
+      toast.success(
+        next
+          ? tr("Đã chia sẻ phiếu cho các giáo viên khác!", "Shared with other teachers!")
+          : tr("Đã tắt chia sẻ.", "Sharing disabled.")
+      );
+    }
+  };
+
+  const handleAppendFromWord = async (file: File) => {
+    setImportingWord(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("startNumber", String(fields.length + 1));
+      const res = await fetch("/api/worksheets/parse-word", {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? tr("Đọc file Word thất bại", "Word parse failed"));
+      const parsed = (json.fields ?? []) as Array<{
+        label: string;
+        prompt: string;
+        accepted: string[];
+        points: number;
+      }>;
+      if (parsed.length === 0) {
+        toast.warning(tr("Không tìm thấy ô __đáp án__ nào trong file.", "No __answer__ blanks found in file."));
+        return;
+      }
+      const newFields: EditorFieldDTO[] = parsed.map((pf, idx) => ({
+        id: `tmp-word-${Date.now()}-${idx}`,
+        isPersisted: false,
+        placement: "ANSWER_SHEET",
+        type: "TEXT",
+        label: pf.label,
+        prompt: pf.prompt,
+        order: fields.length + idx,
+        points: pf.points,
+        options: null,
+        answerKey: { accepted: pf.accepted },
+        gradingOpts: {
+          caseSensitive: false,
+          ignorePunctuation: true,
+          ignoreExtraSpaces: true,
+        },
+        style: { fontSize: 13, align: "left", transparentBg: false },
+      }));
+      setFields((prev) => [...prev, ...newFields]);
+      toast.success(
+        tr(`Đã thêm tự động ${newFields.length} ô điền từ từ file Word!`, `Appended ${newFields.length} fill-in-the-blank items from Word!`)
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : tr("Nhập Word thất bại", "Word import failed"));
+    } finally {
+      setImportingWord(false);
     }
   };
 
@@ -613,6 +783,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
         label: f.label,
         prompt: f.prompt,
         skillTag: f.skillTag,
+        audioId: f.audioId,
         order: f.order,
         points: f.points,
         pageIndex: f.pageIndex,
@@ -712,6 +883,23 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
           </div>
         )}
 
+        {audios.length > 0 && (
+          <div className="stitch-card p-4 space-y-2.5">
+            <p className="text-xs font-bold text-[#0B1C30]">
+              {tr("File nghe của bài tập", "Worksheet audio tracks")}
+            </p>
+            <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
+              {audios.map((a) => (
+                <LimitedAudioPlayer
+                  key={a.id}
+                  audio={a}
+                  previewUrl={a.fileKey ? `/api/files/${a.fileKey}` : null}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
           <div className="min-w-0 flex-1 space-y-5 overflow-x-auto pb-16">
             {pages.length > 0 ? (
@@ -769,7 +957,18 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
             }}
             revealResult={Boolean(previewGraded)}
             revealKey={Boolean(previewGraded)}
-            gradeByFieldId={previewGraded?.fieldResults ?? {}}
+            audios={audios}
+            audioPreviewMode
+            gradeByFieldId={
+              previewGraded
+                ? Object.fromEntries(
+                    Object.entries(previewGraded.fieldResults).map(([fid, r]) => [
+                      fid,
+                      { isCorrect: r.isCorrect, score: r.score, gradeDetail: r.detail ?? null },
+                    ])
+                  )
+                : {}
+            }
           />
         </div>
       </div>
@@ -785,6 +984,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
     { id: "CHECKBOX", label: vi.worksheets.tools.CHECKBOX, icon: <CheckSquare className="h-3.5 w-3.5" /> },
     { id: "MULTIPLE_CHOICE", label: vi.worksheets.tools.MULTIPLE_CHOICE, icon: <ListChecks className="h-3.5 w-3.5" /> },
     { id: "ESSAY", label: vi.worksheets.tools.ESSAY, icon: <FileText className="h-3.5 w-3.5" /> },
+    { id: "DICTATION", label: vi.worksheets.tools.DICTATION, icon: <Mic className="h-3.5 w-3.5" /> },
   ];
 
   return (
@@ -860,8 +1060,32 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
             ))}
           </div>
 
-          {/* Right: Preview + Save + Assign CTA */}
-          <div className="flex items-center gap-2">
+          {/* Right: Share + Export + Preview + Save + Assign CTA */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Button
+              type="button"
+              variant={isShared ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => void handleToggleShare()}
+              title={tr("Chia sẻ phiếu cho giáo viên khác trong hệ thống", "Share worksheet with other teachers")}
+            >
+              <Share2 className={cn("h-4 w-4", isShared && "text-emerald-600")} />
+              <span className="hidden 2xl:inline">
+                {isShared ? tr("Đang chia sẻ", "Shared") : tr("Chia sẻ GV", "Share")}
+              </span>
+            </Button>
+            <Button variant="outline" size="sm" asChild title={tr("Xuất gói backup .zip (gồm PDF + file nghe + đáp án)", "Export backup .zip")}>
+              <a href={`/api/worksheets/${worksheetId}/export?format=zip`} download>
+                <Download className="h-4 w-4" />
+                <span className="hidden 2xl:inline">.zip</span>
+              </a>
+            </Button>
+            <Button variant="outline" size="sm" asChild title={tr("Xuất file Word (.docx có đáp án)", "Export Word (.docx)")}>
+              <a href={`/api/worksheets/${worksheetId}/export?format=docx`} download>
+                <FileDown className="h-4 w-4" />
+                <span className="hidden 2xl:inline">.docx</span>
+              </a>
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setPreviewMode(true)}>
               <Eye className="h-4 w-4" />
               <span className="hidden xl:inline">{vi.worksheets.previewAsStudent}</span>
@@ -1082,6 +1306,83 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
               <span>Overlay: {overlayFields.length}</span>
               <span>{tr("Phiếu:", "Sheet:")} {sheetFields.length}</span>
             </div>
+          </div>
+
+          {/* Worksheet Audio Manager Card */}
+          <div className="stitch-card p-3 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <h3 className="flex items-center gap-1.5 text-xs font-bold text-[#0B1C30]">
+                <Headphones className="h-3.5 w-3.5 text-[#4F46E5]" />
+                {tr("File nghe", "Audio tracks")}
+              </h3>
+              <Badge variant="default" className="text-[10px]">
+                {audios.length}
+              </Badge>
+            </div>
+
+            <div className="space-y-2 max-h-[260px] overflow-y-auto pr-0.5">
+              {audios.length === 0 ? (
+                <p className="text-[11px] text-slate-400">
+                  {tr("Chưa có file nghe. Tải MP3/WAV/M4A để dùng cho bài Listening hoặc Chép chính tả.", "No audio yet. Upload MP3/WAV/M4A for listening or dictation.")}
+                </p>
+              ) : (
+                audios.map((a) => (
+                  <div
+                    key={a.id}
+                    className="rounded-xl border border-slate-200 bg-[#F8F9FF] p-2 space-y-1.5"
+                  >
+                    <div className="flex items-center gap-1">
+                      <input
+                        defaultValue={a.title}
+                        onBlur={(e) => void handleRenameAudio(a.id, e.target.value)}
+                        className="min-w-0 flex-1 rounded bg-transparent px-1 py-0.5 text-[11px] font-semibold text-[#0B1C30] hover:bg-white focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteAudio(a.id)}
+                        className="p-0.5 text-slate-400 hover:text-red-500"
+                        title={tr("Xoá file nghe", "Delete audio")}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    {a.fileKey && (
+                      <audio
+                        controls
+                        preload="none"
+                        src={`/api/files/${a.fileKey}`}
+                        className="h-7 w-full"
+                      />
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            <input
+              ref={audioInputRef}
+              type="file"
+              accept="audio/*,.mp3,.wav,.ogg,.m4a,.webm"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void handleUploadAudio(f);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="w-full"
+              disabled={uploadingAudio}
+              onClick={() => audioInputRef.current?.click()}
+            >
+              <Upload className="h-3.5 w-3.5" />
+              {uploadingAudio
+                ? tr("Đang tải…", "Uploading…")
+                : tr("Tải file nghe (MP3/WAV)", "Upload audio")}
+            </Button>
           </div>
         </aside>
 
@@ -1475,6 +1776,29 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                   </div>
                 )}
 
+                {/* Optional audio track link */}
+                {audios.length > 0 && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">{tr("Gắn file nghe cho câu này", "Linked audio track")}</Label>
+                    <select
+                      value={selectedField.audioId ?? ""}
+                      onChange={(e) =>
+                        updateField(selectedField.id, {
+                          audioId: e.target.value || null,
+                        })
+                      }
+                      className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#4F46E5]"
+                    >
+                      <option value="">{tr("Không gắn riêng (dùng player chung)", "None (use shared player)")}</option>
+                      {audios.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 {/* Answer Key Editor by FieldType */}
                 <div className="rounded-xl border border-indigo-100 bg-[#F8F9FF] p-3 space-y-2.5">
                   <p className="font-bold text-[#3525CD]">{tr("Cấu hình Đáp án đúng", "Correct answer settings")}</p>
@@ -1709,6 +2033,76 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                       />
                     </div>
                   )}
+
+                  {selectedField.type === "DICTATION" && (
+                    <div className="space-y-2.5">
+                      <div className="space-y-1">
+                        <Label className="text-[11px]">
+                          {tr("Transcript chuẩn (đáp án chép chính tả)", "Expected transcript")}
+                        </Label>
+                        <Textarea
+                          rows={4}
+                          value={String(selectedField.answerKey.transcript ?? "")}
+                          onChange={(e) =>
+                            updateField(selectedField.id, {
+                              answerKey: { transcript: e.target.value },
+                            })
+                          }
+                          placeholder={tr(
+                            "Nhập chính xác nội dung học sinh cần nghe và chép lại…",
+                            "Enter the exact transcript students must type…"
+                          )}
+                          className="text-xs"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label className="text-[11px]">{tr("Cách tính điểm", "Scoring rule")}</Label>
+                        <select
+                          value={selectedField.gradingOpts?.scoring ?? "WORD_ACCURACY"}
+                          onChange={(e) =>
+                            updateField(selectedField.id, {
+                              gradingOpts: {
+                                ...selectedField.gradingOpts,
+                                scoring: e.target.value as "WORD_ACCURACY" | "ALL_OR_NOTHING",
+                              },
+                            })
+                          }
+                          className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#4F46E5]"
+                        >
+                          <option value="WORD_ACCURACY">
+                            {tr("Theo % số từ đúng (VD: 8/10 từ → 80% điểm)", "By % of correct words (e.g. 8/10 → 80%)")}
+                          </option>
+                          <option value="ALL_OR_NOTHING">
+                            {tr("Đúng hết mới được điểm", "All-or-nothing")}
+                          </option>
+                        </select>
+                      </div>
+
+                      <label className="flex items-center justify-between">
+                        <span>{vi.worksheets.editor.ignorePunctuation}</span>
+                        <Switch
+                          checked={selectedField.gradingOpts?.ignorePunctuation ?? true}
+                          onCheckedChange={(v) =>
+                            updateField(selectedField.id, {
+                              gradingOpts: { ...selectedField.gradingOpts, ignorePunctuation: v },
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="flex items-center justify-between">
+                        <span>{vi.worksheets.editor.caseSensitive}</span>
+                        <Switch
+                          checked={Boolean(selectedField.gradingOpts?.caseSensitive)}
+                          onCheckedChange={(v) =>
+                            updateField(selectedField.id, {
+                              gradingOpts: { ...selectedField.gradingOpts, caseSensitive: v },
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                  )}
                 </div>
 
                 {/* Overlay Styling */}
@@ -1828,9 +2222,34 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                 {vi.worksheets.modes.sheetTab} ({sheetFields.length} {tr("câu)", "questions)")}
               </h3>
               <p className="text-xs text-[#464555]">
-                {tr("Thêm nhanh câu hỏi phiếu trả lời hoặc dán chuỗi đáp án trắc nghiệm (VD: ABCDA hoặc 1A 2B 3C).", "Quickly add answer-sheet questions or paste a multiple-choice key (e.g. ABCDA or 1A 2B 3C).")}
+                {tr("Thêm nhanh câu hỏi phiếu trả lời, nhập tự động từ Word (__đáp án__) hoặc dán chuỗi đáp án trắc nghiệm.", "Quickly add questions, auto-import from Word (__answer__) or paste a multiple-choice key.")}
               </p>
             </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              ref={wordAppendInputRef}
+              type="file"
+              accept=".docx,.txt"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void handleAppendFromWord(f);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={importingWord}
+              onClick={() => wordAppendInputRef.current?.click()}
+            >
+              <FileUp className="h-4 w-4 text-[#F97316]" />
+              {importingWord
+                ? tr("Đang phân tích…", "Parsing…")
+                : tr("Nhập tự động từ Word (.docx)", "Auto-import from Word (.docx)")}
+            </Button>
           </div>
         </div>
 
@@ -1865,6 +2284,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                   <option value="TEXT">{tr("Điền ngắn", "Short answer")}</option>
                   <option value="NUMBER">{tr("Điền số", "Number")}</option>
                   <option value="ESSAY">{tr("Tự luận", "Essay")}</option>
+                  <option value="DICTATION">{tr("Chép chính tả (Dictation)", "Dictation")}</option>
                 </select>
               </div>
               <div className="w-24">
@@ -2028,6 +2448,20 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                           })
                         }
                         className="h-8 text-xs"
+                      />
+                    )}
+
+                    {field.type === "DICTATION" && (
+                      <Textarea
+                        rows={2}
+                        value={String(field.answerKey.transcript ?? "")}
+                        onChange={(e) =>
+                          updateField(field.id, {
+                            answerKey: { transcript: e.target.value },
+                          })
+                        }
+                        placeholder={tr("Nhập transcript chuẩn…", "Enter expected transcript…")}
+                        className="text-xs"
                       />
                     )}
                   </div>

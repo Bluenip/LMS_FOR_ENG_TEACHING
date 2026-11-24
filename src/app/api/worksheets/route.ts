@@ -3,14 +3,18 @@ import { handleApiError, requireRole } from "@/lib/permissions";
 import { createWorksheetSchema } from "@/lib/validators";
 import {
   createWorksheet,
+  listSharedWorksheets,
   listTeacherWorksheets,
 } from "@/server/worksheetService";
 
 export async function GET() {
   try {
     const user = await requireRole(["TEACHER", "ADMIN"]);
-    const worksheets = await listTeacherWorksheets(user.id);
-    return NextResponse.json({ worksheets });
+    const [worksheets, sharedWorksheets] = await Promise.all([
+      listTeacherWorksheets(user.id),
+      listSharedWorksheets(user.id),
+    ]);
+    return NextResponse.json({ worksheets, sharedWorksheets });
   } catch (error) {
     return handleApiError(error);
   }

@@ -95,3 +95,31 @@ const labelCollator = new Intl.Collator("vi", { numeric: true, sensitivity: "bas
 export function compareQuestionLabels(a: string, b: string): number {
   return labelCollator.compare(a, b);
 }
+
+/**
+ * Formats an attempt counter/limit, supporting null (unlimited attempts).
+ * Examples:
+ *  - formatAttemptsLimit(null, tr) -> "Không giới hạn lượt" / "Unlimited attempts"
+ *  - formatAttemptsLimit(3, tr)    -> "3 lượt làm" / "3 attempt(s)"
+ *  - formatAttemptsProgress(2, null) -> "2/∞"
+ *  - formatAttemptsProgress(2, 3)    -> "2/3"
+ */
+export function formatAttemptsLimit(
+  maxAttempts: number | null | undefined,
+  tr: (viText: string, enText: string) => string = (v) => v
+): string {
+  if (maxAttempts === null || maxAttempts === undefined) {
+    return tr("Không giới hạn lượt", "Unlimited attempts");
+  }
+  return tr(`${maxAttempts} lượt làm`, `${maxAttempts} attempt(s)`);
+}
+
+export function formatAttemptsProgress(
+  used: number,
+  maxAttempts: number | null | undefined
+): string {
+  if (maxAttempts === null || maxAttempts === undefined) {
+    return `${used}/∞`;
+  }
+  return `${used}/${maxAttempts}`;
+}

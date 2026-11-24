@@ -55,10 +55,10 @@ export default async function TeacherAssignmentsPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-base font-bold text-[#0B1C30]">{a.title}</h3>
                     <Badge variant="default">{a.class.name}</Badge>
-                    {a.proctorMode !== "OFF" && (
+                    {(a.proctorMode !== "OFF" || a.requireCamera) && (
                       <Badge variant="danger">
                         <Lock className="h-3 w-3" />
-                        {vi.proctor.modes[a.proctorMode]}
+                        {a.proctorMode !== "OFF" ? vi.proctor.modes[a.proctorMode] : tr("Camera AI", "AI Camera")}
                       </Badge>
                     )}
                   </div>
@@ -89,7 +89,7 @@ export default async function TeacherAssignmentsPage() {
                       {tr("Xếp hạng", "Leaderboard")}
                     </Link>
                   </Button>
-                  {a.proctorMode !== "OFF" && (
+                  {(a.proctorMode !== "OFF" || a.requireCamera) && (
                     <Button size="sm" variant="secondary" asChild>
                       <Link href={`/teacher/assignments/${a.id}/live`}>
                         <Radio className="h-3.5 w-3.5 text-red-500" />

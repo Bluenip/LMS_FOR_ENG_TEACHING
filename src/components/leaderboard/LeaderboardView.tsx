@@ -217,7 +217,7 @@ export function LeaderboardView({
               <div className="order-2 md:order-1">
                 {top2 && (
                   <div className="rounded-2xl border border-slate-200 bg-[#F8F9FF] p-5 text-center">
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-200 text-sm font-bold text-slate-700 ring-4 ring-white">
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-200 text-sm font-bold text-slate-700 ring-4 ring-white dark:ring-slate-900">
                       {getInitials(top2.displayName)}
                     </div>
                     <Badge variant="neutral" className="mt-2">
@@ -251,9 +251,9 @@ export function LeaderboardView({
               {/* Rank 1 - Gold Champion */}
               <div className="order-1 md:order-2">
                 {top1 && (
-                  <div className="relative rounded-2xl border-2 border-[#F97316]/60 bg-gradient-to-b from-[#FFF7ED] to-white p-6 text-center shadow-card-hover">
+                  <div className="relative rounded-2xl border-2 border-[#F97316]/60 bg-gradient-to-b from-[#FFF7ED] to-white dark:from-[#2B1B10] dark:to-[#111A2E] p-6 text-center shadow-card-hover">
                     <Crown className="mx-auto mb-1 h-6 w-6 text-[#F97316]" />
-                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F97316] text-base font-bold text-white ring-4 ring-orange-100">
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F97316] text-base font-bold text-white ring-4 ring-orange-100 dark:ring-orange-500/25">
                       {getInitials(top1.displayName)}
                     </div>
                     <Badge variant="orange" className="mt-2">
@@ -266,7 +266,7 @@ export function LeaderboardView({
                       {top1.scoreScale10}
                       <span className="text-sm font-medium text-slate-400"> / 10</span>
                     </p>
-                    <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-white p-2.5 text-xs border border-orange-100">
+                    <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-white p-2.5 text-xs border border-orange-100 dark:border-orange-500/30">
                       <div>
                         <p className="text-[10px] text-slate-400">{tr("Thời gian", "Time")}</p>
                         <p className="font-bold tabular-nums">
@@ -289,11 +289,11 @@ export function LeaderboardView({
               {/* Rank 3 - Bronze */}
               <div className="order-3">
                 {top3 && (
-                  <div className="rounded-2xl border border-amber-200/70 bg-[#FFFBEB]/60 p-5 text-center">
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-200 text-sm font-bold text-amber-900 ring-4 ring-white">
+                  <div className="rounded-2xl border border-amber-200/70 bg-[#FFFBEB]/60 dark:border-amber-500/35 dark:bg-amber-950/25 p-5 text-center">
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-200 text-sm font-bold text-amber-900 ring-4 ring-white dark:bg-amber-500/25 dark:text-amber-300 dark:ring-slate-900">
                       {getInitials(top3.displayName)}
                     </div>
-                    <Badge variant="outline" className="mt-2 border-amber-300 text-amber-800">
+                    <Badge variant="outline" className="mt-2 border-amber-300 text-amber-800 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-300">
                       {tr("Hạng", "Rank")} {top3.rank}
                     </Badge>
                     <p className="mt-2 font-bold text-[#0B1C30]">{top3.displayName}</p>
@@ -368,7 +368,7 @@ export function LeaderboardView({
                               : entry.rank === 2
                                 ? "bg-slate-200 text-slate-700"
                                 : entry.rank === 3
-                                  ? "bg-amber-100 text-amber-800"
+                                  ? "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300"
                                   : "text-slate-600"
                           )}
                         >

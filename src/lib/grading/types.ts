@@ -17,6 +17,7 @@ export interface GradingOptions {
   ignorePunctuation?: boolean;
   ignoreExtraSpaces?: boolean;
   partialCredit?: boolean;
+  scoring?: "WORD_ACCURACY" | "ALL_OR_NOTHING";
 }
 
 export interface TextAnswerKey {
@@ -48,6 +49,27 @@ export interface EssayAnswerKey {
   rubric?: string;
 }
 
+export interface DictationAnswerKey {
+  transcript: string;
+}
+
+export interface DictationDiffToken {
+  kind: "correct" | "wrong" | "missing" | "extra";
+  text: string;
+  expected?: string;
+}
+
+export interface DictationGradeDetail {
+  kind: "DICTATION";
+  correctWords: number;
+  totalWords: number;
+  wrongWords: number;
+  missingWords: number;
+  extraWords: number;
+  accuracy: number;
+  tokens: DictationDiffToken[];
+}
+
 export type AnswerKey =
   | TextAnswerKey
   | NumberAnswerKey
@@ -55,7 +77,8 @@ export type AnswerKey =
   | MultiSelectAnswerKey
   | TrueFalseAnswerKey
   | CheckboxAnswerKey
-  | EssayAnswerKey;
+  | EssayAnswerKey
+  | DictationAnswerKey;
 
 export type AnswerValue = string | string[] | boolean | number | null | undefined;
 
@@ -70,6 +93,7 @@ export interface FieldForGrading {
 export interface GradeResult {
   isCorrect: boolean | null; // null = requires manual grading (ESSAY)
   score: number | null; // null = requires manual grading (ESSAY)
+  detail?: DictationGradeDetail | null;
 }
 
 export interface SubmissionGradeSummary {

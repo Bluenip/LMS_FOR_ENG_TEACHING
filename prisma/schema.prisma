@@ -40,6 +40,7 @@ enum FieldType {
   DROPDOWN
   CHECKBOX
   ESSAY
+  DICTATION
 }
 
 enum SkillTag {
@@ -91,6 +92,13 @@ enum ProctorEventType {
   MULTI_SESSION
   NETWORK_OFFLINE
   RESIZE_SUSPICIOUS
+  DROP
+  PASTE_SUSPECTED
+  CAMERA_NO_FACE
+  CAMERA_MULTI_FACE
+  CAMERA_LOOK_AWAY
+  CAMERA_PHONE
+  CAMERA_OFF
 }
 
 enum SubmissionStatus {
@@ -261,12 +269,14 @@ model Worksheet {
   instructions String?
   pdfFileKey   String?
   pageCount    Int      @default(0)
+  isShared     Boolean  @default(false) // shared with other teachers in the LMS
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  owner       User            @relation("WorksheetOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  owner       User             @relation("WorksheetOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   pages       WorksheetPage[]
   fields      Field[]
+  audios      WorksheetAudio[]
   assignments Assignment[]
 
   @@index([ownerId])
@@ -311,6 +321,10 @@ model Field {
   worksheet Worksheet @relation(fields: [worksheetId], references: [id], onDelete: Cascade)
   answers   Answer[]
 
+  // Optional link to a worksheet audio track (listening / dictation)
+  audioId String?
+  audio   WorksheetAudio? @relation(fields: [audioId], references: [id], onDelete: SetNull)
+
   @@index([worksheetId, order])
 }
 
@@ -322,7 +336,7 @@ model Assignment {
   openAt        DateTime?
   dueAt         DateTime?
   timeLimitMin  Int?
-  maxAttempts   Int            @default(1)
+  maxAttempts   Int?           @default(1) // null = unlimited
   shuffle       Boolean        @default(false)
   showResult    ShowResultMode @default(AFTER_SUBMIT)
   showAnswerKey Boolean        @default(false)
@@ -342,6 +356,19 @@ model Assignment {
   sebConfigKeyHash       String?
   shareProctorWithParent Boolean         @default(false)
 
+  // Camera (AI) proctoring
+  requireCamera   Boolean @default(false)
+  cameraEnforce   Boolean @default(false) // false = AI events are "suspected" only
+  cameraSnapshots Boolean @default(true)
+
+  // Listening audio rules (per assignment, so one worksheet can be practice or test)
+  audioMaxPlays   Int? // null = unlimited plays per track
+  audioBlockPause Boolean @default(false)
+  audioBlockSeek  Boolean @default(false)
+
+  // Focus mode: show 1 question at a time on screen (ideal for memorization / fill-in-the-blank)
+  oneQuestionPerPage Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -354,20 +381,20 @@ model Assignment {
 }
 
 model Submission {
-  id              String           @id @default(cuid())
-  assignmentId    String
-  studentId       String
-  attemptNo       Int
-  status          SubmissionStatus @default(IN_PROGRESS)
-  startedAt       DateTime         @default(now())
-  submittedAt     DateTime?
-  isLate          Boolean          @default(false)
-  autoScore       Float?
-  manualScore     Float?
-  totalScore      Float?
-  maxScore        Float
-  questionOrder   Json?
-  teacherComment  String?
+  id             String           @id @default(cuid())
+  assignmentId   String
+  studentId      String
+  attemptNo      Int
+  status         SubmissionStatus @default(IN_PROGRESS)
+  startedAt      DateTime         @default(now())
+  submittedAt    DateTime?
+  isLate         Boolean          @default(false)
+  autoScore      Float?
+  manualScore    Float?
+  totalScore     Float?
+  maxScore       Float
+  questionOrder  Json?
+  teacherComment String?
 
   // Proctoring tracking
   violationCount  Int       @default(0)
@@ -376,6 +403,7 @@ model Submission {
   attemptVersion  Int       @default(0)
   restartCount    Int       @default(0)
   rulesAcceptedAt DateTime?
+  cameraConsentAt DateTime?
   unlockedById    String?
   attemptToken    String?
   lastHeartbeatAt DateTime?
@@ -385,6 +413,7 @@ model Submission {
   unlockedBy    User?          @relation("UnlockedByTeacher", fields: [unlockedById], references: [id], onDelete: SetNull)
   answers       Answer[]
   proctorEvents ProctorEvent[]
+  audioPlays    AudioPlay[]
 
   @@unique([assignmentId, studentId, attemptNo])
   @@index([studentId])
@@ -412,6 +441,7 @@ model Answer {
   isCorrect    Boolean?
   score        Float?
   isOverridden Boolean  @default(false)
+  gradeDetail  Json?
   teacherNote  String?
   updatedAt    DateTime @updatedAt
 
@@ -434,4 +464,35 @@ model Notification {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, read, createdAt])
+}
+
+model WorksheetAudio {
+  id          String   @id @default(cuid())
+  worksheetId String
+  title       String
+  fileKey     String
+  mimeType    String
+  sizeBytes   Int      @default(0)
+  durationSec Int?
+  order       Int
+  createdAt   DateTime @default(now())
+
+  worksheet Worksheet   @relation(fields: [worksheetId], references: [id], onDelete: Cascade)
+  fields    Field[]
+  plays     AudioPlay[]
+
+  @@index([worksheetId, order])
+}
+
+/// One row per play granted by the server (counted server-side, never trusted from client).
+model AudioPlay {
+  id           String   @id @default(cuid())
+  submissionId String
+  audioId      String
+  startedAt    DateTime @default(now())
+
+  submission Submission     @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  audio      WorksheetAudio @relation(fields: [audioId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId, audioId])
 }
