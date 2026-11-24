@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
@@ -35,11 +35,13 @@ export function DeleteAccountDialog({
   target,
   onClose,
   onDeleted,
+  onRequestTransfer,
   mode = "trash",
 }: {
   target: DeleteAccountTarget | null;
   onClose: () => void;
   onDeleted: () => void;
+  onRequestTransfer?: (target: DeleteAccountTarget) => void;
   /** "trash": move to the 90-day trash (restorable). "purge": delete forever from the trash. */
   mode?: "trash" | "purge";
 }) {
@@ -169,6 +171,34 @@ export function DeleteAccountDialog({
               </ul>
             )}
           </div>
+
+          {!purge &&
+            target &&
+            onRequestTransfer &&
+            ((counts?.classesTaught ?? 0) > 0 || (counts?.worksheets ?? 0) > 0) && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-indigo-200 bg-[#EEF2FF] p-3 text-xs text-[#3525CD]">
+                <span>
+                  {tr(
+                    "Tài khoản còn lớp học hoặc worksheet. Nên chuyển dữ liệu sang giáo viên khác trước khi xoá.",
+                    "This account still owns classes or worksheets. Consider transferring them to another teacher first."
+                  )}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="min-h-[40px]"
+                  onClick={() => {
+                    const current = target;
+                    onClose();
+                    onRequestTransfer(current);
+                  }}
+                >
+                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                  {tr("Chuyển dữ liệu", "Transfer data")}
+                </Button>
+              </div>
+            )}
 
           <div className="space-y-1.5">
             <Label htmlFor="confirm-delete-email" className="text-xs">

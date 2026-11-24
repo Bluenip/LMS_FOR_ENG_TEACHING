@@ -61,6 +61,7 @@ export async function listAllUsers(query?: string, roleFilter?: Role) {
       _count: {
         select: {
           classesTaught: true,
+          worksheets: true,
           enrollments: true,
           submissions: true,
         },
@@ -182,14 +183,14 @@ export async function createManualParentLink(
   relation = "Phụ huynh"
 ) {
   const [parent, student] = await Promise.all([
-    prisma.user.findUnique({ where: { id: parentId }, select: { id: true, role: true } }),
-    prisma.user.findUnique({ where: { id: studentId }, select: { id: true, role: true } }),
+    prisma.user.findUnique({ where: { id: parentId }, select: { id: true, role: true, deletedAt: true } }),
+    prisma.user.findUnique({ where: { id: studentId }, select: { id: true, role: true, deletedAt: true } }),
   ]);
 
-  if (!parent || parent.role !== "PARENT") {
+  if (!parent || parent.deletedAt || parent.role !== "PARENT") {
     throw new AppError("Tài khoản phụ huynh không hợp lệ.", 400, "INVALID_PARENT");
   }
-  if (!student || student.role !== "STUDENT") {
+  if (!student || student.deletedAt || student.role !== "STUDENT") {
     throw new AppError("Tài khoản học sinh không hợp lệ.", 400, "INVALID_STUDENT");
   }
 
@@ -214,4 +215,210 @@ export async function createManualParentLink(
 
 export async function deleteParentLink(linkId: string) {
   return prisma.parentLink.delete({ where: { id: linkId } });
+}
+
+/**
+ * Lists classes and worksheets owned by a teacher/admin, plus active teachers/admins who can receive them.
+ */
+export async function getUserOwnedContent(fromUserId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: fromUserId },
+    select: { id: true, name: true, email: true, role: true, deletedAt: true },
+  });
+  if (!user) {
+    throw new AppError("Không tìm thấy người dùng.", 404, "NOT_FOUND");
+  }
+
+  const [classes, worksheets, eligibleRecipients] = await Promise.all([
+    prisma.class.findMany({
+      where: { teacherId: fromUserId },
+      select: {
+        id: true,
+        name: true,
+        joinCode: true,
+        archived: true,
+        _count: { select: { enrollments: true, assignments: true, lessons: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.worksheet.findMany({
+      where: { ownerId: fromUserId },
+      select: {
+        id: true,
+        title: true,
+        isShared: true,
+        _count: { select: { fields: true, assignments: true } },
+      },
+      orderBy: { updatedAt: "desc" },
+    }),
+    prisma.user.findMany({
+      where: {
+        id: { not: fromUserId },
+        deletedAt: null,
+        isLocked: false,
+        role: { in: ["TEACHER", "ADMIN"] },
+      },
+      select: { id: true, name: true, email: true, role: true },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
+    }),
+  ]);
+
+  return { user, classes, worksheets, eligibleRecipients };
+}
+
+export interface TransferOwnershipInput {
+  toUserId: string;
+  transferAll?: boolean;
+  classIds?: string[];
+  worksheetIds?: string[];
+}
+
+/**
+ * Transfers selected (or all) classes and/or worksheets from one teacher/admin to another active teacher/admin.
+ * Assignments, submissions, and lessons follow their class automatically. Drive files keep their Drive location
+ * and only change `ownerId` in the database.
+ */
+export async function transferOwnership(
+  actorId: string,
+  fromUserId: string,
+  input: TransferOwnershipInput
+) {
+  if (fromUserId === input.toUserId) {
+    throw new AppError("Người nhận phải khác người chuyển.", 400, "SAME_OWNER");
+  }
+
+  const [fromUser, toUser] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: fromUserId },
+      select: { id: true, name: true, email: true, role: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: input.toUserId },
+      select: { id: true, name: true, email: true, role: true, isLocked: true, deletedAt: true },
+    }),
+  ]);
+
+  if (!fromUser) {
+    throw new AppError("Không tìm thấy người dùng cần chuyển dữ liệu.", 404, "NOT_FOUND");
+  }
+  if (!toUser || toUser.deletedAt || toUser.isLocked || (toUser.role !== "TEACHER" && toUser.role !== "ADMIN")) {
+    throw new AppError(
+      "Người nhận phải là giáo viên hoặc quản trị viên đang hoạt động.",
+      400,
+      "INVALID_RECIPIENT"
+    );
+  }
+
+  const uniqueClassIds = Array.from(new Set(input.classIds ?? []));
+  const uniqueWorksheetIds = Array.from(new Set(input.worksheetIds ?? []));
+
+  const [classesToMove, worksheetsToMove] = await Promise.all([
+    input.transferAll
+      ? prisma.class.findMany({
+          where: { teacherId: fromUserId },
+          select: { id: true, name: true },
+        })
+      : uniqueClassIds.length > 0
+        ? prisma.class.findMany({
+            where: { id: { in: uniqueClassIds }, teacherId: fromUserId },
+            select: { id: true, name: true },
+          })
+        : Promise.resolve([]),
+    input.transferAll
+      ? prisma.worksheet.findMany({
+          where: { ownerId: fromUserId },
+          select: { id: true, title: true },
+        })
+      : uniqueWorksheetIds.length > 0
+        ? prisma.worksheet.findMany({
+            where: { id: { in: uniqueWorksheetIds }, ownerId: fromUserId },
+            select: { id: true, title: true },
+          })
+        : Promise.resolve([]),
+  ]);
+
+  if (!input.transferAll) {
+    if (classesToMove.length !== uniqueClassIds.length || worksheetsToMove.length !== uniqueWorksheetIds.length) {
+      throw new AppError(
+        "Một hoặc nhiều lớp học / worksheet không thuộc quyền sở hữu của tài khoản nguồn.",
+        400,
+        "INVALID_TRANSFER_ITEMS"
+      );
+    }
+  }
+
+  if (classesToMove.length === 0 && worksheetsToMove.length === 0) {
+    throw new AppError("Không có lớp học hoặc worksheet nào được chọn để chuyển.", 400, "NOTHING_TO_TRANSFER");
+  }
+
+  const movedClassIds = classesToMove.map((c) => c.id);
+  const movedWorksheetIds = worksheetsToMove.map((w) => w.id);
+
+  const result = await prisma.$transaction(async (tx) => {
+    if (movedClassIds.length > 0) {
+      await tx.class.updateMany({
+        where: { id: { in: movedClassIds }, teacherId: fromUserId },
+        data: { teacherId: toUser.id },
+      });
+    }
+    if (movedWorksheetIds.length > 0) {
+      await tx.worksheet.updateMany({
+        where: { id: { in: movedWorksheetIds }, ownerId: fromUserId },
+        data: { ownerId: toUser.id },
+      });
+    }
+
+    let driveFilesUpdated = 0;
+    const driveOrConditions: Array<{ classId: { in: string[] } } | { worksheetId: { in: string[] } }> = [];
+    if (movedClassIds.length > 0) driveOrConditions.push({ classId: { in: movedClassIds } });
+    if (movedWorksheetIds.length > 0) driveOrConditions.push({ worksheetId: { in: movedWorksheetIds } });
+
+    if (driveOrConditions.length > 0) {
+      const dfRes = await tx.driveFile.updateMany({
+        where: { ownerId: fromUserId, OR: driveOrConditions },
+        data: { ownerId: toUser.id },
+      });
+      driveFilesUpdated = dfRes.count;
+    }
+
+    if (movedClassIds.length > 0) {
+      await tx.driveUpload.updateMany({
+        where: { ownerId: fromUserId, classId: { in: movedClassIds } },
+        data: { ownerId: toUser.id },
+      });
+    }
+
+    await logAudit(
+      {
+        actorId,
+        action: "OWNERSHIP_TRANSFERRED",
+        targetType: "USER",
+        targetId: fromUser.id,
+        summary: `Chuyển ${movedClassIds.length} lớp và ${movedWorksheetIds.length} worksheet từ ${fromUser.name} (${fromUser.email}) sang ${toUser.name} (${toUser.email})`,
+        meta: {
+          fromUserId: fromUser.id,
+          fromEmail: fromUser.email,
+          toUserId: toUser.id,
+          toEmail: toUser.email,
+          transferAll: Boolean(input.transferAll),
+          classCount: movedClassIds.length,
+          worksheetCount: movedWorksheetIds.length,
+          classIds: movedClassIds,
+          worksheetIds: movedWorksheetIds,
+          driveFilesUpdated,
+        },
+      },
+      tx
+    );
+
+    return {
+      transferredClasses: movedClassIds.length,
+      transferredWorksheets: movedWorksheetIds.length,
+      driveFilesUpdated,
+      fromUser: { id: fromUser.id, name: fromUser.name, email: fromUser.email },
+      toUser: { id: toUser.id, name: toUser.name, email: toUser.email },
+    };
+  });
+
+  return result;
 }

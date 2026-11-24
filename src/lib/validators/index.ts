@@ -355,3 +355,10 @@ export const adminParentLinkSchema = z.object({
   studentId: z.string().min(1),
   relation: z.string().trim().max(50).optional().default("Phụ huynh"),
 });
+
+export const transferOwnershipSchema = z.object({
+  toUserId: z.string().trim().min(1, "Vui lòng chọn giáo viên nhận."),
+  transferAll: z.boolean().optional().default(false),
+  classIds: z.array(z.string().trim().min(1)).max(500).optional().default([]),
+  worksheetIds: z.array(z.string().trim().min(1)).max(500).optional().default([]),
+});

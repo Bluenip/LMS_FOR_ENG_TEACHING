@@ -6,6 +6,7 @@ import { apiFetchJson } from "@/lib/api-client";
 import { DriveAdminCard } from "@/components/drive/DriveAdminCard";
 import { toast } from "sonner";
 import {
+  ArrowRightLeft,
   BookOpen,
   FileText,
   GraduationCap,
@@ -25,6 +26,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { CreateAccountForm } from "@/components/accounts/CreateAccountForm";
 import {
   ResetPasswordDialog,
@@ -34,6 +43,10 @@ import {
   DeleteAccountDialog,
   type DeleteAccountTarget,
 } from "@/components/accounts/DeleteAccountDialog";
+import {
+  TransferOwnershipDialog,
+  type TransferOwnershipTarget,
+} from "@/components/admin/TransferOwnershipDialog";
 
 interface AdminOverview {
   stats: {
@@ -53,7 +66,7 @@ interface AdminOverview {
     role: Role;
     isLocked: boolean;
     createdAt: string;
-    _count: { classesTaught: number; enrollments: number; submissions: number };
+    _count: { classesTaught: number; worksheets: number; enrollments: number; submissions: number };
   }>;
   parentLinks: Array<{
     id: string;
@@ -80,6 +93,14 @@ export default function AdminPortalPage() {
   const [resetTarget, setResetTarget] = useState<ResetPasswordTarget | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteAccountTarget | null>(null);
   const [purgeTarget, setPurgeTarget] = useState<DeleteAccountTarget | null>(null);
+  const [transferTarget, setTransferTarget] = useState<TransferOwnershipTarget | null>(null);
+  const [roleDialog, setRoleDialog] = useState<{
+    user: { id: string; name: string; email: string; role: Role };
+    nextRole: Role;
+    error: string | null;
+    isRoleHasContent: boolean;
+    saving: boolean;
+  } | null>(null);
 
   const handleRestore = async (id: string) => {
     const res = await fetch(`/api/admin/users/${id}/restore`, { method: "POST" });
@@ -114,7 +135,7 @@ export default function AdminPortalPage() {
   const handleUpdateUser = async (
     userId: string,
     patch: { role?: Role; isLocked?: boolean }
-  ) => {
+  ): Promise<{ ok: boolean; error?: string; code?: string }> => {
     const res = await fetch(`/api/admin/users/${userId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -122,11 +143,35 @@ export default function AdminPortalPage() {
     });
     const json = await res.json();
     if (!res.ok) {
-      toast.error(json.error ?? tr("Cập nhật thất bại", "Update failed"));
-      return;
+      const errMsg = (json.error as string | undefined) ?? tr("Cập nhật thất bại", "Update failed");
+      if (!patch.role) {
+        toast.error(errMsg);
+      }
+      return { ok: false, error: errMsg, code: json.code as string | undefined };
     }
     toast.success(tr("Đã cập nhật tài khoản!", "Account updated!"));
     queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
+    return { ok: true };
+  };
+
+  const handleConfirmRoleChange = async () => {
+    if (!roleDialog) return;
+    setRoleDialog((prev) => (prev ? { ...prev, saving: true, error: null } : null));
+    const result = await handleUpdateUser(roleDialog.user.id, { role: roleDialog.nextRole });
+    if (result.ok) {
+      setRoleDialog(null);
+      return;
+    }
+    setRoleDialog((prev) =>
+      prev
+        ? {
+            ...prev,
+            saving: false,
+            error: result.error ?? tr("Cập nhật thất bại", "Update failed"),
+            isRoleHasContent: result.code === "ROLE_HAS_CONTENT",
+          }
+        : null
+    );
   };
 
   const handleCreateLink = async (e: React.FormEvent) => {
@@ -302,21 +347,29 @@ export default function AdminPortalPage() {
                   <td className="px-6 py-3.5">
                     <p className="font-semibold text-[#0B1C30]">{u.name}</p>
                     <p className="text-xs text-slate-400">{u.email}</p>
+                    {(u._count.classesTaught > 0 || u._count.worksheets > 0) && (
+                      <p className="mt-0.5 text-[11px] text-[#464555] tabular-nums">
+                        {u._count.classesTaught} {tr("lớp", "classes")} · {u._count.worksheets}{" "}
+                        {tr("worksheet", "worksheets")}
+                      </p>
+                    )}
                   </td>
                   <td className="px-6 py-3.5">
                     <select
+                      aria-label={tr(`Vai trò của ${u.name}`, `Role for ${u.name}`)}
                       value={u.role}
                       onChange={(e) => {
                         const nextRole = e.target.value as Role;
-                        const ok = window.confirm(
-                          tr(
-                            `Đổi vai trò của ${u.name} (${u.email}) từ "${vi.roles[u.role]}" sang "${vi.roles[nextRole]}"? Người này sẽ bị đăng xuất và phải đăng nhập lại.`,
-                            `Change ${u.name} (${u.email}) from "${vi.roles[u.role]}" to "${vi.roles[nextRole]}"? They will be signed out and must sign in again.`
-                          )
-                        );
-                        if (ok) void handleUpdateUser(u.id, { role: nextRole });
+                        if (nextRole === u.role) return;
+                        setRoleDialog({
+                          user: { id: u.id, name: u.name, email: u.email, role: u.role },
+                          nextRole,
+                          error: null,
+                          isRoleHasContent: false,
+                          saving: false,
+                        });
                       }}
-                      className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold outline-none focus:border-[#4F46E5]"
+                      className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold outline-none focus:border-[#4F46E5]"
                     >
                       <option value="STUDENT">{vi.roles.STUDENT}</option>
                       <option value="TEACHER">{vi.roles.TEACHER}</option>
@@ -336,6 +389,21 @@ export default function AdminPortalPage() {
                   </td>
                   <td className="px-6 py-3.5 text-right">
                     <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                      {(u.role === "TEACHER" ||
+                        u.role === "ADMIN" ||
+                        u._count.classesTaught > 0 ||
+                        u._count.worksheets > 0) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            setTransferTarget({ id: u.id, name: u.name, email: u.email })
+                          }
+                        >
+                          <ArrowRightLeft className="h-3.5 w-3.5 text-[#4F46E5]" />{" "}
+                          {tr("Chuyển dữ liệu", "Transfer data")}
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant={u.isLocked ? "secondary" : "outline"}
@@ -523,6 +591,7 @@ export default function AdminPortalPage() {
         target={deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onDeleted={() => queryClient.invalidateQueries({ queryKey: ["admin-overview"] })}
+        onRequestTransfer={(t) => setTransferTarget(t)}
       />
       <DeleteAccountDialog
         mode="purge"
@@ -530,6 +599,79 @@ export default function AdminPortalPage() {
         onClose={() => setPurgeTarget(null)}
         onDeleted={() => queryClient.invalidateQueries({ queryKey: ["admin-overview"] })}
       />
+      <TransferOwnershipDialog
+        target={transferTarget}
+        onClose={() => setTransferTarget(null)}
+        onTransferred={() => queryClient.invalidateQueries({ queryKey: ["admin-overview"] })}
+      />
+
+      <Dialog open={Boolean(roleDialog)} onOpenChange={(open) => !open && setRoleDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{tr("Xác nhận đổi vai trò", "Confirm role change")}</DialogTitle>
+            {roleDialog && (
+              <DialogDescription>
+                {roleDialog.user.name} ({roleDialog.user.email})
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          {roleDialog && (
+            <div className="space-y-4">
+              <p className="text-sm text-[#464555]">
+                {tr(
+                  `Đổi vai trò từ "${vi.roles[roleDialog.user.role]}" sang "${vi.roles[roleDialog.nextRole]}"? Tài khoản này sẽ bị đăng xuất khỏi mọi thiết bị và phải đăng nhập lại.`,
+                  `Change role from "${vi.roles[roleDialog.user.role]}" to "${vi.roles[roleDialog.nextRole]}"? This account will be signed out of all devices and must sign in again.`
+                )}
+              </p>
+
+              {roleDialog.error && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-3.5 text-xs text-red-800 space-y-2.5">
+                  <p className="font-semibold">{roleDialog.error}</p>
+                  {roleDialog.isRoleHasContent && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="min-h-[40px]"
+                      onClick={() => {
+                        const target = {
+                          id: roleDialog.user.id,
+                          name: roleDialog.user.name,
+                          email: roleDialog.user.email,
+                        };
+                        setRoleDialog(null);
+                        setTransferTarget(target);
+                      }}
+                    >
+                      <ArrowRightLeft className="h-4 w-4" />
+                      {tr("Chuyển dữ liệu ngay", "Transfer data now")}
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              <DialogFooter className="gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-[40px]"
+                  disabled={roleDialog.saving}
+                  onClick={() => setRoleDialog(null)}
+                >
+                  {vi.common.cancel}
+                </Button>
+                <Button
+                  type="button"
+                  className="min-h-[40px]"
+                  disabled={roleDialog.saving}
+                  onClick={() => void handleConfirmRoleChange()}
+                >
+                  {roleDialog.saving ? vi.common.saving : vi.common.confirm}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

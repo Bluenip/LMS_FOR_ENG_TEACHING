@@ -119,6 +119,15 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
     "The system must retain at least one active administrator.",
   "Tài khoản phụ huynh không hợp lệ.": "Invalid parent account.",
   "Tài khoản học sinh không hợp lệ.": "Invalid student account.",
+  "Vui lòng chọn giáo viên nhận.": "Please select a recipient teacher.",
+  "Người nhận phải khác người chuyển.": "Recipient must be different from the source user.",
+  "Không tìm thấy người dùng cần chuyển dữ liệu.": "Source user not found.",
+  "Người nhận phải là giáo viên hoặc quản trị viên đang hoạt động.":
+    "Recipient must be an active teacher or administrator.",
+  "Một hoặc nhiều lớp học / worksheet không thuộc quyền sở hữu của tài khoản nguồn.":
+    "One or more selected classes or worksheets do not belong to the source account.",
+  "Không có lớp học hoặc worksheet nào được chọn để chuyển.":
+    "No classes or worksheets were selected for transfer.",
   "Email này đã được đăng ký.": "This email is already registered.",
   "Số điện thoại này đã được đăng ký.": "This phone number is already registered.",
   "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.":
