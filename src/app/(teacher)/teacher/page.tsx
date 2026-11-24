@@ -1,17 +1,19 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { requireLayoutUser } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
 import { TeacherDashboardClient } from "./TeacherDashboardClient";
 import { getI18n } from "@/lib/i18n/server";
 
 export default async function TeacherDashboardPage() {
   const { tr } = await getI18n();
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  const user = await requireLayoutUser(["TEACHER", "ADMIN"]);
+  // an admin sees (and manages) every class in the system
+  const isAdmin = user.role === "ADMIN";
+  const classScope = isAdmin ? {} : { teacherId: user.id };
 
   const classes = await prisma.class.findMany({
-    where: { teacherId: session.user.id },
+    where: classScope,
     include: {
+      teacher: { select: { id: true, name: true } },
       _count: {
         select: {
           enrollments: { where: { status: "ACTIVE" } },
@@ -23,7 +25,7 @@ export default async function TeacherDashboardPage() {
   });
 
   const assignments = await prisma.assignment.findMany({
-    where: { class: { teacherId: session.user.id } },
+    where: { class: classScope },
     include: {
       class: {
         select: {
@@ -64,7 +66,8 @@ export default async function TeacherDashboardPage() {
 
   return (
     <TeacherDashboardClient
-      teacherName={session.user.name ?? tr("Giáo viên", "Teacher")}
+      teacherName={user.name || tr("Giáo viên", "Teacher")}
+      isAdmin={isAdmin}
       stats={{
         totalStudents,
         activeClassCount: activeClasses.length,
@@ -79,6 +82,7 @@ export default async function TeacherDashboardPage() {
         archived: c.archived,
         studentCount: c._count.enrollments,
         assignmentCount: c._count.assignments,
+        teacherName: c.teacherId !== user.id ? c.teacher.name : null,
       }))}
       assignments={assignments.map((a) => {
         const uniqueSubmitted = new Set(

@@ -18,13 +18,19 @@ async function generateUniqueJoinCode(): Promise<string> {
   throw new AppError("Không thể tạo mã lớp duy nhất, vui lòng thử lại.", 500, "JOIN_CODE_ERROR");
 }
 
-export async function listTeacherClasses(teacherId: string, includeArchived = false) {
+/** A teacher's own classes; an admin (`allClasses`) gets every class in the system. */
+export async function listTeacherClasses(
+  teacherId: string,
+  includeArchived = false,
+  opts?: { allClasses?: boolean }
+) {
   return prisma.class.findMany({
     where: {
-      teacherId,
+      ...(opts?.allClasses ? {} : { teacherId }),
       ...(includeArchived ? {} : { archived: false }),
     },
     include: {
+      teacher: { select: { id: true, name: true } },
       _count: {
         select: {
           enrollments: { where: { status: "ACTIVE" } },

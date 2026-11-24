@@ -35,6 +35,8 @@ import {
 
 interface TeacherDashboardClientProps {
   teacherName: string;
+  /** admin: the list holds every class, labelled with its teacher */
+  isAdmin?: boolean;
   stats: {
     totalStudents: number;
     activeClassCount: number;
@@ -49,6 +51,8 @@ interface TeacherDashboardClientProps {
     archived: boolean;
     studentCount: number;
     assignmentCount: number;
+    /** set when the class belongs to another teacher (admin view) */
+    teacherName?: string | null;
   }>;
   assignments: Array<{
     id: string;
@@ -72,6 +76,7 @@ const CARD_GRADIENTS = [
 
 export function TeacherDashboardClient({
   teacherName,
+  isAdmin = false,
   stats,
   classes,
   assignments,
@@ -230,7 +235,10 @@ export function TeacherDashboardClient({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <h2 className="text-xl font-bold text-[#0B1C30]">{vi.classes.title}</h2>
-            <Badge variant="neutral">{classes.length} {tr("lớp", "class(es)")}</Badge>
+            <Badge variant="neutral">
+              {classes.length} {tr("lớp", "class(es)")}
+              {isAdmin && tr(" · toàn hệ thống", " · whole system")}
+            </Badge>
           </div>
         </div>
 
@@ -264,6 +272,11 @@ export function TeacherDashboardClient({
                     <h3 className="text-base font-bold text-[#0B1C30] line-clamp-1">
                       {cls.name}
                     </h3>
+                    {cls.teacherName && (
+                      <p className="mt-0.5 text-xs font-semibold text-[#4F46E5]">
+                        {tr("GV:", "Teacher:")} {cls.teacherName}
+                      </p>
+                    )}
                     {cls.description && (
                       <p className="mt-1 text-xs text-[#464555] line-clamp-2">
                         {cls.description}

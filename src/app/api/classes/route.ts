@@ -14,7 +14,9 @@ export async function GET(req: Request) {
     const includeArchived = url.searchParams.get("includeArchived") === "true";
 
     if (user.role === "TEACHER" || user.role === "ADMIN") {
-      const classes = await listTeacherClasses(user.id, includeArchived);
+      const classes = await listTeacherClasses(user.id, includeArchived, {
+        allClasses: user.role === "ADMIN",
+      });
       return NextResponse.json({ classes });
     }
     if (user.role === "STUDENT") {
