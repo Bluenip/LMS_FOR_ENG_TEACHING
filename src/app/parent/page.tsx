@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   Award,
   BarChart2,
+  BookOpen,
   CheckCircle2,
   Clock,
   KeyRound,
@@ -57,6 +58,17 @@ interface ParentOverviewDTO {
     assignmentId: string;
     label: string;
     childScore10: number | null;
+    classAvg10: number | null;
+  }>;
+  classPerformance: Array<{
+    classId: string;
+    className: string;
+    teacherName: string;
+    studentCount: number;
+    totalAssignments: number;
+    submittedCount: number;
+    onTimeCount: number;
+    childAvg10: number | null;
     classAvg10: number | null;
   }>;
   skills: Array<{
@@ -466,57 +478,140 @@ function ParentPortalContent() {
               <ScoreTrendSvgChart trend={overview.trend} />
             </div>
 
-            {/* Bar Chart: 5 English Skills */}
+            {/* Bar Chart: Results by Class / Subject (multi-subject) */}
             <div className="stitch-card p-6 lg:col-span-5 space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <div>
                   <h3 className="text-base font-bold text-[#0B1C30]">
-                    {vi.parent.skillsChartTitle}
+                    {vi.parent.classChartTitle}
                   </h3>
                   <p className="text-xs text-[#464555]">
-                    {tr("Thành tích của con so với trung bình lớp theo từng kỹ năng", "Your child's performance vs the class average by skill")}
+                    {tr(
+                      "Điểm trung bình của con so với trung bình lớp ở từng lớp đang học",
+                      "Your child's average vs the class average in each enrolled class"
+                    )}
                   </p>
                 </div>
-                <BarChart2 className="h-5 w-5 text-[#4F46E5]" />
+                <BookOpen className="h-5 w-5 shrink-0 text-[#4F46E5]" />
               </div>
 
-              <div className="space-y-3.5">
-                {overview.skills.map((s) => (
-                  <div key={s.skill} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-[#0B1C30]">{vi.skills[s.skill]}</span>
-                      <span className="tabular-nums">
-                        <strong className="text-[#3525CD]">
-                          {tr("Con:", "Child:")} {s.childPct === null ? "—" : `${s.childPct}%`}
-                        </strong>
-                        <span className="mx-1.5 text-slate-300">|</span>
-                        <span className="text-slate-500">
-                          {tr("Lớp:", "Class:")} {s.classPct === null ? "—" : `${s.classPct}%`}
-                        </span>
-                      </span>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                        <div
-                          className={cn(
-                            "h-full rounded-full transition-all",
-                            (s.childPct ?? 0) >= (s.classPct ?? 0) ? "bg-[#4F46E5]" : "bg-[#F97316]"
-                          )}
-                          style={{ width: `${s.childPct ?? 0}%` }}
-                        />
+              {overview.classPerformance.length === 0 ? (
+                <div className="flex h-44 items-center justify-center text-xs text-slate-400">
+                  {tr("Con chưa tham gia lớp học nào.", "Your child is not enrolled in any class yet.")}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {overview.classPerformance.map((c) => {
+                    const childWidth = c.childAvg10 === null ? 0 : Math.min(100, Math.max(0, (c.childAvg10 / 10) * 100));
+                    const classWidth = c.classAvg10 === null ? 0 : Math.min(100, Math.max(0, (c.classAvg10 / 10) * 100));
+                    const aboveOrEqual =
+                      c.childAvg10 !== null && (c.classAvg10 === null || c.childAvg10 >= c.classAvg10);
+                    return (
+                      <div key={c.classId} className="space-y-1.5">
+                        <div className="flex items-start justify-between gap-3 text-xs">
+                          <div className="min-w-0">
+                            <p className="truncate font-bold text-[#0B1C30]">{c.className}</p>
+                            <p className="truncate text-[11px] text-slate-500">
+                              {tr("GV:", "Teacher:")} {c.teacherName} • {c.submittedCount}/{c.totalAssignments}{" "}
+                              {tr("bài đã nộp", "submitted")}
+                            </p>
+                          </div>
+                          <span className="shrink-0 tabular-nums">
+                            <strong className="text-[#3525CD]">
+                              {tr("Con:", "Child:")} {c.childAvg10 === null ? "—" : `${c.childAvg10}/10`}
+                            </strong>
+                            <span className="mx-1.5 text-slate-300">|</span>
+                            <span className="text-slate-500">
+                              {tr("Lớp:", "Class:")} {c.classAvg10 === null ? "—" : `${c.classAvg10}/10`}
+                            </span>
+                          </span>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                            <div
+                              className={cn(
+                                "h-full rounded-full transition-all",
+                                aboveOrEqual ? "bg-[#4F46E5]" : "bg-[#F97316]"
+                              )}
+                              style={{ width: `${childWidth}%` }}
+                            />
+                          </div>
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-50">
+                            <div
+                              className="h-full rounded-full bg-slate-300 transition-all"
+                              style={{ width: `${classWidth}%` }}
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-50">
-                        <div
-                          className="h-full rounded-full bg-slate-300 transition-all"
-                          style={{ width: `${s.classPct ?? 0}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Optional Skills Breakdown — shown only when teachers tagged questions with skills */}
+          {(() => {
+            const activeSkills = overview.skills.filter(
+              (s) => s.childPct !== null || s.classPct !== null
+            );
+            if (activeSkills.length === 0) return null;
+            return (
+              <div className="stitch-card p-6 space-y-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-base font-bold text-[#0B1C30]">
+                      {vi.parent.skillsChartTitle}
+                    </h3>
+                    <p className="text-xs text-[#464555]">
+                      {tr(
+                        "Thành tích của con so với trung bình lớp ở các kỹ năng có gắn nhãn câu hỏi",
+                        "Your child's performance vs the class average across tagged question skills"
+                      )}
+                    </p>
+                  </div>
+                  <BarChart2 className="h-5 w-5 shrink-0 text-[#4F46E5]" />
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {activeSkills.map((s) => (
+                    <div key={s.skill} className="space-y-1.5 rounded-xl border border-slate-100 bg-[#F8F9FF] p-3.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-[#0B1C30]">{vi.skills[s.skill]}</span>
+                        <span className="tabular-nums">
+                          <strong className="text-[#3525CD]">
+                            {tr("Con:", "Child:")} {s.childPct === null ? "—" : `${s.childPct}%`}
+                          </strong>
+                          <span className="mx-1.5 text-slate-300">|</span>
+                          <span className="text-slate-500">
+                            {tr("Lớp:", "Class:")} {s.classPct === null ? "—" : `${s.classPct}%`}
+                          </span>
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className={cn(
+                              "h-full rounded-full transition-all",
+                              (s.childPct ?? 0) >= (s.classPct ?? 0) ? "bg-[#4F46E5]" : "bg-[#F97316]"
+                            )}
+                            style={{ width: `${s.childPct ?? 0}%` }}
+                          />
+                        </div>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-50">
+                          <div
+                            className="h-full rounded-full bg-slate-300 transition-all"
+                            style={{ width: `${s.classPct ?? 0}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Recent Assignments Table (Strictly Aggregated Class Stats — NO other student names!) */}
           <div className="stitch-card overflow-hidden">

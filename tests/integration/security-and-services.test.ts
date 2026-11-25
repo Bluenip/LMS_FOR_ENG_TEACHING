@@ -87,6 +87,8 @@ describe("Security, Privacy & Proctoring Integration Tests", () => {
 
     expect(overview.student.name).toBe("Nguyễn Văn Minh");
     expect(overview.kpis.totalSubmitted).toBeGreaterThan(0);
+    expect(overview.classPerformance.length).toBeGreaterThan(0);
+    expect(overview.classPerformance[0]!.submittedCount).toBeGreaterThan(0);
     // Other classmates in 12A1 MUST NOT appear anywhere in parent overview payload!
     expect(serialized).not.toContain("Trần Thị Mai");
     expect(serialized).not.toContain("Lê Hoàng Long");

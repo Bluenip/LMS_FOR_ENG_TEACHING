@@ -201,6 +201,7 @@ export async function getChildOverviewForParent(studentId: string, selectedClass
         pendingCount: 0,
       },
       trend: [],
+      classPerformance: [],
       skills: DISPLAY_SKILLS.map((skill) => ({
         skill,
         childPct: null as number | null,
@@ -315,6 +316,40 @@ export async function getChildOverviewForParent(studentId: string, selectedClass
     events: Array<{ type: string; at: string; durationMs: number | null }>;
   }> = [];
 
+  // For per-class / per-subject comparison (multi-subject friendly, strictly aggregated)
+  const classBuckets = new Map<
+    string,
+    {
+      classId: string;
+      className: string;
+      teacherName: string;
+      studentCount: number;
+      totalAssignments: number;
+      submittedCount: number;
+      onTimeCount: number;
+      childSum10: number;
+      childGraded: number;
+      classSum10: number;
+      classGraded: number;
+    }
+  >();
+  for (const cls of classes) {
+    if (!classIds.includes(cls.id)) continue;
+    classBuckets.set(cls.id, {
+      classId: cls.id,
+      className: cls.name,
+      teacherName: cls.teacher.name,
+      studentCount: cls._count.enrollments,
+      totalAssignments: 0,
+      submittedCount: 0,
+      onTimeCount: 0,
+      childSum10: 0,
+      childGraded: 0,
+      classSum10: 0,
+      classGraded: 0,
+    });
+  }
+
   // For overall class rank across aggregated student scores (anonymous map)
   const overallStudentTotals = new Map<string, { sum10: number; count: number }>();
 
@@ -380,9 +415,18 @@ export async function getChildOverviewForParent(studentId: string, selectedClass
           ) / 100
         : null;
 
+    const classBucket = classBuckets.get(asg.classId);
+    if (classBucket) {
+      classBucket.totalAssignments += 1;
+    }
+
     if (classAvg10 !== null) {
       classAvgSum10 += classAvg10;
       classAvgCount += 1;
+      if (classBucket) {
+        classBucket.classSum10 += classAvg10;
+        classBucket.classGraded += 1;
+      }
     }
 
     const childSub = bestByStudent.get(studentId);
@@ -392,6 +436,10 @@ export async function getChildOverviewForParent(studentId: string, selectedClass
     if (childAnySub) {
       totalSubmitted++;
       if (!childAnySub.isLate) onTimeCount++;
+      if (classBucket) {
+        classBucket.submittedCount += 1;
+        if (!childAnySub.isLate) classBucket.onTimeCount += 1;
+      }
     }
     let childScore10: number | null = null;
     let rank: number | null = null;
@@ -402,6 +450,10 @@ export async function getChildOverviewForParent(studentId: string, selectedClass
         childScore10 = Math.round((sc / childSub.maxScore) * 1000) / 100;
         childScoreSum10 += childScore10;
         childGradedCount++;
+        if (classBucket) {
+          classBucket.childSum10 += childScore10;
+          classBucket.childGraded += 1;
+        }
       }
 
       // Rank child among class participants (tie-break by score10 DESC, durationMs ASC)
@@ -487,6 +539,18 @@ export async function getChildOverviewForParent(studentId: string, selectedClass
     primaryClassStudents = lb.totalStudentsInClass;
   }
 
+  const classPerformance = Array.from(classBuckets.values()).map((b) => ({
+    classId: b.classId,
+    className: b.className,
+    teacherName: b.teacherName,
+    studentCount: b.studentCount,
+    totalAssignments: b.totalAssignments,
+    submittedCount: b.submittedCount,
+    onTimeCount: b.onTimeCount,
+    childAvg10: b.childGraded > 0 ? Math.round((b.childSum10 / b.childGraded) * 100) / 100 : null,
+    classAvg10: b.classGraded > 0 ? Math.round((b.classSum10 / b.classGraded) * 100) / 100 : null,
+  }));
+
   const skills = DISPLAY_SKILLS.map((skill) => {
     const cMax = childSkillMax[skill] ?? 0;
     const clMax = classSkillMax[skill] ?? 0;
@@ -519,6 +583,7 @@ export async function getChildOverviewForParent(studentId: string, selectedClass
       pendingCount,
     },
     trend: trend.slice(-10),
+    classPerformance,
     skills,
     recentAssignments: recentAssignments.reverse(),
     teacherFeedback: teacherFeedback.reverse(),
