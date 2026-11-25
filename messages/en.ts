@@ -4,7 +4,7 @@ import type { Messages } from "./vi";
 export const en: Messages = {
   app: {
     defaultName: "Pivora",
-    tagline: "Interactive English learning & worksheet platform",
+    tagline: "Interactive learning & worksheet platform",
   },
   common: {
     save: "Save",
@@ -75,7 +75,7 @@ export const en: Messages = {
     accountLocked: "Your account has been locked. Please contact an administrator.",
     rateLimited: "Too many attempts. Please try again in a few minutes.",
     emailExists: "This email is already registered.",
-    heroTitle: "Learn English with interactive worksheets",
+    heroTitle: "Teach & learn better with interactive worksheets",
     heroSubtitle:
       "Turn traditional PDF exercises into smart interactive tests with automatic grading and easy progress tracking.",
     demoAccounts: "Demo accounts (password: password123)",

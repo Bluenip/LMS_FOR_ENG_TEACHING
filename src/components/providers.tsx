@@ -29,8 +29,12 @@ export function Providers({ children, locale }: { children: ReactNode; locale: L
       const reason = getSessionExpiryReason(error);
       if (!reason || signingOutRef.current) return;
       signingOutRef.current = true;
-      void signOut({
-        callbackUrl: reason === "locked" ? "/login?reason=locked" : "/login?reason=session",
+      const target =
+        reason === "locked"
+          ? "/api/auth/clear-session?reason=locked"
+          : "/api/auth/clear-session?reason=session";
+      void signOut({ redirect: false }).finally(() => {
+        window.location.assign(target);
       });
     };
 
@@ -48,7 +52,7 @@ export function Providers({ children, locale }: { children: ReactNode; locale: L
   });
 
   return (
-    <SessionProvider>
+    <SessionProvider refetchOnWindowFocus={false}>
       <ThemeProvider>
         <I18nProvider initialLocale={locale}>
           <QueryClientProvider client={queryClient}>

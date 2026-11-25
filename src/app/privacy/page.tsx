@@ -78,7 +78,7 @@ export default async function PrivacyPage() {
           </section>
         ))}
       </div>
-      <BackLink fallbackHref="/login" label={tr("Quay lại", "Back")} className="mt-10" />
+      <BackLink fallbackHref="/" label={tr("Quay lại", "Back")} className="mt-10" />
     </main>
   );
 }

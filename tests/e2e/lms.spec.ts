@@ -11,6 +11,42 @@ async function loginAs(page: Page, email: string, password = "password123") {
 }
 
 test.describe("Phase 1 & 2: Auth, Role Routing & Class IDOR", () => {
+  test("public landing page renders at / when logged out and redirects to dashboard when logged in", async ({ browser }) => {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.locator("h1")).toBeVisible();
+    await expect(page.getByRole("tab")).toHaveCount(3);
+
+    // Navigate from landing page to clean login page
+    await page.locator('header a[href="/login"]').first().click();
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.locator('input[name="email"]')).toBeVisible();
+    await expect(page.locator('input[name="password"]')).toBeVisible();
+
+    // Sign in -> redirects to teacher dashboard; revisiting / also redirects to /teacher
+    await page.fill('input[name="email"]', "teacher1@engclass.vn");
+    await page.fill('input[name="password"]', "password123");
+    await page.click('button[type="submit"]');
+    await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 20000 });
+    await expect(page).toHaveURL(/\/teacher/);
+
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/teacher/);
+
+    // Sign out -> stays on the current origin /login (never 0.0.0.0) and / shows landing page again
+    await page.locator('header button[title*="Đăng xuất"], header button[title*="Sign out"]').first().click();
+    await page.waitForURL(/\/login$/, { timeout: 15000 });
+    expect(page.url()).not.toContain("0.0.0.0");
+
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole("tab")).toHaveCount(3);
+    await ctx.close();
+  });
+
   test("redirects each role to its dashboard and blocks cross-role routes", async ({ browser }) => {
     // 1. Teacher
     const teacherCtx = await browser.newContext();

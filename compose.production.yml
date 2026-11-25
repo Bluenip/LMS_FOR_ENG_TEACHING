@@ -33,6 +33,7 @@ services:
     env_file: .env.production
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-engclass}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-engclass}?schema=public
+      AUTH_URL: ${AUTH_URL:-${APP_URL:-${NEXT_PUBLIC_APP_URL:-}}}
     volumes:
       - uploads:/app/uploads
     # Only reachable from the host (Cloudflare Tunnel connects to it); never exposed publicly

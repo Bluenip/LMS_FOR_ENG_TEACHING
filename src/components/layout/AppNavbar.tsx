@@ -58,6 +58,14 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const queryClient = useQueryClient();
 
+  const handleSignOut = async () => {
+    try {
+      await signOut({ redirect: false });
+    } finally {
+      window.location.assign("/api/auth/clear-session");
+    }
+  };
+
   useEffect(() => {
     if (!notifOpen && !mobileOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -282,7 +290,7 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={() => void handleSignOut()}
             className="hidden text-slate-500 hover:text-red-600 sm:inline-flex"
             title={vi.auth.logoutButton}
           >
@@ -356,7 +364,7 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => signOut({ callbackUrl: "/login" })}
+                onClick={() => void handleSignOut()}
                 className="text-slate-500 hover:text-red-600"
               >
                 <LogOut className="h-4 w-4" />

@@ -1,7 +1,7 @@
 export const vi = {
   app: {
     defaultName: "Pivora",
-    tagline: "Hệ sinh thái học tập & phiếu bài tập tiếng Anh tương tác",
+    tagline: "Hệ sinh thái học tập & phiếu bài tập tương tác",
   },
   common: {
     save: "Lưu",
@@ -51,7 +51,7 @@ export const vi = {
   },
   auth: {
     loginTitle: "Đăng nhập",
-    loginSubtitle: "Chọn vai trò và nhập thông tin để tiếp tục truy cập",
+    loginSubtitle: "Nhập email và mật khẩu để tiếp tục",
     registerTitle: "Đăng ký tài khoản",
     registerSubtitle: "Tạo tài khoản mới để tham gia hệ thống học tập",
     email: "Email",
@@ -72,7 +72,7 @@ export const vi = {
     accountLocked: "Tài khoản của bạn đã bị khoá. Vui lòng liên hệ quản trị viên.",
     rateLimited: "Bạn thao tác quá nhiều lần. Vui lòng thử lại sau ít phút.",
     emailExists: "Email này đã được đăng ký.",
-    heroTitle: "Học tiếng Anh với worksheet tương tác",
+    heroTitle: "Dạy và học hiệu quả với phiếu bài tập tương tác",
     heroSubtitle: "Chuyển đổi bài tập PDF truyền thống thành đề tương tác thông minh, chấm điểm tự động và theo dõi tiến độ dễ dàng.",
     demoAccounts: "Tài khoản mẫu (mật khẩu: password123)",
   },
