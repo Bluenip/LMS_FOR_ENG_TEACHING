@@ -70,7 +70,7 @@ export function LandingPage({ appName }: { appName: string }) {
     {
       icon: Cloud,
       tone: "mint" as const,
-      title: tr("Kho bài giảng dùng chung & Google Drive", "Shared library & Google Drive sync"),
+      title: tr("Kho bài giảng dùng cho nhiều lớp & Google Drive", "Reusable lesson library & Google Drive"),
       desc: tr(
         "Soạn bài giảng một lần, dùng cho nhiều lớp; lưu PDF, file nghe và tài liệu trực tiếp lên Google Drive kèm Thùng rác đồng bộ 2 chiều trong 30 ngày.",
         "Create lessons once and attach them to any class. Store PDFs, audio, and backups on Google Drive with two-way 30-day trash synchronization."
@@ -88,10 +88,10 @@ export function LandingPage({ appName }: { appName: string }) {
     {
       icon: FileSpreadsheet,
       tone: "indigo" as const,
-      title: tr("Sao lưu 1 chạm & Chia sẻ giáo viên", "One-click backups & teacher sharing"),
+      title: tr("Sao lưu & gửi đề cho đồng nghiệp", "Backups you can send to colleagues"),
       desc: tr(
-        "Đóng gói đầy đủ câu hỏi, PDF và file nghe thành gói .engclass.zip, xuất đề Word bản có hoặc không đáp án, và chia sẻ trực tiếp giữa các giáo viên trong hệ thống.",
-        "Export complete worksheets (questions, PDF, audio) as .engclass.zip bundles, generate printable Word sheets, and share reusable materials across teachers."
+        "Chọn một hoặc nhiều phiếu để đóng gói (câu hỏi, PDF, file nghe) thành file .zip, gửi cho giáo viên khác qua Zalo / Messenger để họ nhập vào kho; xuất đề Word bản có hoặc không đáp án.",
+        "Pack one or many worksheets (questions, PDF, audio) into a .zip, send it to colleagues over chat so they can import it, and export printable Word sheets with or without answers."
       ),
     },
   ];

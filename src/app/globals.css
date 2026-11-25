@@ -145,10 +145,13 @@ html.dark .bg-red-100 {
   background-color: rgba(239, 68, 68, 0.14);
 }
 html.dark .bg-\[\#FFEDD5\],
-html.dark .bg-orange-50,
+html.dark .bg-orange-50 {
+  background-color: rgba(249, 115, 22, 0.14);
+}
+/* translucent row tints (e.g. "not started" rows) stay subtle in dark mode */
 html.dark .bg-orange-50\/30,
 html.dark .bg-orange-50\/40 {
-  background-color: rgba(249, 115, 22, 0.14);
+  background-color: rgba(249, 115, 22, 0.06);
 }
 html.dark .bg-amber-50,
 html.dark .bg-amber-50\/40,

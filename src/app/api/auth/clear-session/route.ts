@@ -9,17 +9,12 @@ const SESSION_COOKIE_PREFIXES = [
   "__Secure-next-auth.session-token",
 ];
 
+/**
+ * Public origin for the redirect. The configured AUTH_URL / APP_URL wins: request headers
+ * (Host / X-Forwarded-Host) can be forged, so they are only a fallback when nothing is configured
+ * (local development).
+ */
 function getPublicOrigin(req: NextRequest): string {
-  const fwdHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
-  const fwdProto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
-  if (fwdHost && !fwdHost.startsWith("0.0.0.0")) {
-    return `${fwdProto || "https"}://${fwdHost}`;
-  }
-  const host = req.headers.get("host")?.trim();
-  if (host && !host.startsWith("0.0.0.0")) {
-    const proto = fwdProto || (req.nextUrl.protocol.replace(":", "") || "http");
-    return `${proto}://${host}`;
-  }
   const configured =
     process.env.AUTH_URL?.trim() ||
     process.env.APP_URL?.trim() ||
@@ -30,6 +25,16 @@ function getPublicOrigin(req: NextRequest): string {
     } catch {
       // fall through
     }
+  }
+  const fwdHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const fwdProto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  if (fwdHost && !fwdHost.startsWith("0.0.0.0")) {
+    return `${fwdProto || "https"}://${fwdHost}`;
+  }
+  const host = req.headers.get("host")?.trim();
+  if (host && !host.startsWith("0.0.0.0")) {
+    const proto = fwdProto || (req.nextUrl.protocol.replace(":", "") || "http");
+    return `${proto}://${host}`;
   }
   return req.nextUrl.origin;
 }
