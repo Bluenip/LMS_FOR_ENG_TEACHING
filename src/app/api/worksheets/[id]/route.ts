@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { handleApiError, requireTeacherOfWorksheet } from "@/lib/permissions";
 import { updateWorksheetSchema } from "@/lib/validators";
+import { trashWorksheet } from "@/server/trashService";
 import {
-  deleteWorksheet,
   getWorksheetForTeacher,
   updateWorksheet,
 } from "@/server/worksheetService";
@@ -44,7 +44,8 @@ export async function DELETE(
   try {
     const { id } = await context.params;
     const { user } = await requireTeacherOfWorksheet(id);
-    await deleteWorksheet(id, user.id);
+    // moves to the trash (restorable for 30 days); files go to Google Drive's trash too
+    await trashWorksheet(user, id);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return handleApiError(error);

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { handleApiError, requireRole } from "@/lib/permissions";
-import { deleteLessonItem } from "@/server/lessonService";
+import { trashLessonItem } from "@/server/trashService";
 
 export async function DELETE(
   _req: Request,
@@ -9,7 +9,7 @@ export async function DELETE(
   try {
     const user = await requireRole(["TEACHER", "ADMIN"]);
     const { id, itemId } = await context.params;
-    await deleteLessonItem(user, id, itemId);
+    await trashLessonItem(user, id, itemId);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return handleApiError(error);

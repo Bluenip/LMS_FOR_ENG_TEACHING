@@ -229,7 +229,7 @@ export async function exportAllTeacherWorksheetsZip(ownerId: string, ids?: strin
   filename: string;
 }> {
   const worksheets = await prisma.worksheet.findMany({
-    where: { ownerId, ...(ids ? { id: { in: ids } } : {}) },
+    where: { ownerId, deletedAt: null, ...(ids ? { id: { in: ids } } : {}) },
     select: { id: true, title: true },
     orderBy: { updatedAt: "desc" },
   });

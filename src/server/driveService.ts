@@ -661,7 +661,7 @@ export async function runDailyAutoBackup(): Promise<{
     if (!conn.owner) continue;
     const owner = conn.owner;
     const worksheets = await prisma.worksheet.findMany({
-      where: { ownerId: owner.id },
+      where: { ownerId: owner.id, deletedAt: null },
       select: { id: true, updatedAt: true, lastDriveBackupAt: true },
     });
 

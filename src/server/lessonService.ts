@@ -36,9 +36,9 @@ const NOT_FOUND = () => new AppError("Không tìm thấy chương bài giảng."
 export async function requireEditableLesson(actor: Actor, lessonId: string) {
   const lesson = await prisma.lesson.findUnique({
     where: { id: lessonId },
-    select: { id: true, ownerId: true, classId: true, title: true },
+    select: { id: true, ownerId: true, classId: true, title: true, deletedAt: true },
   });
-  if (!lesson) throw NOT_FOUND();
+  if (!lesson || lesson.deletedAt) throw NOT_FOUND();
   if (actor.role !== "ADMIN" && lesson.ownerId !== actor.id) {
     throw new AppError("Bạn không có quyền chỉnh sửa bài giảng này.", 403, "FORBIDDEN");
   }
@@ -55,7 +55,7 @@ async function requireLessonInClass(classId: string, lessonId: string) {
 }
 
 const LIBRARY_INCLUDE = {
-  items: { orderBy: { order: "asc" as const } },
+  items: { where: { deletedAt: null }, orderBy: { order: "asc" as const } },
   owner: { select: { id: true, name: true } },
   classLinks: {
     select: { class: { select: { id: true, name: true, archived: true } } },
@@ -66,7 +66,7 @@ const LIBRARY_INCLUDE = {
 /** The actor's lesson library (admins see every teacher's lessons). */
 export async function listLibraryLessons(actor: Actor) {
   return prisma.lesson.findMany({
-    where: actor.role === "ADMIN" ? {} : { ownerId: actor.id },
+    where: { deletedAt: null, ...(actor.role === "ADMIN" ? {} : { ownerId: actor.id }) },
     include: LIBRARY_INCLUDE,
     orderBy: { updatedAt: "desc" },
   });
@@ -75,11 +75,11 @@ export async function listLibraryLessons(actor: Actor) {
 /** Lessons shown in a class, in the class's order (same shape as before the library existed). */
 export async function listClassLessons(classId: string) {
   const links = await prisma.classLesson.findMany({
-    where: { classId },
+    where: { classId, lesson: { deletedAt: null } },
     include: {
       lesson: {
         include: {
-          items: { orderBy: { order: "asc" } },
+          items: { where: { deletedAt: null }, orderBy: { order: "asc" } },
           owner: { select: { id: true, name: true } },
         },
       },
@@ -200,7 +200,7 @@ export async function setLessonClasses(actor: Actor, lessonId: string, classIds:
 export async function addLessonsToClass(actor: Actor, classId: string, lessonIds: string[]) {
   const ids = [...new Set(lessonIds)];
   const lessons = await prisma.lesson.findMany({
-    where: { id: { in: ids }, ...(actor.role === "ADMIN" ? {} : { ownerId: actor.id }) },
+    where: { id: { in: ids }, deletedAt: null, ...(actor.role === "ADMIN" ? {} : { ownerId: actor.id }) },
     select: { id: true },
   });
   if (lessons.length !== ids.length) {

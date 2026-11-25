@@ -52,7 +52,7 @@ export async function createAssignmentsForClasses(
     where: { id: input.worksheetId },
     include: { _count: { select: { fields: true } } },
   });
-  if (!worksheet) {
+  if (!worksheet || worksheet.deletedAt) {
     throw new AppError("Không tìm thấy phiếu bài tập.", 404, "NOT_FOUND");
   }
   if (!isAdmin && worksheet.ownerId !== teacherId && !worksheet.isShared) {

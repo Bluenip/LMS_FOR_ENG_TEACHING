@@ -285,17 +285,20 @@ model Comment {
 }
 
 model Lesson {
-  id          String   @id @default(cuid())
+  id            String    @id @default(cuid())
   /// Deprecated "home" class (the class it was first created in). Class membership now lives in
   /// ClassLesson; kept nullable so a rolled-back app can still read lessons created before the library.
-  classId     String?
+  classId       String?
   /// Teacher who owns this lesson in their library (null if that account was deleted).
-  ownerId     String?
-  title       String
-  description String?
-  order       Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  ownerId       String?
+  title         String
+  description   String?
+  /// Trash (Phase 14): set when moved to the trash; purged after 30 days. Source: "USER" | "DRIVE"
+  deletedAt     DateTime?
+  deletedSource String?
+  order         Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   class        Class?        @relation(fields: [classId], references: [id], onDelete: SetNull)
   owner        User?         @relation("LessonOwner", fields: [ownerId], references: [id], onDelete: SetNull)
@@ -324,15 +327,17 @@ model ClassLesson {
 }
 
 model LessonItem {
-  id          String         @id @default(cuid())
-  lessonId    String
-  title       String
-  type        LessonItemType
-  fileKey     String?
-  driveFileId String?
-  url         String?
-  order       Int
-  createdAt   DateTime       @default(now())
+  id            String         @id @default(cuid())
+  lessonId      String
+  title         String
+  type          LessonItemType
+  fileKey       String?
+  driveFileId   String?
+  deletedAt     DateTime?
+  deletedSource String?
+  url           String?
+  order         Int
+  createdAt     DateTime       @default(now())
 
   lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
@@ -349,6 +354,9 @@ model Worksheet {
   isShared              Boolean   @default(false) // shared with other teachers in the LMS
   lastDriveBackupAt     DateTime?
   lastDriveBackupFileId String?
+  /// Trash (Phase 14): set when moved to the trash; purged after 30 days. Source: "USER" | "DRIVE"
+  deletedAt             DateTime?
+  deletedSource         String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -604,23 +612,25 @@ model DriveConnection {
 }
 
 model DriveFile {
-  id           String        @id @default(cuid())
-  storageKey   String        @unique
-  driveFileId  String        @unique
-  connectionId String
-  ownerId      String?
-  name         String
-  mimeType     String
-  size         Int           @default(0)
-  md5          String?
-  kind         DriveFileKind
-  worksheetId  String?
-  classId      String?
-  submissionId String?
-  shared       Boolean       @default(false)
-  trashedAt    DateTime?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id            String        @id @default(cuid())
+  storageKey    String        @unique
+  driveFileId   String        @unique
+  connectionId  String
+  ownerId       String?
+  name          String
+  mimeType      String
+  size          Int           @default(0)
+  md5           String?
+  kind          DriveFileKind
+  worksheetId   String?
+  classId       String?
+  submissionId  String?
+  shared        Boolean       @default(false)
+  trashedAt     DateTime?
+  /// In Google Drive's trash because its worksheet / lesson is in Pivora's trash (restorable)
+  softTrashedAt DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   connection DriveConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   owner      User?           @relation("DriveFileOwner", fields: [ownerId], references: [id], onDelete: SetNull)

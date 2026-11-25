@@ -36,7 +36,7 @@ export async function listTeacherClasses(
         select: {
           enrollments: { where: { status: "ACTIVE" } },
           assignments: true,
-          classLessons: true,
+          classLessons: { where: { lesson: { deletedAt: null } } },
         },
       },
     },
@@ -55,7 +55,7 @@ export async function listStudentClasses(studentId: string) {
             select: {
               enrollments: { where: { status: "ACTIVE" } },
               assignments: true,
-              classLessons: true,
+              classLessons: { where: { lesson: { deletedAt: null } } },
             },
           },
         },
@@ -252,10 +252,11 @@ export async function getClassDetail(classId: string) {
         orderBy: { createdAt: "desc" },
       },
       classLessons: {
+        where: { lesson: { deletedAt: null } },
         include: {
           lesson: {
             include: {
-              items: { orderBy: { order: "asc" } },
+              items: { where: { deletedAt: null }, orderBy: { order: "asc" } },
               owner: { select: { id: true, name: true } },
             },
           },

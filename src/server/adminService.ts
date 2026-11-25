@@ -246,7 +246,7 @@ export async function getUserOwnedContent(fromUserId: string) {
       orderBy: { createdAt: "desc" },
     }),
     prisma.worksheet.findMany({
-      where: { ownerId: fromUserId },
+      where: { ownerId: fromUserId, deletedAt: null },
       select: {
         id: true,
         title: true,

@@ -78,6 +78,8 @@ export default function AdminAuditPage() {
       CLASS_UNARCHIVED: ["Mở lại lớp", "Class restored"],
       CLASS_DELETED: ["Xoá lớp", "Class deleted"],
       WORKSHEET_DELETED: ["Xoá worksheet", "Worksheet deleted"],
+      CONTENT_TRASHED: ["Chuyển vào thùng rác", "Moved to trash"],
+      CONTENT_RESTORED: ["Khôi phục từ thùng rác", "Restored from trash"],
       TOTP_ENABLED: ["Bật xác thực 2 bước (2FA)", "2FA enabled"],
       TOTP_DISABLED: ["Tắt xác thực 2 bước (2FA)", "2FA disabled"],
     };

@@ -75,7 +75,6 @@ export function LessonLibrary({ isAdmin }: { isAdmin: boolean }) {
 
   // delete
   const [deleting, setDeleting] = useState<LibraryLesson | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["lesson-library"],
@@ -170,7 +169,8 @@ export function LessonLibrary({ isAdmin }: { isAdmin: boolean }) {
   const deleteItem = async (lessonId: string, itemId: string) => {
     const res = await fetch(`/api/lessons/${lessonId}/items/${itemId}`, { method: "DELETE" });
     if (res.ok) {
-      toast.success(tr("Đã xoá tài liệu.", "Material deleted."));
+      toast.success(tr("Đã chuyển tài liệu vào thùng rác.", "Material moved to trash."));
+      queryClient.invalidateQueries({ queryKey: ["library-trash"] });
       await refresh();
     } else {
       toast.error(tr("Không xoá được tài liệu.", "Could not delete the material."));
@@ -212,9 +212,11 @@ export function LessonLibrary({ isAdmin }: { isAdmin: boolean }) {
     if (!deleting) return;
     const res = await fetch(`/api/lessons/${deleting.id}`, { method: "DELETE" });
     if (res.ok) {
-      toast.success(tr("Đã xoá bài giảng khỏi kho và mọi lớp.", "Lesson deleted from the library and all classes."));
+      toast.success(
+        tr("Đã chuyển bài giảng vào thùng rác (khôi phục trong 30 ngày).", "Lesson moved to trash (restorable for 30 days).")
+      );
+      queryClient.invalidateQueries({ queryKey: ["library-trash"] });
       setDeleting(null);
-      setDeleteConfirm("");
       await refresh();
     } else {
       toast.error(tr("Không xoá được bài giảng.", "Could not delete the lesson."));
@@ -301,8 +303,7 @@ export function LessonLibrary({ isAdmin }: { isAdmin: boolean }) {
                     aria-label={tr("Xoá bài giảng", "Delete lesson")}
                     onClick={() => {
                       setDeleting(lesson);
-                      setDeleteConfirm("");
-                    }}
+                                    }}
                   >
                     <Trash2 className="h-4 w-4 text-slate-400" />
                   </Button>
@@ -525,35 +526,29 @@ export function LessonLibrary({ isAdmin }: { isAdmin: boolean }) {
       <Dialog open={Boolean(deleting)} onOpenChange={(o) => !o && setDeleting(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{tr("Xoá bài giảng?", "Delete lesson?")}</DialogTitle>
+            <DialogTitle>{tr("Chuyển bài giảng vào thùng rác?", "Move lesson to trash?")}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-[#464555]">
             {deleting && deleting.classLinks.length > 0
               ? tr(
-                  `Bài giảng sẽ bị xoá khỏi kho và khỏi ${deleting.classLinks.length} lớp đang dùng, kèm toàn bộ file. Không thể hoàn tác.`,
-                  `The lesson and all its files will be deleted from the library and from ${deleting.classLinks.length} class(es). This cannot be undone.`
+                  `“${deleting.title}” sẽ ẩn khỏi ${deleting.classLinks.length} lớp đang dùng; file trên Google Drive vào thùng rác Drive. Khôi phục được trong 30 ngày ở tab Thùng rác.`,
+                  `“${deleting.title}” will disappear from ${deleting.classLinks.length} class(es); its Google Drive files go to Drive's trash. Restore it within 30 days from the Trash tab.`
                 )
-              : tr("Bài giảng và toàn bộ file sẽ bị xoá. Không thể hoàn tác.", "The lesson and all its files will be deleted. This cannot be undone.")}
+              : tr(
+                  `“${deleting?.title ?? ""}” sẽ vào thùng rác, khôi phục được trong 30 ngày.`,
+                  `“${deleting?.title ?? ""}” goes to the trash and can be restored for 30 days.`
+                )}
           </p>
-          <div className="space-y-1.5">
-            <Label htmlFor="delete-confirm">{tr("Gõ lại tên bài giảng để xác nhận", "Type the lesson title to confirm")}</Label>
-            <Input
-              id="delete-confirm"
-              value={deleteConfirm}
-              onChange={(e) => setDeleteConfirm(e.target.value)}
-              placeholder={deleting?.title}
-            />
-          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleting(null)}>
               {tr("Huỷ", "Cancel")}
             </Button>
             <Button
               variant="destructive"
-              disabled={!deleting || deleteConfirm.trim() !== deleting.title.trim()}
+              disabled={!deleting}
               onClick={confirmDelete}
             >
-              {tr("Xoá vĩnh viễn", "Delete permanently")}
+              {tr("Chuyển vào thùng rác", "Move to trash")}
             </Button>
           </DialogFooter>
         </DialogContent>

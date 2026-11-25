@@ -4,9 +4,22 @@ import type { Instrumentation } from "next";
  * Runs once when the Next.js Node.js server starts.
  * 1. Schedules Google Drive cleanup (`pruneDrive`) every DRIVE_PRUNE_INTERVAL_MINUTES (default 60; 0 disables).
  * 2. Schedules daily incremental teacher auto-backup (`runDailyAutoBackup`) at DRIVE_AUTO_BACKUP_HOUR (default 02:00).
+ * 3. Hourly: syncs the library trash with Google Drive's trash and deletes items older than 30 days.
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    // library trash: empty items older than CONTENT_TRASH_DAYS (runs with or without Google Drive)
+    const purgeTrash = async () => {
+      try {
+        const { purgeExpiredContentTrash } = await import("./server/trashService");
+        await purgeExpiredContentTrash();
+      } catch (err) {
+        console.error("[Trash] Scheduled purge failed:", err instanceof Error ? err.message : "unknown");
+      }
+    };
+    setTimeout(purgeTrash, 3 * 60 * 1000).unref();
+    setInterval(purgeTrash, 60 * 60 * 1000).unref();
+
     if (!process.env.GOOGLE_CLIENT_ID?.trim()) return;
 
     const pruneMinutes = Number(process.env.DRIVE_PRUNE_INTERVAL_MINUTES ?? 60);
@@ -15,6 +28,9 @@ export async function register() {
         try {
           const { pruneDrive } = await import("./server/driveService");
           await pruneDrive();
+          // items trashed / restored directly in Google Drive show up in Pivora's trash
+          const { syncTrashWithDrive } = await import("./server/trashService");
+          await syncTrashWithDrive();
         } catch (err) {
           console.error(
             "[Drive Instrumentation] Scheduled prune failed:",

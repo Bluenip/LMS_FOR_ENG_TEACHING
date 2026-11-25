@@ -214,6 +214,9 @@ export async function requireTeacherOfWorksheet(worksheetId: string) {
   if (user.role !== "ADMIN" && worksheet.ownerId !== user.id) {
     throw new AppError("Bạn không có quyền chỉnh sửa phiếu bài tập này.", 403, "FORBIDDEN");
   }
+  if (worksheet.deletedAt) {
+    throw new AppError("Phiếu bài tập đang ở thùng rác. Hãy khôi phục trước khi dùng.", 404, "IN_TRASH");
+  }
   return { user, worksheet };
 }
 

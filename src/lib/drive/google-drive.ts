@@ -1018,6 +1018,48 @@ export async function trashDriveFile(connectionId: string, driveFileId: string):
   if (!res.ok) throw await classifyGoogleError(res);
 }
 
+/**
+ * Takes a file out of Google Drive's trash. Returns false when the file no longer exists
+ * (trash emptied / deleted forever), true otherwise.
+ */
+export async function untrashDriveFile(connectionId: string, driveFileId: string): Promise<boolean> {
+  const res = await driveFetch(
+    connectionId,
+    `${getDriveApiBase()}/files/${encodeURIComponent(driveFileId)}?fields=id`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json; charset=UTF-8" },
+      body: JSON.stringify({ trashed: false }),
+    }
+  );
+  if (res.status === 404) return false;
+  if (!res.ok) throw await classifyGoogleError(res);
+  return true;
+}
+
+/**
+ * Ids of this app's files that are currently in Google Drive's trash (drive.file scope only lists
+ * files the app created or was given), e.g. after an admin deleted them directly in Drive.
+ */
+export async function listTrashedDriveFileIds(connectionId: string, maxPages = 20): Promise<string[]> {
+  const ids: string[] = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < maxPages; page++) {
+    const params = new URLSearchParams({
+      q: "trashed = true and mimeType != 'application/vnd.google-apps.folder'",
+      pageSize: "1000",
+      fields: "nextPageToken,files(id)",
+      ...(pageToken ? { pageToken } : {}),
+    });
+    const res = await driveFetch(connectionId, `${getDriveApiBase()}/files?${params}`);
+    const body = await parseJsonOrThrow<{ nextPageToken?: string; files?: Array<{ id: string }> }>(res);
+    for (const f of body.files ?? []) ids.push(f.id);
+    if (!body.nextPageToken) break;
+    pageToken = body.nextPageToken;
+  }
+  return ids;
+}
+
 export async function listDriveFolderFiles(
   connectionId: string,
   folderId?: string,

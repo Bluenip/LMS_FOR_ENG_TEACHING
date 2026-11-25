@@ -30,6 +30,7 @@ import { cn, formatDateTime } from "@/lib/utils";
 import { foldText } from "@/lib/text-search";
 import { useI18n } from "@/lib/i18n/client";
 import { LessonLibrary } from "@/components/lessons/LessonLibrary";
+import { TrashView } from "@/components/library/TrashView";
 import type { DriveStatusPayload } from "@/server/driveService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,7 +56,7 @@ interface WorksheetRow {
   lastDriveBackupAt?: string | null;
   updatedAt: string;
   owner?: { id: string; name: string; email: string };
-  _count: { fields: number; assignments: number; audios?: number };
+  _count: { fields: number; assignments: number; audios?: number; driveFiles?: number };
 }
 
 type WorksheetSort = "updated_desc" | "updated_asc" | "title" | "most_assigned" | "most_questions";
@@ -94,14 +95,15 @@ export default function TeacherWorksheetsPage() {
 
   const [tab, setTab] = useState<"mine" | "shared">("mine");
   // Library tab lives in the URL (?tab=lessons) so links from class pages open it directly
-  const [libraryTab, setLibraryTab] = useState<"worksheets" | "lessons">("worksheets");
+  const [libraryTab, setLibraryTab] = useState<"worksheets" | "lessons" | "trash">("worksheets");
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("tab") === "lessons") setLibraryTab("lessons");
+    const t = new URLSearchParams(window.location.search).get("tab");
+    if (t === "lessons" || t === "trash") setLibraryTab(t);
   }, []);
-  const switchLibraryTab = (next: "worksheets" | "lessons") => {
+  const switchLibraryTab = (next: "worksheets" | "lessons" | "trash") => {
     setLibraryTab(next);
     const url = new URL(window.location.href);
-    if (next === "lessons") url.searchParams.set("tab", "lessons");
+    if (next !== "worksheets") url.searchParams.set("tab", next);
     else url.searchParams.delete("tab");
     window.history.replaceState(window.history.state, "", url.toString());
   };
@@ -217,8 +219,23 @@ export default function TeacherWorksheetsPage() {
   const handleDelete = async (id: string) => {
     const res = await fetch(`/api/worksheets/${id}`, { method: "DELETE" });
     if (res.ok) {
-      toast.success(tr("Đã xoá Worksheet.", "Worksheet deleted."));
+      toast.success(tr("Đã chuyển vào thùng rác (khôi phục trong 30 ngày).", "Moved to trash (restorable for 30 days)."), {
+        action: {
+          label: tr("Hoàn tác", "Undo"),
+          onClick: async () => {
+            const undo = await fetch("/api/trash", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ kind: "WORKSHEET", id }),
+            });
+            if (undo.ok) toast.success(tr("Đã khôi phục worksheet.", "Worksheet restored."));
+            queryClient.invalidateQueries({ queryKey: ["teacher-worksheets"] });
+            queryClient.invalidateQueries({ queryKey: ["library-trash"] });
+          },
+        },
+      });
       queryClient.invalidateQueries({ queryKey: ["teacher-worksheets"] });
+      queryClient.invalidateQueries({ queryKey: ["library-trash"] });
     } else {
       const json = await res.json().catch(() => ({}));
       toast.error(json.error ?? tr("Không thể xoá Worksheet.", "Could not delete worksheet."));
@@ -423,12 +440,13 @@ export default function TeacherWorksheetsPage() {
       <div
         role="tablist"
         aria-label={tr("Kho lưu trữ", "Library")}
-        className="inline-grid grid-cols-2 gap-1 rounded-xl bg-[#EFF4FF] p-1"
+        className="inline-grid grid-cols-3 gap-1 rounded-xl bg-[#EFF4FF] p-1"
       >
         {(
           [
             ["worksheets", tr("Worksheet", "Worksheets"), <FileText key="i" className="h-4 w-4" />],
             ["lessons", tr("Bài giảng", "Lessons"), <BookOpen key="i" className="h-4 w-4" />],
+            ["trash", tr("Thùng rác", "Trash"), <Trash2 key="i" className="h-4 w-4" />],
           ] as const
         ).map(([id, label, icon]) => (
           <button
@@ -450,6 +468,15 @@ export default function TeacherWorksheetsPage() {
       </div>
     </div>
   );
+
+  if (libraryTab === "trash") {
+    return (
+      <div className="space-y-6">
+        {libraryHeader}
+        <TrashView isAdmin={isAdmin} />
+      </div>
+    );
+  }
 
   if (libraryTab === "lessons") {
     return (
@@ -729,15 +756,27 @@ export default function TeacherWorksheetsPage() {
                           <Headphones className="h-3 w-3" /> {ws._count.audios}
                         </Badge>
                       )}
-                      {ws.lastDriveBackupAt && (
-                        <Badge
-                          variant="sky"
-                          data-testid={`drive-backed-up-badge-${ws.id}`}
-                          title={`${tr("Sao lưu Drive gần nhất:", "Last Drive backup:")} ${formatDateTime(ws.lastDriveBackupAt, locale)}`}
-                        >
-                          <Cloud className="h-3 w-3" /> {tr("Đã lưu trên Drive", "Backed up on Drive")}
-                        </Badge>
-                      )}
+                      {/* where this worksheet's files (PDF / audio) live; answer-sheet-only worksheets have none */}
+                      {(ws.pdfFileKey || (ws._count.audios ?? 0) > 0) &&
+                        ((ws._count.driveFiles ?? 0) > 0 ? (
+                          <Badge
+                            variant="sky"
+                            data-testid={`drive-stored-badge-${ws.id}`}
+                            title={tr("PDF / file nghe của phiếu nằm trên Google Drive", "PDF / audio stored on Google Drive")}
+                          >
+                            <Cloud className="h-3 w-3" /> {tr("Trên Google Drive", "On Google Drive")}
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="neutral"
+                            title={tr(
+                              "File đang ở máy chủ (lúc tạo chưa kết nối Google Drive)",
+                              "Files are on the server (Google Drive was not connected when created)"
+                            )}
+                          >
+                            {tr("Trên máy chủ", "On the server")}
+                          </Badge>
+                        ))}
                     </div>
                   </div>
                   <h3 className="text-base font-bold text-[#0B1C30] line-clamp-2">{ws.title}</h3>

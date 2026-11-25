@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { handleApiError, requireRole } from "@/lib/permissions";
 import { updateLessonSchema } from "@/lib/validators";
-import { deleteLessonEverywhere, updateLesson } from "@/server/lessonService";
+import { updateLesson } from "@/server/lessonService";
+import { trashLesson } from "@/server/trashService";
 
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -15,12 +16,12 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
   }
 }
 
-/** Deletes the lesson from the library and from every class that shows it. */
+/** Moves the lesson to the trash (hidden from every class; restorable for 30 days). */
 export async function DELETE(_req: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireRole(["TEACHER", "ADMIN"]);
     const { id } = await context.params;
-    await deleteLessonEverywhere(user, id);
+    await trashLesson(user, id);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return handleApiError(error);

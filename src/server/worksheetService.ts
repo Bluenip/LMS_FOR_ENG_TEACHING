@@ -38,10 +38,15 @@ export const STUDENT_FIELD_SELECT = {
 
 export async function listTeacherWorksheets(ownerId: string) {
   return prisma.worksheet.findMany({
-    where: { ownerId },
+    where: { ownerId, deletedAt: null },
     include: {
       _count: {
-        select: { fields: true, assignments: true, audios: true },
+        select: {
+          fields: true,
+          assignments: true,
+          audios: true,
+          driveFiles: { where: { trashedAt: null, kind: { in: ["WORKSHEET_PDF", "WORKSHEET_AUDIO"] } } },
+        },
       },
     },
     orderBy: { updatedAt: "desc" },
@@ -52,13 +57,19 @@ export async function listTeacherWorksheets(ownerId: string) {
 export async function listSharedWorksheets(excludeOwnerId: string, opts?: { all?: boolean }) {
   return prisma.worksheet.findMany({
     where: {
+      deletedAt: null,
       ...(opts?.all ? {} : { isShared: true }),
       ownerId: { not: excludeOwnerId },
     },
     include: {
       owner: { select: { id: true, name: true, email: true } },
       _count: {
-        select: { fields: true, assignments: true, audios: true },
+        select: {
+          fields: true,
+          assignments: true,
+          audios: true,
+          driveFiles: { where: { trashedAt: null, kind: { in: ["WORKSHEET_PDF", "WORKSHEET_AUDIO"] } } },
+        },
       },
     },
     orderBy: { updatedAt: "desc" },
@@ -464,7 +475,7 @@ export async function authorizeFileDownload(
 
   // Lesson material: owner, teachers of any class showing the lesson, and students enrolled there
   const lessonItem = await prisma.lessonItem.findFirst({
-    where: { fileKey },
+    where: { fileKey, deletedAt: null, lesson: { deletedAt: null } },
     select: {
       lesson: {
         select: {
