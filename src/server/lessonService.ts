@@ -58,6 +58,7 @@ const LIBRARY_INCLUDE = {
   items: { where: { deletedAt: null }, orderBy: { order: "asc" as const } },
   owner: { select: { id: true, name: true } },
   classLinks: {
+    where: { class: { deletedAt: null } },
     select: { class: { select: { id: true, name: true, archived: true } } },
     orderBy: { createdAt: "asc" as const },
   },
@@ -159,6 +160,7 @@ export async function setLessonClasses(actor: Actor, lessonId: string, classIds:
   const manageable = await prisma.class.findMany({
     where: {
       id: { in: wanted },
+      deletedAt: null,
       ...(actor.role === "ADMIN" ? {} : { teacherId: actor.id }),
     },
     select: { id: true },

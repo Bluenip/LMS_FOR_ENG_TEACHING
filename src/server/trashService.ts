@@ -6,6 +6,7 @@ import { getStorageProvider } from "@/lib/storage";
 import { listTrashedDriveFileIds, trashDriveFile, untrashDriveFile } from "@/lib/drive/google-drive";
 import { logAudit } from "@/server/auditService";
 import { deleteWorksheet } from "@/server/worksheetService";
+import { deleteClass } from "@/server/classService";
 
 /**
  * Library trash (Phase 14).
@@ -23,7 +24,7 @@ export const CONTENT_TRASH_DAYS = TRASH_DAYS;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 type Actor = { id: string; role: Role };
-export type TrashKind = "WORKSHEET" | "LESSON" | "LESSON_ITEM";
+export type TrashKind = "CLASS" | "WORKSHEET" | "LESSON" | "LESSON_ITEM";
 type TrashSource = "USER" | "DRIVE";
 
 const SYSTEM: Actor = { id: "system", role: "ADMIN" };
@@ -105,6 +106,13 @@ function assertOwner(actor: Actor, ownerId: string | null, message: string) {
 }
 
 async function loadItem(kind: TrashKind, id: string) {
+  if (kind === "CLASS") {
+    const c = await prisma.class.findUnique({
+      where: { id },
+      select: { id: true, name: true, teacherId: true, deletedAt: true },
+    });
+    return c ? { id: c.id, title: c.name, ownerId: c.teacherId, deletedAt: c.deletedAt } : null;
+  }
   if (kind === "WORKSHEET") {
     const ws = await prisma.worksheet.findUnique({
       where: { id },
@@ -175,6 +183,29 @@ export async function trashWorksheet(actor: Actor, worksheetId: string, source: 
   });
 }
 
+/**
+ * Moves a class to the trash: hidden from teacher, students and parents (like it no longer exists),
+ * everything kept until it is restored or purged after 30 days. Lessons stay in the teacher's library.
+ */
+export async function trashClass(actor: Actor, classId: string) {
+  const cls = await prisma.class.findUnique({
+    where: { id: classId },
+    select: { id: true, name: true, teacherId: true, deletedAt: true },
+  });
+  if (!cls || cls.deletedAt) throw new AppError("Không tìm thấy lớp học.", 404, "NOT_FOUND");
+  assertOwner(actor, cls.teacherId, "Bạn không có quyền quản lý lớp học này.");
+  await prisma.class.update({ where: { id: classId }, data: { deletedAt: new Date() } });
+  await logAudit({
+    actorId: actor.id,
+    action: "CONTENT_TRASHED",
+    targetType: "CLASS",
+    targetId: classId,
+    summary: `Chuyển lớp vào thùng rác: ${cls.name}`,
+    summaryEn: `Moved class to trash: ${cls.name}`,
+    meta: { className: cls.name, teacherId: cls.teacherId },
+  });
+}
+
 export async function trashLesson(actor: Actor, lessonId: string) {
   const lesson = await prisma.lesson.findUnique({
     where: { id: lessonId },
@@ -237,6 +268,10 @@ function daysLeft(deletedAt: Date, now = Date.now()) {
 
 export async function listTrash(actor: Actor): Promise<TrashEntry[]> {
   const mine = actor.role === "ADMIN" ? {} : { ownerId: actor.id };
+  const classes = await prisma.class.findMany({
+    where: { ...(actor.role === "ADMIN" ? {} : { teacherId: actor.id }), deletedAt: { not: null } },
+    select: { id: true, name: true, deletedAt: true, teacher: { select: { name: true } } },
+  });
   const [worksheets, lessons, items] = await Promise.all([
     prisma.worksheet.findMany({
       where: { ...mine, deletedAt: { not: null } },
@@ -260,6 +295,16 @@ export async function listTrash(actor: Actor): Promise<TrashEntry[]> {
   ]);
   const src = (s: string | null): TrashSource => (s === "DRIVE" ? "DRIVE" : "USER");
   const rows: TrashEntry[] = [
+    ...classes.map((c) => ({
+      kind: "CLASS" as const,
+      id: c.id,
+      title: c.name,
+      parentTitle: null,
+      ownerName: c.teacher?.name ?? null,
+      deletedAt: c.deletedAt!.toISOString(),
+      source: "USER" as const,
+      daysLeft: daysLeft(c.deletedAt!),
+    })),
     ...worksheets.map((w) => ({
       kind: "WORKSHEET" as const,
       id: w.id,
@@ -301,7 +346,9 @@ export async function restoreFromTrash(actor: Actor, kind: TrashKind, id: string
   assertOwner(actor, item.ownerId, "Bạn không có quyền khôi phục mục này.");
 
   let missingFiles = 0;
-  if (kind === "WORKSHEET") {
+  if (kind === "CLASS") {
+    await prisma.class.update({ where: { id }, data: { deletedAt: null } });
+  } else if (kind === "WORKSHEET") {
     await prisma.worksheet.update({ where: { id }, data: { deletedAt: null, deletedSource: null } });
     missingFiles = await restoreFilesFromDriveTrash(await driveFilesFor(id, await worksheetFileKeys(id)));
   } else if (kind === "LESSON") {
@@ -314,7 +361,7 @@ export async function restoreFromTrash(actor: Actor, kind: TrashKind, id: string
   await logAudit({
     actorId: actor.id === SYSTEM.id ? null : actor.id,
     action: "CONTENT_RESTORED",
-    targetType: kind === "WORKSHEET" ? "WORKSHEET" : "SYSTEM",
+    targetType: kind === "WORKSHEET" ? "WORKSHEET" : kind === "CLASS" ? "CLASS" : "SYSTEM",
     targetId: id,
     summary: `Khôi phục từ thùng rác: ${item.title}`,
     summaryEn: `Restored from trash: ${item.title}`,
@@ -329,6 +376,11 @@ export async function deleteForever(actor: Actor, kind: TrashKind, id: string) {
   if (!item || !item.deletedAt) throw new AppError("Không tìm thấy mục trong thùng rác.", 404, "NOT_FOUND");
   assertOwner(actor, item.ownerId, "Bạn không có quyền xoá mục này.");
 
+  if (kind === "CLASS") {
+    // assignments, submissions, posts and enrollments go with the class; lessons stay in the library
+    await deleteClass(id, actor.id === SYSTEM.id ? undefined : actor.id);
+    return;
+  }
   if (kind === "WORKSHEET") {
     await deleteWorksheet(id, actor.id === SYSTEM.id ? undefined : actor.id);
     return;
@@ -350,6 +402,7 @@ export async function deleteForever(actor: Actor, kind: TrashKind, id: string) {
 /** Deletes everything that has been in the trash longer than CONTENT_TRASH_DAYS. */
 export async function purgeExpiredContentTrash(now = new Date()) {
   const cutoff = new Date(now.getTime() - CONTENT_TRASH_DAYS * DAY_MS);
+  const classes = await prisma.class.findMany({ where: { deletedAt: { lt: cutoff } }, select: { id: true } });
   const [worksheets, lessons, items] = await Promise.all([
     prisma.worksheet.findMany({ where: { deletedAt: { lt: cutoff } }, select: { id: true } }),
     prisma.lesson.findMany({ where: { deletedAt: { lt: cutoff } }, select: { id: true } }),
@@ -364,6 +417,7 @@ export async function purgeExpiredContentTrash(now = new Date()) {
       console.error(`[Trash] purge ${kind} ${id} failed:`, err instanceof Error ? err.message : "unknown");
     }
   };
+  for (const c of classes) await run("CLASS", c.id);
   for (const w of worksheets) await run("WORKSHEET", w.id);
   for (const l of lessons) await run("LESSON", l.id);
   for (const i of items) await run("LESSON_ITEM", i.id);

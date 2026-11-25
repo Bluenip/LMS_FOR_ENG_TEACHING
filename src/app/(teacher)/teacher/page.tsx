@@ -8,7 +8,8 @@ export default async function TeacherDashboardPage() {
   const user = await requireLayoutUser(["TEACHER", "ADMIN"]);
   // an admin sees (and manages) every class in the system
   const isAdmin = user.role === "ADMIN";
-  const classScope = isAdmin ? {} : { teacherId: user.id };
+  // classes in the trash are hidden everywhere until restored
+  const classScope = isAdmin ? { deletedAt: null } : { teacherId: user.id, deletedAt: null };
 
   const classes = await prisma.class.findMany({
     where: classScope,

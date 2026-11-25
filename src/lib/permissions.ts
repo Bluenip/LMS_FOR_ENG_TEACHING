@@ -142,7 +142,7 @@ export async function requireRole(allowedRoles: Role[]): Promise<SessionUser> {
 export async function requireTeacherOfClass(classId: string) {
   const user = await requireRole(["TEACHER", "ADMIN"]);
   const cls = await prisma.class.findUnique({ where: { id: classId } });
-  if (!cls) {
+  if (!cls || cls.deletedAt) {
     throw new AppError("Không tìm thấy lớp học.", 404, "NOT_FOUND");
   }
   if (user.role !== "ADMIN" && cls.teacherId !== user.id) {
@@ -157,7 +157,7 @@ export async function requireStudentInClass(classId: string) {
     where: { classId_studentId: { classId, studentId: user.id } },
     include: { class: true },
   });
-  if (!enrollment || enrollment.status !== "ACTIVE") {
+  if (!enrollment || enrollment.status !== "ACTIVE" || enrollment.class.deletedAt) {
     throw new AppError("Bạn chưa tham gia lớp học này.", 403, "FORBIDDEN");
   }
   return { user, enrollment, cls: enrollment.class };
@@ -166,7 +166,7 @@ export async function requireStudentInClass(classId: string) {
 export async function requireMemberOfClass(classId: string) {
   const user = await requireAuth();
   const cls = await prisma.class.findUnique({ where: { id: classId } });
-  if (!cls) {
+  if (!cls || cls.deletedAt) {
     throw new AppError("Không tìm thấy lớp học.", 404, "NOT_FOUND");
   }
   if (user.role === "ADMIN" || cls.teacherId === user.id) {
@@ -226,7 +226,7 @@ export async function requireTeacherOfAssignment(assignmentId: string) {
     where: { id: assignmentId },
     include: { class: true, worksheet: true },
   });
-  if (!assignment) {
+  if (!assignment || assignment.class.deletedAt) {
     throw new AppError("Không tìm thấy bài tập.", 404, "NOT_FOUND");
   }
   if (user.role !== "ADMIN" && assignment.class.teacherId !== user.id) {
@@ -241,7 +241,7 @@ export async function requireStudentForAssignment(assignmentId: string) {
     where: { id: assignmentId },
     include: { class: true },
   });
-  if (!assignment) {
+  if (!assignment || assignment.class.deletedAt) {
     throw new AppError("Không tìm thấy bài tập.", 404, "NOT_FOUND");
   }
   const enrollment = await prisma.enrollment.findUnique({

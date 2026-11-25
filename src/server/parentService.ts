@@ -162,7 +162,7 @@ export async function getChildOverviewForParent(studentId: string, selectedClass
       id: true,
       name: true,
       enrollments: {
-        where: { status: "ACTIVE" },
+        where: { status: "ACTIVE", class: { deletedAt: null } },
         include: {
           class: {
             select: {

@@ -260,7 +260,7 @@ async function parseAndValidateWorkbook(buffer: Buffer): Promise<ParsedInternalR
         })
       : Promise.resolve([]),
     prisma.class.findMany({
-      where: { archived: false },
+      where: { archived: false, deletedAt: null },
       select: { id: true, name: true, joinCode: true },
     }),
   ]);

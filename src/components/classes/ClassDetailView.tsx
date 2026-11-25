@@ -58,6 +58,7 @@ import { PdfCanvasPage, usePdfDocument } from "@/components/worksheet/PdfCanvasP
 import type { LessonItemType, ProctorMode, ViolationAction } from "@prisma/client";
 import { CreateAccountForm } from "@/components/accounts/CreateAccountForm";
 import { AddLessonsFromLibraryDialog } from "@/components/lessons/AddLessonsFromLibraryDialog";
+import { TRASH_DAYS } from "@/lib/trash";
 import {
   ResetPasswordDialog,
   type ResetPasswordTarget,
@@ -342,6 +343,31 @@ export function ClassDetailView({
       toast.success(cls.archived ? tr("Đã khôi phục lớp học!", "Class restored!") : tr("Đã lưu trữ lớp học!", "Class archived!"));
     } else {
       toast.error(vi.common.errorGeneric);
+    }
+  };
+
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const deleteNameMatches = deleteConfirm.trim() === cls.name.trim();
+
+  const handleDeleteClass = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/classes/${cls.id}`, { method: "DELETE" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? vi.common.errorGeneric);
+      toast.success(
+        tr(
+          `Đã chuyển lớp “${cls.name}” vào thùng rác (khôi phục trong ${TRASH_DAYS} ngày).`,
+          `Class “${cls.name}” moved to the trash (restorable for ${TRASH_DAYS} days).`
+        )
+      );
+      router.push("/teacher");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : vi.common.errorGeneric);
+      setDeleting(false);
     }
   };
 
@@ -1252,6 +1278,28 @@ export function ClassDetailView({
                   {tr("Lưu thay đổi", "Save changes")}
                 </Button>
               </div>
+
+              {/* Danger zone: delete = move to the 30-day trash */}
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-[#BA1A1A]">{tr("Xoá lớp học", "Delete class")}</p>
+                  <p className="text-xs text-[#464555]">
+                    {tr(
+                      `Lớp vào thùng rác ${TRASH_DAYS} ngày (khôi phục ở Kho lưu trữ › Thùng rác), sau đó xoá hẳn cùng bài đã giao, bài nộp, bảng tin và danh sách học sinh. Bài giảng vẫn ở trong kho.`,
+                      `The class goes to the trash for ${TRASH_DAYS} days (restore it from Library › Trash), then it is deleted with its assignments, submissions, posts and roster. Lessons stay in your library.`
+                    )}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => setDeleteOpen(true)}
+                  data-testid="delete-class-btn"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {tr("Xoá lớp", "Delete class")}
+                </Button>
+              </div>
             </form>
           </TabsContent>
         )}
@@ -1303,6 +1351,58 @@ export function ClassDetailView({
               <Button type="submit" variant="destructive" disabled={!archiveNameMatches}>
                 <Archive className="h-4 w-4" />
                 {vi.classes.archive}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete the class: the teacher must type the class name; it goes to the 30-day trash */}
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          setDeleteOpen(open);
+          if (!open) setDeleteConfirm("");
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{tr("Xoá lớp học?", "Delete this class?")}</DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (deleteNameMatches) void handleDeleteClass();
+            }}
+            className="space-y-4"
+          >
+            <p className="text-sm text-[#464555]">
+              {tr(
+                `Lớp sẽ biến mất với bạn, học sinh và phụ huynh. Trong ${TRASH_DAYS} ngày bạn có thể khôi phục nguyên vẹn ở Kho lưu trữ › Thùng rác; sau đó lớp bị xoá hẳn cùng bài đã giao, bài nộp, bảng tin và danh sách học sinh. Bài giảng của lớp vẫn nằm trong kho của bạn.`,
+                `The class disappears for you, students and parents. For ${TRASH_DAYS} days you can restore it intact from Library › Trash; after that it is deleted with its assignments, submissions, posts and roster. Its lessons stay in your library.`
+              )}
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="delete-class-confirm">
+                {tr("Nhập tên lớp để xác nhận:", "Type the class name to confirm:")}{" "}
+                <span className="font-bold text-[#0B1C30]">{cls.name}</span>
+              </Label>
+              <Input
+                id="delete-class-confirm"
+                value={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
+                autoComplete="off"
+                autoFocus
+                placeholder={cls.name}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setDeleteOpen(false)}>
+                {vi.common.cancel}
+              </Button>
+              <Button type="submit" variant="destructive" disabled={!deleteNameMatches || deleting}>
+                <Trash2 className="h-4 w-4" />
+                {deleting ? tr("Đang xoá…", "Deleting…") : tr("Xoá lớp", "Delete class")}
               </Button>
             </DialogFooter>
           </form>

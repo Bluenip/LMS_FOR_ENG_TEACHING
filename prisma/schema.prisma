@@ -220,15 +220,17 @@ model ParentInviteCode {
 }
 
 model Class {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   name            String
   description     String?
-  joinCode        String   @unique
+  joinCode        String    @unique
   teacherId       String
-  archived        Boolean  @default(false)
-  requireApproval Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  archived        Boolean   @default(false)
+  /// Trash: set when the teacher deletes the class; purged (with assignments, submissions, posts) after 30 days
+  deletedAt       DateTime?
+  requireApproval Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   teacher      User          @relation("TeacherClasses", fields: [teacherId], references: [id], onDelete: Cascade)
   enrollments  Enrollment[]

@@ -27,6 +27,7 @@ export async function listTeacherClasses(
 ) {
   return prisma.class.findMany({
     where: {
+      deletedAt: null,
       ...(opts?.allClasses ? {} : { teacherId }),
       ...(includeArchived ? {} : { archived: false }),
     },
@@ -46,7 +47,7 @@ export async function listTeacherClasses(
 
 export async function listStudentClasses(studentId: string) {
   const enrollments = await prisma.enrollment.findMany({
-    where: { studentId, status: "ACTIVE" },
+    where: { studentId, status: "ACTIVE", class: { deletedAt: null } },
     include: {
       class: {
         include: {
@@ -281,7 +282,7 @@ export async function getClassDetail(classId: string) {
       },
     },
   });
-  if (!cls) {
+  if (!cls || cls.deletedAt) {
     throw new AppError("Không tìm thấy lớp học.", 404, "NOT_FOUND");
   }
   // lessons now come from the library (ClassLesson); keep the old `lessons` shape for the pages

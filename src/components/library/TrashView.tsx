@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { BookOpen, Cloud, FileText, Paperclip, RotateCcw, Search, Trash2 } from "lucide-react";
+import { BookOpen, Cloud, FileText, Paperclip, RotateCcw, Search, Trash2, Users } from "lucide-react";
 import { apiFetchJson } from "@/lib/api-client";
 import { cn, formatDateTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
@@ -19,7 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-type TrashKind = "WORKSHEET" | "LESSON" | "LESSON_ITEM";
+type TrashKind = "CLASS" | "WORKSHEET" | "LESSON" | "LESSON_ITEM";
 
 interface TrashEntry {
   kind: TrashKind;
@@ -62,15 +62,20 @@ export function TrashView({ isAdmin }: { isAdmin: boolean }) {
   }, [data, query]);
 
   const kindLabel = (k: TrashKind) =>
-    k === "WORKSHEET" ? tr("Worksheet", "Worksheet") : k === "LESSON" ? tr("Bài giảng", "Lesson") : tr("Tài liệu bài giảng", "Lesson material");
+    k === "CLASS"
+      ? tr("Lớp học", "Class")
+      : k === "WORKSHEET" ? tr("Worksheet", "Worksheet") : k === "LESSON" ? tr("Bài giảng", "Lesson") : tr("Tài liệu bài giảng", "Lesson material");
   const kindIcon = (k: TrashKind) =>
-    k === "WORKSHEET" ? <FileText className="h-4 w-4" /> : k === "LESSON" ? <BookOpen className="h-4 w-4" /> : <Paperclip className="h-4 w-4" />;
+    k === "CLASS"
+      ? <Users className="h-4 w-4" />
+      : k === "WORKSHEET" ? <FileText className="h-4 w-4" /> : k === "LESSON" ? <BookOpen className="h-4 w-4" /> : <Paperclip className="h-4 w-4" />;
 
   const refreshAll = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["library-trash"] }),
       queryClient.invalidateQueries({ queryKey: ["teacher-worksheets"] }),
       queryClient.invalidateQueries({ queryKey: ["lesson-library"] }),
+      queryClient.invalidateQueries({ queryKey: ["teacher-classes"] }),
     ]);
   };
 
@@ -128,8 +133,8 @@ export function TrashView({ isAdmin }: { isAdmin: boolean }) {
     <div className="space-y-4">
       <p className="text-sm text-[#464555]">
         {tr(
-          `Mục đã xoá được giữ ${data?.retentionDays ?? 30} ngày rồi tự xoá hẳn. File trên Google Drive nằm trong thùng rác Drive và được khôi phục cùng lúc. File bị xoá trực tiếp trên Drive cũng hiện ở đây.`,
-          `Deleted items are kept for ${data?.retentionDays ?? 30} days, then removed for good. Their Google Drive files sit in Drive's trash and are restored together. Files deleted directly in Drive show up here too.`
+          `Lớp học, worksheet và bài giảng đã xoá được giữ ${data?.retentionDays ?? 30} ngày rồi tự xoá hẳn. File trên Google Drive nằm trong thùng rác Drive và được khôi phục cùng lúc. File bị xoá trực tiếp trên Drive cũng hiện ở đây.`,
+          `Deleted classes, worksheets and lessons are kept for ${data?.retentionDays ?? 30} days, then removed for good. Their Google Drive files sit in Drive's trash and are restored together. Files deleted directly in Drive show up here too.`
         )}
       </p>
 

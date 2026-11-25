@@ -25,7 +25,8 @@ vi.mock("@/lib/drive/google-drive", async (importOriginal) => {
 
 import { prisma } from "@/lib/db";
 import { createAccount } from "@/server/accountService";
-import { createClass } from "@/server/classService";
+import { createClass, getClassDetail, listStudentClasses, listTeacherClasses } from "@/server/classService";
+import { listStudentAssignments } from "@/server/assignmentService";
 import { createLesson, createLessonItem, listClassLessons, listLibraryLessons } from "@/server/lessonService";
 import { createWorksheet, listTeacherWorksheets } from "@/server/worksheetService";
 import { trashDriveOrphans } from "@/server/driveService";
@@ -35,6 +36,7 @@ import {
   purgeExpiredContentTrash,
   restoreFromTrash,
   syncTrashWithDrive,
+  trashClass,
   trashLesson,
   trashLessonItem,
   trashWorksheet,
@@ -204,5 +206,45 @@ describe("Phase 14: Drive orphan cleanup", () => {
     expect(drive.trashed.has(knownId)).toBe(false);
     expect(drive.trashed.has(`${prefix}-uploading`)).toBe(false);
     expect(drive.trashed.has(`${prefix}-foreign`)).toBe(false);
+  });
+});
+
+describe("Phase 14: class trash", () => {
+  it("hides a deleted class everywhere, keeps its lessons, restores it, and purges it after 30 days", async () => {
+    const cls = await createClass(teacher.id, { name: `${prefix} Trash class` });
+    const studentEmail = `${prefix}-stu@test.vn`;
+    emails.push(studentEmail);
+    const student = (
+      await createAccount({ id: adminId, role: "ADMIN" }, { name: "Stu", email: studentEmail, role: "STUDENT", password: "Password12345" })
+    ).user;
+    await prisma.enrollment.create({ data: { classId: cls.id, studentId: student.id, status: "ACTIVE" } });
+    const ws = await createWorksheet(teacher.id, { title: `${prefix} WS in class` });
+    await prisma.assignment.create({ data: { classId: cls.id, worksheetId: ws.id, title: `${prefix} asg` } });
+    const lesson = await createLesson(teacher.id, { title: `${prefix} Lesson in class` }, { classId: cls.id });
+
+    await expect(trashClass(other, cls.id)).rejects.toMatchObject({ statusCode: 403 });
+    await trashClass(teacher, cls.id);
+
+    expect((await listTeacherClasses(teacher.id)).some((c) => c.id === cls.id)).toBe(false);
+    expect((await listStudentClasses(student.id)).some((c) => c.id === cls.id)).toBe(false);
+    expect((await listStudentAssignments(student.id)).some((a) => a.classId === cls.id)).toBe(false);
+    await expect(getClassDetail(cls.id)).rejects.toMatchObject({ statusCode: 404 });
+    expect((await listTrash(teacher)).find((t) => t.id === cls.id)).toMatchObject({ kind: "CLASS", daysLeft: 30 });
+    expect((await listTrash(other)).some((t) => t.id === cls.id)).toBe(false);
+
+    await restoreFromTrash(teacher, "CLASS", cls.id);
+    expect((await listTeacherClasses(teacher.id)).some((c) => c.id === cls.id)).toBe(true);
+    expect((await getClassDetail(cls.id)).lessons.some((l) => l.id === lesson.id)).toBe(true);
+
+    await trashClass(teacher, cls.id);
+    await prisma.class.update({
+      where: { id: cls.id },
+      data: { deletedAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000) },
+    });
+    await purgeExpiredContentTrash();
+    expect(await prisma.class.findUnique({ where: { id: cls.id } })).toBeNull();
+    expect(await prisma.assignment.count({ where: { classId: cls.id } })).toBe(0);
+    // the lesson stays in the teacher's library
+    expect(await prisma.lesson.findUnique({ where: { id: lesson.id } })).not.toBeNull();
   });
 });

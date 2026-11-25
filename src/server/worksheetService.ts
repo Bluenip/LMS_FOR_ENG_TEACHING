@@ -400,6 +400,7 @@ export async function authorizeFileDownload(
         where: {
           worksheetId: worksheet.id,
           class: {
+            deletedAt: null,
             enrollments: {
               some: { studentId: userId, status: "ACTIVE" },
             },
@@ -415,6 +416,7 @@ export async function authorizeFileDownload(
         where: {
           worksheetId: worksheet.id,
           class: {
+            deletedAt: null,
             enrollments: {
               some: {
                 status: "ACTIVE",
@@ -480,7 +482,10 @@ export async function authorizeFileDownload(
       lesson: {
         select: {
           ownerId: true,
-          classLinks: { select: { classId: true, class: { select: { teacherId: true } } } },
+          classLinks: {
+            where: { class: { deletedAt: null } },
+            select: { classId: true, class: { select: { teacherId: true } } },
+          },
         },
       },
     },

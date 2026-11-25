@@ -5,7 +5,8 @@ import {
   requireTeacherOfClass,
 } from "@/lib/permissions";
 import { updateClassSchema } from "@/lib/validators";
-import { deleteClass, getClassDetail, updateClass } from "@/server/classService";
+import { getClassDetail, updateClass } from "@/server/classService";
+import { trashClass } from "@/server/trashService";
 
 export async function GET(
   _req: Request,
@@ -60,7 +61,8 @@ export async function DELETE(
   try {
     const { id } = await context.params;
     const { user } = await requireTeacherOfClass(id);
-    await deleteClass(id, user.id);
+    // moves the class to the trash (restorable for 30 days from Library › Trash)
+    await trashClass(user, id);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return handleApiError(error);

@@ -62,6 +62,7 @@ export async function createAssignmentsForClasses(
   const classes = await prisma.class.findMany({
     where: {
       id: { in: input.classIds },
+      deletedAt: null,
       ...(isAdmin ? {} : { teacherId }),
     },
     include: {
@@ -291,6 +292,7 @@ export async function listStudentAssignments(studentId: string) {
     where: {
       class: {
         archived: false,
+        deletedAt: null,
         enrollments: {
           some: { studentId, status: "ACTIVE" },
         },
@@ -339,7 +341,7 @@ export async function listStudentAssignments(studentId: string) {
 /** A teacher's own assignments; an admin (`allClasses`) sees every assignment in the system. */
 export async function listTeacherAssignments(teacherId: string, opts?: { allClasses?: boolean }) {
   return prisma.assignment.findMany({
-    where: opts?.allClasses ? {} : { class: { teacherId } },
+    where: opts?.allClasses ? { class: { deletedAt: null } } : { class: { teacherId, deletedAt: null } },
     include: {
       class: {
         select: {

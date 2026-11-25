@@ -4,7 +4,7 @@ import { handleApiError, requireRole } from "@/lib/permissions";
 import { CONTENT_TRASH_DAYS, deleteForever, listTrash, restoreFromTrash } from "@/server/trashService";
 
 const itemSchema = z.object({
-  kind: z.enum(["WORKSHEET", "LESSON", "LESSON_ITEM"]),
+  kind: z.enum(["CLASS", "WORKSHEET", "LESSON", "LESSON_ITEM"]),
   id: z.string().trim().min(1).max(64),
 });
 
