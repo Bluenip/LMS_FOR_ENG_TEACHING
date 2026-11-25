@@ -1,8 +1,8 @@
-# EngClass — Hệ thống LMS dạy tiếng Anh & Worksheet tương tác
+# Pivora — Hệ thống LMS dạy tiếng Anh & Worksheet tương tác
 
 Nền tảng LMS dành cho giáo viên, học sinh, phụ huynh và quản trị viên, được tối ưu cho giảng dạy tiếng Anh: **Worksheet PDF tương tác** (Overlay trên PDF, Phiếu trả lời nhanh, hoặc kết hợp A + B), **tự động tạo bài điền từ từ file Word (`.docx`)**, **Chế độ tập trung 1 câu/màn hình cho bài học thuộc**, **File nghe giới hạn số lần nghe**, **Chép chính tả chấm theo % số từ đúng**, **Backup/Export & chia sẻ giữa các giáo viên**, **Bảng xếp hạng**, **Cổng Phụ huynh**, và **Chống gian lận 2 lớp (Trình duyệt + Camera AI)**.
 
-Tên hiển thị sản phẩm đổi được qua biến môi trường `NEXT_PUBLIC_APP_NAME` (mặc định: `EngClass`). Hỗ trợ chuyển đổi nhanh giao diện **Sáng / Tối (Light / Dark)** và **Tiếng Việt / Tiếng Anh (VI / EN)**.
+Tên hiển thị sản phẩm đổi được qua biến môi trường `NEXT_PUBLIC_APP_NAME` (mặc định: `Pivora`). Hỗ trợ chuyển đổi nhanh giao diện **Sáng / Tối (Light / Dark)** và **Tiếng Việt / Tiếng Anh (VI / EN)**.
 
 ---
 
@@ -79,7 +79,7 @@ Tên hiển thị sản phẩm đổi được qua biến môi trường `NEXT_P
 
 ### 6. Lưu bài tập trên Google Drive (tuỳ chọn)
 - Admin kết nối **Drive dùng chung** ở `/admin`; mỗi giáo viên có thể kết nối **Drive riêng** ở `/teacher/settings`. Thứ tự ưu tiên khi lưu file: Drive riêng → Drive dùng chung → máy chủ (`local` / `s3`).
-- PDF đề, file nghe, file Word gốc, bản backup `.engclass.zip` và file học sinh nộp được xếp theo thư mục `EngClass/<Tên GV>/Worksheets | Backups | Lớp …`. Mọi file **riêng tư**; học sinh chỉ xem qua app (có kiểm tra quyền, hỗ trợ tua audio/video).
+- PDF đề, file nghe, file Word gốc, bản backup `.engclass.zip` và file học sinh nộp được xếp theo thư mục `Pivora/<Tên GV>/Worksheets | Backups | Lớp …`. Mọi file **riêng tư**; học sinh chỉ xem qua app (có kiểm tra quyền, hỗ trợ tua audio/video).
 - Nút **Lưu lên Drive**, **Sao lưu tất cả lên Drive**, **Nhập từ Drive** (Google Picker) ở `/teacher/worksheets`; tuỳ chọn tự động sao lưu hằng ngày lúc 02:00 (giữ 14 bản).
 - Cấu hình Google Cloud (OAuth client, redirect URI, biến môi trường): xem [`docs/GOOGLE_DRIVE.md`](docs/GOOGLE_DRIVE.md).
 
@@ -125,7 +125,7 @@ Các biến môi trường quan trọng trong `.env`:
 |---|---|---|
 | `DATABASE_URL` | `postgresql://engclass:...` | Chuỗi kết nối PostgreSQL |
 | `AUTH_SECRET` | *(tự sinh ≥ 32 ký tự)* | Khoá ký phiên đăng nhập & stream token audio |
-| `NEXT_PUBLIC_APP_NAME` | `EngClass` | Tên hiển thị trên giao diện |
+| `NEXT_PUBLIC_APP_NAME` | `Pivora` | Tên hiển thị trên giao diện |
 | `STORAGE_DRIVER` | `local` | `local` (`./uploads`) hoặc `s3` (S3/R2/MinIO) |
 | `MAX_UPLOAD_SIZE_MB` | `20` | Giới hạn dung lượng upload PDF / Audio (MB) |
 | `PROCTOR_SNAPSHOT_RETENTION_DAYS` | `30` | Số ngày lưu ảnh bằng chứng camera trước khi xoá |

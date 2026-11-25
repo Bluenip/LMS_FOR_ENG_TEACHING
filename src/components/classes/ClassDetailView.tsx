@@ -21,6 +21,7 @@ import {
   KeyRound,
   Lock,
   MessageSquare,
+  Pencil,
   Plus,
   Radio,
   RefreshCw,
@@ -742,6 +743,25 @@ export function ClassDetailView({
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
+                    {isTeacher && (
+                      <>
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/teacher/assignments/new?edit=${asg.id}`}>
+                            <Pencil className="h-3.5 w-3.5" />
+                            {tr("Sửa", "Edit")}
+                          </Link>
+                        </Button>
+                        <Button variant="outline" size="sm" asChild>
+                          <Link
+                            href={`/teacher/assignments/new?worksheetId=${asg.worksheet.id}&classId=${cls.id}`}
+                            title={tr("Giao lại phiếu này thành một bài mới", "Assign this worksheet again as a new assignment")}
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                            {tr("Giao lại", "Assign again")}
+                          </Link>
+                        </Button>
+                      </>
+                    )}
                     <Button variant="outline" size="sm" asChild>
                       <Link href={`${leaderboardHref}?assignmentId=${asg.id}`}>
                         <Trophy className="h-3.5 w-3.5 text-[#F97316]" />

@@ -71,17 +71,17 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
   "Chỉ hỗ trợ file Word (.docx) hoặc văn bản (.txt).":
     "Only Word (.docx) or plain text (.txt) files are supported.",
   "Bạn chưa có phiếu bài tập nào để sao lưu.": "You have no worksheets to back up yet.",
-  "File backup không đúng định dạng EngClass.": "Backup file is not a valid EngClass package.",
+  "File backup không đúng định dạng Pivora.": "Backup file is not a valid Pivora package.",
   "Không tìm thấy câu điền từ nào có dấu __đáp án__ trong file.":
     "No fill-in-the-blank questions using __answer__ syntax were found in the file.",
   "File JSON không hợp lệ.": "Invalid JSON file.",
   "File ZIP không hợp lệ hoặc bị hỏng.": "Invalid or corrupted ZIP file.",
-  "File backup thư viện không đúng định dạng EngClass.":
-    "Library backup file is not a valid EngClass package.",
+  "File backup thư viện không đúng định dạng Pivora.":
+    "Library backup file is not a valid Pivora package.",
   "Không tìm thấy phiếu bài tập nào trong file backup.":
     "No worksheets were found in the backup file.",
-  "File ZIP không phải gói backup EngClass (thiếu manifest.json).":
-    "ZIP file is not an EngClass backup package (missing manifest.json).",
+  "File ZIP không phải gói backup Pivora (thiếu manifest.json).":
+    "ZIP file is not a Pivora backup package (missing manifest.json).",
   "Định dạng file không được hỗ trợ. Hãy dùng .engclass.zip, .zip, .json, .docx hoặc .txt.":
     "Unsupported file format. Please use .engclass.zip, .zip, .json, .docx, or .txt.",
 

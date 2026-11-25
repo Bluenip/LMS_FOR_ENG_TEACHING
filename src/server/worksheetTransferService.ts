@@ -261,7 +261,7 @@ export async function exportAllTeacherWorksheetsZip(ownerId: string): Promise<{
   const arr = await rootZip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
   return {
     buffer: Buffer.from(arr),
-    filename: `engclass-backup-${dateTag}.zip`,
+    filename: `pivora-backup-${dateTag}.zip`,
   };
 }
 
@@ -396,7 +396,7 @@ async function restoreManifestForOwner(
   folderPrefix = ""
 ) {
   if (manifest.format !== "engclass-worksheet-v1" || !manifest.worksheet?.title) {
-    throw new AppError("File backup không đúng định dạng EngClass.", 400, "INVALID_MANIFEST");
+    throw new AppError("File backup không đúng định dạng Pivora.", 400, "INVALID_MANIFEST");
   }
 
   const storage = getStorageProvider();
@@ -578,7 +578,7 @@ export async function importWorksheetFile(
     if (backupFile) {
       const backup = JSON.parse(await backupFile.async("string")) as LibraryBackupManifest;
       if (backup.format !== "engclass-library-backup-v1" || !Array.isArray(backup.entries)) {
-        throw new AppError("File backup thư viện không đúng định dạng EngClass.", 400, "INVALID_BACKUP");
+        throw new AppError("File backup thư viện không đúng định dạng Pivora.", 400, "INVALID_BACKUP");
       }
       const restored = [];
       for (const entry of backup.entries) {
@@ -598,7 +598,7 @@ export async function importWorksheetFile(
     const singleManifestFile = zip.file("manifest.json");
     if (!singleManifestFile) {
       throw new AppError(
-        "File ZIP không phải gói backup EngClass (thiếu manifest.json).",
+        "File ZIP không phải gói backup Pivora (thiếu manifest.json).",
         400,
         "MISSING_MANIFEST"
       );

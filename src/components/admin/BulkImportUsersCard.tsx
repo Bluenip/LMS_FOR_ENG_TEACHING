@@ -178,7 +178,7 @@ export function BulkImportUsersCard({ onImported }: { onImported: () => void }) 
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "engclass-temp-passwords.xlsx";
+      a.download = "pivora-temp-passwords.xlsx";
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -222,7 +222,7 @@ export function BulkImportUsersCard({ onImported }: { onImported: () => void }) 
         <div className="flex flex-wrap items-center gap-2">
           <a
             href="/api/admin/users/bulk-import/template"
-            download="engclass-users-template.xlsx"
+            download="pivora-users-template.xlsx"
             className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-[#0B1C30] transition hover:bg-slate-50"
           >
             <Download className="h-4 w-4 text-[#4F46E5]" />

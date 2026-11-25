@@ -1,8 +1,10 @@
 import { ImageResponse } from "next/og";
+import { PIVORA_ACCENT, PIVORA_INK, PivoraMark } from "@/components/brand/PivoraLogo";
 
 export const size = { width: 512, height: 512 };
 export const contentType = "image/png";
 
+/** Favicon / Android install icon: Pivora mark on a white rounded tile. */
 export default function Icon() {
   return new ImageResponse(
     (
@@ -13,14 +15,11 @@ export default function Icon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#4F46E5",
+          background: "#FFFFFF",
           borderRadius: 112,
-          color: "white",
-          fontSize: 300,
-          fontWeight: 800,
         }}
       >
-        E
+        <PivoraMark ink={PIVORA_INK} accent={PIVORA_ACCENT} size={400} />
       </div>
     ),
     size

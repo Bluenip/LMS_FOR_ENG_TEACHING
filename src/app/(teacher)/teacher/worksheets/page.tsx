@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -20,6 +20,7 @@ import {
   FileUp,
   Headphones,
   Plus,
+  Search,
   Send,
   Share2,
   Sparkles,
@@ -28,6 +29,7 @@ import {
   Users,
 } from "lucide-react";
 import { cn, formatDateTime } from "@/lib/utils";
+import { foldText } from "@/lib/text-search";
 import { useI18n } from "@/lib/i18n/client";
 import { DriveImportDialog } from "@/components/drive/DriveImportDialog";
 import type { DriveStatusPayload } from "@/server/driveService";
@@ -58,12 +60,43 @@ interface WorksheetRow {
   _count: { fields: number; assignments: number; audios?: number };
 }
 
+type WorksheetSort = "updated_desc" | "updated_asc" | "title" | "most_assigned" | "most_questions";
+
+
+/** Client-side search + sort for the worksheet library (lists are small and already loaded). */
+function filterAndSortWorksheets(rows: WorksheetRow[], query: string, sort: WorksheetSort): WorksheetRow[] {
+  const needle = foldText(query.trim());
+  const out = needle
+    ? rows.filter((ws) =>
+        foldText(`${ws.title} ${ws.instructions ?? ""} ${ws.owner?.name ?? ""}`).includes(needle)
+      )
+    : [...rows];
+  const time = (ws: WorksheetRow) => new Date(ws.updatedAt).getTime();
+  out.sort((a, b) => {
+    switch (sort) {
+      case "updated_asc":
+        return time(a) - time(b);
+      case "title":
+        return a.title.localeCompare(b.title, "vi", { numeric: true });
+      case "most_assigned":
+        return b._count.assignments - a._count.assignments || time(b) - time(a);
+      case "most_questions":
+        return b._count.fields - a._count.fields || time(b) - time(a);
+      default:
+        return time(b) - time(a);
+    }
+  });
+  return out;
+}
+
 export default function TeacherWorksheetsPage() {
   const { m: vi, tr, locale } = useI18n();
   const router = useRouter();
   const queryClient = useQueryClient();
 
   const [tab, setTab] = useState<"mine" | "shared">("mine");
+  const [wsQuery, setWsQuery] = useState("");
+  const [wsSort, setWsSort] = useState<WorksheetSort>("updated_desc");
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [instructions, setInstructions] = useState("");
@@ -365,6 +398,16 @@ export default function TeacherWorksheetsPage() {
   const sharedWorksheets = data?.sharedWorksheets ?? [];
   /** admin: the second tab lists every other teacher's worksheet, editable */
   const isAdmin = Boolean(data?.isAdmin);
+  const visibleMine = useMemo(
+    () => filterAndSortWorksheets(data?.worksheets ?? [], wsQuery, wsSort),
+    [data?.worksheets, wsQuery, wsSort]
+  );
+  const visibleShared = useMemo(
+    () => filterAndSortWorksheets(data?.sharedWorksheets ?? [], wsQuery, wsSort),
+    [data?.sharedWorksheets, wsQuery, wsSort]
+  );
+  const currentTotal = tab === "mine" ? worksheets.length : sharedWorksheets.length;
+  const currentShown = tab === "mine" ? visibleMine.length : visibleShared.length;
 
   return (
     <div className="space-y-6">
@@ -501,9 +544,49 @@ export default function TeacherWorksheetsPage() {
         </button>
       </div>
 
+      {(worksheets.length > 0 || sharedWorksheets.length > 0) && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <label className="relative block flex-1">
+            <span className="sr-only">{tr("Tìm worksheet", "Search worksheets")}</span>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              value={wsQuery}
+              onChange={(e) => setWsQuery(e.target.value)}
+              placeholder={tr("Tìm theo tên phiếu, hướng dẫn, giáo viên…", "Search by title, instructions, teacher…")}
+              className="h-10 pl-9"
+            />
+          </label>
+          <select
+            aria-label={tr("Sắp xếp worksheet", "Sort worksheets")}
+            value={wsSort}
+            onChange={(e) => setWsSort(e.target.value as WorksheetSort)}
+            className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-[#0B1C30] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/30 sm:w-56"
+          >
+            <option value="updated_desc">{tr("Cập nhật mới nhất", "Recently updated")}</option>
+            <option value="updated_asc">{tr("Cập nhật cũ nhất", "Least recently updated")}</option>
+            <option value="title">{tr("Tên (A→Z)", "Title (A→Z)")}</option>
+            <option value="most_assigned">{tr("Giao nhiều nhất", "Most assigned")}</option>
+            <option value="most_questions">{tr("Nhiều câu hỏi nhất", "Most questions")}</option>
+          </select>
+          {wsQuery.trim() && (
+            <span className="text-xs text-[#464555] sm:whitespace-nowrap" aria-live="polite">
+              {tr(`${currentShown}/${currentTotal} phiếu`, `${currentShown} of ${currentTotal}`)}
+            </span>
+          )}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="stitch-card p-12 text-center text-sm text-slate-400">
           {vi.common.loading}
+        </div>
+      ) : tab === "mine" && worksheets.length > 0 && visibleMine.length === 0 ? (
+        <div className="stitch-card p-10 text-center text-sm text-slate-500">
+          {tr("Không có worksheet nào khớp từ khoá.", "No worksheets match your search.")}
+        </div>
+      ) : tab === "shared" && sharedWorksheets.length > 0 && visibleShared.length === 0 ? (
+        <div className="stitch-card p-10 text-center text-sm text-slate-500">
+          {tr("Không có worksheet nào khớp từ khoá.", "No worksheets match your search.")}
         </div>
       ) : tab === "mine" ? (
         worksheets.length === 0 ? (
@@ -523,7 +606,7 @@ export default function TeacherWorksheetsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {worksheets.map((ws) => (
+            {visibleMine.map((ws) => (
               <div key={ws.id} className="stitch-card-hover flex flex-col justify-between p-5 space-y-4">
                 <div className="space-y-2">
                   <div className="flex items-start justify-between gap-2">
@@ -673,14 +756,14 @@ export default function TeacherWorksheetsPage() {
             {isAdmin
               ? tr("Các giáo viên khác chưa tạo worksheet nào.", "Other teachers have not created any worksheets yet.")
               : tr(
-              "Chưa có phiếu nào được giáo viên khác chia sẻ. Bạn có thể bấm 'Chia sẻ GV' trên phiếu của mình hoặc dùng nút 'Nhập Backup' để nhận file .engclass.zip từ đồng nghiệp.",
+              "Chưa có phiếu nào được giáo viên khác chia sẻ. Bạn có thể bấm 'Chia sẻ GV' trên phiếu của mình hoặc dùng nút 'Nhập Backup' để nhận file backup (.engclass.zip) từ đồng nghiệp.",
               "No worksheets shared by colleagues yet. Click 'Share' on your worksheets or use 'Import Backup' to load a colleague's .engclass.zip file."
             )}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {sharedWorksheets.map((ws) => (
+          {visibleShared.map((ws) => (
             <div key={ws.id} className="stitch-card-hover flex flex-col justify-between p-5 space-y-4">
               <div className="space-y-2">
                 <div className="flex items-start justify-between gap-2">

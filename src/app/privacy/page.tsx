@@ -31,8 +31,8 @@ export default async function PrivacyPage() {
           `When an administrator or teacher connects Google Drive, ${app} only uses the drive.file scope: it can only see and manage files it created or files you explicitly pick. ${app} does not read any other file in your Drive.`
         ),
         tr(
-          "File được lưu ở chế độ riêng tư trong thư mục EngClass; refresh token được mã hoá (AES-256-GCM) và có thể thu hồi bất cứ lúc nào bằng nút Ngắt kết nối hoặc trong cài đặt tài khoản Google.",
-          "Files are stored privately in the EngClass folder; the refresh token is encrypted (AES-256-GCM) and can be revoked at any time with Disconnect or from your Google Account settings."
+          "File được lưu ở chế độ riêng tư trong thư mục Pivora; refresh token được mã hoá (AES-256-GCM) và có thể thu hồi bất cứ lúc nào bằng nút Ngắt kết nối hoặc trong cài đặt tài khoản Google.",
+          "Files are stored privately in the Pivora folder; the refresh token is encrypted (AES-256-GCM) and can be revoked at any time with Disconnect or from your Google Account settings."
         ),
         tr(
           "Việc sử dụng dữ liệu nhận từ Google API tuân thủ Google API Services User Data Policy, bao gồm các yêu cầu Limited Use.",

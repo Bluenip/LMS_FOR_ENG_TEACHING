@@ -1,8 +1,10 @@
 import { ImageResponse } from "next/og";
+import { PIVORA_ACCENT, PIVORA_INK, PivoraMark } from "@/components/brand/PivoraLogo";
 
 export const size = { width: 180, height: 180 };
 export const contentType = "image/png";
 
+/** iPhone home-screen icon (iOS rounds the corners itself). */
 export default function Icon() {
   return new ImageResponse(
     (
@@ -13,14 +15,10 @@ export default function Icon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#4F46E5",
-          borderRadius: 0,
-          color: "white",
-          fontSize: 104,
-          fontWeight: 800,
+          background: "#FFFFFF",
         }}
       >
-        E
+        <PivoraMark ink={PIVORA_INK} accent={PIVORA_ACCENT} size={144} />
       </div>
     ),
     size

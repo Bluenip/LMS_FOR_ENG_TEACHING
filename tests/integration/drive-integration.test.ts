@@ -527,11 +527,11 @@ describe("Phase 12: Google Drive StorageProvider, Backup/Import, Access Control 
         expect(fake.nodes.get(df.driveFileId)?.permissions).toHaveLength(0);
       }
 
-      // Verify folder hierarchy matches PLAN 12.4: EngClass -> Teacher -> Worksheets -> Title
+      // Verify folder hierarchy matches PLAN 12.4: Pivora -> Teacher -> Worksheets -> Title
       const folderNames = Array.from(fake.nodes.values())
         .filter((n) => n.mimeType === "application/vnd.google-apps.folder")
         .map((n) => n.name);
-      expect(folderNames).toContain("EngClass");
+      expect(folderNames).toContain("Pivora");
       expect(folderNames).toContain("Worksheets");
       expect(folderNames).toContain("Drive E2E Unit Test");
 

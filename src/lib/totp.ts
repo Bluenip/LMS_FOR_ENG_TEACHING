@@ -129,7 +129,7 @@ export function buildOtpauthUri(opts: {
   accountName: string;
   secret: string;
 }): string {
-  const issuer = opts.issuer.trim() || "EngClass";
+  const issuer = opts.issuer.trim() || "Pivora";
   const label = `${encodeURIComponent(issuer)}:${encodeURIComponent(opts.accountName)}`;
   const params = new URLSearchParams({
     secret: opts.secret,

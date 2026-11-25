@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PivoraLogo } from "@/components/brand/PivoraLogo";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
@@ -8,9 +9,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetchJson } from "@/lib/api-client";
 import {
   Bell,
-  BookOpen,
   CheckCheck,
-  GraduationCap,
   LogOut,
   Menu,
   X,
@@ -132,16 +131,12 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
         {/* Logo + Nav */}
         <div className="flex min-w-0 items-center gap-6">
           <Link href={homeHref} className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#4F46E5] text-white shadow-sm">
-              {user.role === "TEACHER" ? (
-                <GraduationCap className="h-5 w-5" />
-              ) : (
-                <BookOpen className="h-5 w-5" />
-              )}
-            </span>
-            <span className="truncate text-base font-bold tracking-tight text-[#3525CD] sm:text-lg">
-              {appName}
-            </span>
+            <PivoraLogo
+              name={appName}
+              className="gap-2"
+              markClassName="h-8 w-8 sm:h-9 sm:w-9"
+              textClassName="text-base sm:text-lg"
+            />
           </Link>
 
           <nav className="hidden items-center gap-1 md:flex" aria-label={tr("Điều hướng chính", "Main navigation")}>

@@ -3,7 +3,7 @@ import type { Messages } from "./vi";
 /** English translation. Must have exactly the same keys as `vi` (enforced by the `Messages` type). */
 export const en: Messages = {
   app: {
-    defaultName: "EngClass",
+    defaultName: "Pivora",
     tagline: "Interactive English learning & worksheet platform",
   },
   common: {

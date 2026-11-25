@@ -234,7 +234,7 @@ export function DriveImportDialog({
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={tr("Tìm file đã lưu trong EngClass trên Drive…", "Search EngClass Drive files…")}
+              placeholder={tr("Tìm file đã lưu trong Pivora trên Drive…", "Search Pivora Drive files…")}
               className="h-9 text-xs"
             />
 
@@ -246,8 +246,8 @@ export function DriveImportDialog({
               ) : importableFiles.length === 0 ? (
                 <p className="py-8 text-center text-xs text-slate-400">
                   {tr(
-                    "Chưa có file PDF / DOCX / Backup nào trong EngClass trên Drive.",
-                    "No PDF / DOCX / Backup files found in EngClass Drive yet."
+                    "Chưa có file PDF / DOCX / Backup nào trong Pivora trên Drive.",
+                    "No PDF / DOCX / Backup files found in Pivora Drive yet."
                   )}
                 </p>
               ) : (

@@ -73,13 +73,13 @@ describe("Phase 13 unit: RFC 4226/6238 TOTP & backup codes", () => {
 
   it("builds valid otpauth URI", () => {
     const uri = buildOtpauthUri({
-      issuer: "EngClass",
+      issuer: "Pivora",
       accountName: "admin@engclass.vn",
       secret: "JBSWY3DPEHPK3PXP",
     });
-    expect(uri).toContain("otpauth://totp/EngClass:admin%40engclass.vn?");
+    expect(uri).toContain("otpauth://totp/Pivora:admin%40engclass.vn?");
     expect(uri).toContain("secret=JBSWY3DPEHPK3PXP");
-    expect(uri).toContain("issuer=EngClass");
+    expect(uri).toContain("issuer=Pivora");
     expect(uri).toContain("digits=6");
     expect(uri).toContain("period=30");
   });

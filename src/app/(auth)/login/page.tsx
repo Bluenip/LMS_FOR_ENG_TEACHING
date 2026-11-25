@@ -3,11 +3,12 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { BookOpen, CheckCircle2, Eye, EyeOff, Lock, Mail, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, Lock, Mail, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PivoraLogo, PivoraMark } from "@/components/brand/PivoraLogo";
 import { useI18n } from "@/lib/i18n/client";
 import { ThemeLangToggle } from "@/components/layout/ThemeLangToggle";
 
@@ -112,12 +113,10 @@ function LoginPageContent() {
         <div className="hidden lg:col-span-7 lg:block">
           <div className="rounded-3xl bg-gradient-to-br from-[#EEF2FF] via-[#F4F6FF] to-[#FFF5EE] dark:from-[#162038] dark:via-[#111A2E] dark:to-[#1E1B2E] p-8 shadow-sm border border-indigo-100/70">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#4F46E5] text-white shadow-md">
-                <BookOpen className="h-6 w-6" />
-              </div>
+              <PivoraMark className="h-12 w-12 shrink-0" title={appName} />
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xl font-bold text-[#3525CD]">{appName}</span>
+                  <span className="pivora-ink text-xl font-semibold tracking-tight">{appName}</span>
                   <span className="rounded-full bg-[#E2DFFF] px-2 py-0.5 text-[11px] font-bold text-[#3525CD]">
                     LMS
                   </span>
@@ -187,10 +186,7 @@ function LoginPageContent() {
           <div className="rounded-3xl border border-slate-200/80 bg-white p-7 sm:p-8 shadow-xl shadow-indigo-950/5">
             <div className="mb-6">
               <div className="mb-3 flex items-center gap-2 lg:hidden">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#4F46E5] text-white">
-                  <BookOpen className="h-5 w-5" />
-                </span>
-                <span className="text-lg font-bold text-[#3525CD]">{appName}</span>
+                <PivoraLogo name={appName} textClassName="text-lg" />
               </div>
               <h2 className="text-2xl font-bold text-[#0B1C30]">{vi.auth.loginTitle}</h2>
               <p className="mt-1 text-sm text-[#464555]">{vi.auth.loginSubtitle}</p>

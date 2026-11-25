@@ -286,7 +286,7 @@ test.describe("Phase 13: Admin Ops, Ownership Transfer, Audit, Bulk Import, 2FA 
     const downloadPromise = page.waitForEvent("download");
     await page.getByRole("button", { name: /Tải Excel mật khẩu tạm/ }).click();
     const download = await downloadPromise;
-    expect(download.suggestedFilename()).toBe("engclass-temp-passwords.xlsx");
+    expect(download.suggestedFilename()).toBe("pivora-temp-passwords.xlsx");
 
     // Button is now disabled after one-time download
     await expect(page.getByRole("button", { name: /Đã tải/ })).toBeDisabled();

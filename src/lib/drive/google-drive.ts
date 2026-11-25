@@ -15,7 +15,7 @@ import { AppError } from "@/lib/errors";
  */
 export const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 export const SHARED_SCOPE_KEY = "shared";
-export const ROOT_FOLDER_NAME = "EngClass";
+export const ROOT_FOLDER_NAME = "Pivora";
 
 /** Resumable chunk size (8 MiB — must be a multiple of 256 KiB per Google Drive spec). */
 export const DRIVE_CHUNK_SIZE = 32 * 256 * 1024;
@@ -684,7 +684,7 @@ export async function ensureRootFolder(
     return conn.rootFolderId;
   }
 
-  // Try finding an existing EngClass root folder first so reconnecting doesn't duplicate
+  // Try finding an existing app root folder (named "EngClass" before the Pivora rename) first so reconnecting doesn't duplicate
   if (!forceRecreate) {
     const params = new URLSearchParams({
       q: `appProperties has { key='engclassRoot' and value='1' } and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,

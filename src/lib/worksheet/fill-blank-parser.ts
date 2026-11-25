@@ -45,7 +45,7 @@ function joinPromptWithBlank(before: string, rawInner: string, blankMarker: stri
 
 /**
  * Parses teacher-authored fill-in-the-blank lines (from Word .docx / .txt / pasted text)
- * into EngClass TEXT fields.
+ * into Pivora TEXT fields.
  *
  * Handles real-world Word exports including:
  *   - Non-breaking spaces (\u00A0) and tabs

@@ -318,6 +318,17 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
     [fields]
   );
 
+  /**
+   * Centre of the studio when the worksheet has a PDF: the PDF pages, or the answer-sheet
+   * questions (e.g. imported from Word) — so those can be edited without scrolling past every page.
+   * Opens on the answer sheet when there are sheet questions but no boxes drawn on the PDF yet.
+   */
+  const [studioView, setStudioView] = useState<"pdf" | "sheet">(() => {
+    const hasSheet = initialWorksheet.fields.some((f) => f.placement === "ANSWER_SHEET");
+    const hasOverlay = initialWorksheet.fields.some((f) => f.placement === "OVERLAY");
+    return hasSheet && !hasOverlay ? "sheet" : "pdf";
+  });
+
   const persistFields = useCallback(
     async (fieldsToSave: EditorFieldDTO[]) => {
       setSaveState("saving");
@@ -582,6 +593,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
         style: { fontSize: 13, align: "left", transparentBg: false },
       }));
       setFields((prev) => [...prev, ...newFields]);
+      setStudioView("sheet");
       toast.success(
         tr(`Đã thêm tự động ${newFields.length} ô điền từ từ file Word!`, `Appended ${newFields.length} fill-in-the-blank items from Word!`)
       );
@@ -744,6 +756,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
     setFields((prev) => [...prev, ...created]);
     setQuickStart(start + count);
     toast.success(tr(`Đã thêm ${count} câu vào phiếu trả lời!`, `Added ${count} questions to the answer sheet!`));
+    setStudioView("sheet");
   };
 
   // Mode B Bulk Answer Key string apply
@@ -1024,6 +1037,292 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
     { id: "ESSAY", label: vi.worksheets.tools.ESSAY, icon: <FileText className="h-3.5 w-3.5" /> },
     { id: "DICTATION", label: vi.worksheets.tools.DICTATION, icon: <Mic className="h-3.5 w-3.5" /> },
   ];
+
+  const hasPdf = Boolean(pdfFileKey) && pages.length > 0;
+
+  // Mode B — answer sheet & quick answer key (shown in the centre tab when there is a PDF)
+  const answerSheetSection = (
+      <section className="stitch-card p-5 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#FFEDD5] text-[#F97316]">
+              <Sparkles className="h-5 w-5" />
+            </span>
+            <div>
+              <h3 className="text-base font-bold text-[#0B1C30]">
+                {vi.worksheets.modes.sheetTab} ({sheetFields.length} {tr("câu)", "questions)")}
+              </h3>
+              <p className="text-xs text-[#464555]">
+                {tr("Thêm nhanh câu hỏi phiếu trả lời, nhập tự động từ Word (__đáp án__) hoặc dán chuỗi đáp án trắc nghiệm.", "Quickly add questions, auto-import from Word (__answer__) or paste a multiple-choice key.")}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              ref={wordAppendInputRef}
+              type="file"
+              accept=".docx,.txt"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void handleAppendFromWord(f);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={importingWord}
+              onClick={() => wordAppendInputRef.current?.click()}
+            >
+              <FileUp className="h-4 w-4 text-[#F97316]" />
+              {importingWord
+                ? tr("Đang phân tích…", "Parsing…")
+                : tr("Nhập tự động từ Word (.docx)", "Auto-import from Word (.docx)")}
+            </Button>
+          </div>
+        </div>
+
+        {/* Quick Add + Bulk Answer Key Controls */}
+        <div className={cn("grid grid-cols-1 gap-4", hasPdf ? "xl:grid-cols-2" : "lg:grid-cols-2")}>
+          {/* Quick Add N questions */}
+          <div className="rounded-xl border border-slate-200 bg-[#F8F9FF] p-3.5 space-y-2.5">
+            <p className="text-xs font-bold text-[#0B1C30]">
+              {vi.worksheets.editor.quickAddTitle}
+            </p>
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="w-20">
+                <Label className="text-[11px]">{vi.worksheets.editor.quickAddCount}</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={quickCount}
+                  onChange={(e) => setQuickCount(Number(e.target.value) || 1)}
+                  className="mt-1 h-9 text-xs"
+                />
+              </div>
+              <div className="flex-1 min-w-[140px]">
+                <Label className="text-[11px]">{vi.worksheets.editor.quickAddType}</Label>
+                <select
+                  value={quickType}
+                  onChange={(e) => setQuickType(e.target.value as FieldType)}
+                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-medium outline-none focus:border-[#4F46E5]"
+                >
+                  <option value="MULTIPLE_CHOICE">{tr("Trắc nghiệm A–D", "Multiple choice A–D")}</option>
+                  <option value="TRUE_FALSE">{tr("Đúng / Sai", "True / False")}</option>
+                  <option value="TEXT">{tr("Điền ngắn", "Short answer")}</option>
+                  <option value="NUMBER">{tr("Điền số", "Number")}</option>
+                  <option value="ESSAY">{tr("Tự luận", "Essay")}</option>
+                  <option value="DICTATION">{tr("Chép chính tả (Dictation)", "Dictation")}</option>
+                </select>
+              </div>
+              <div className="w-24">
+                <Label className="text-[11px]">{vi.worksheets.editor.quickAddStart}</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={quickStart}
+                  onChange={(e) => setQuickStart(Number(e.target.value) || 1)}
+                  className="mt-1 h-9 text-xs"
+                />
+              </div>
+              <Button type="button" size="sm" onClick={handleQuickAdd} className="h-9">
+                <Plus className="h-4 w-4" />
+                {vi.worksheets.editor.quickAddButton}
+              </Button>
+            </div>
+          </div>
+
+          {/* Bulk Answer Key String */}
+          <div className="rounded-xl border border-indigo-100 bg-[#EEF2FF]/50 p-3.5 space-y-2.5">
+            <p className="text-xs font-bold text-[#3525CD]">
+              {vi.worksheets.editor.bulkKeyTitle}
+            </p>
+            <div className="flex items-center gap-2">
+              <Input
+                value={bulkKeyInput}
+                onChange={(e) => setBulkKeyInput(e.target.value)}
+                placeholder={vi.worksheets.editor.bulkKeyPlaceholder}
+                className="h-9 flex-1 bg-white font-mono text-xs tracking-wider"
+              />
+              <Button type="button" size="sm" onClick={handleApplyBulkKey} className="h-9 shrink-0">
+                {vi.worksheets.editor.bulkKeyApply}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* List of ANSWER_SHEET fields */}
+        {sheetFields.length > 0 && (
+          <div className={cn("grid grid-cols-1 gap-2 sm:grid-cols-2", !hasPdf && "lg:grid-cols-3")}>
+            {sheetFields.map((field) => {
+              const isSelected = selectedIds.includes(field.id);
+              return (
+                <div
+                  key={field.id}
+                  onClick={() => setSelectedIds([field.id])}
+                  className={cn(
+                    "cursor-pointer rounded-xl border p-3 transition",
+                    isSelected
+                      ? "border-[#4F46E5] bg-[#EEF2FF]/60 ring-2 ring-indigo-100"
+                      : "border-slate-200 bg-white hover:border-indigo-200"
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-6 min-w-[24px] items-center justify-center rounded-md bg-[#4F46E5] px-1.5 text-xs font-bold text-white">
+                        {field.label}
+                      </span>
+                      <span className="text-xs font-semibold text-[#0B1C30]">
+                        {vi.worksheets.tools[field.type]}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-semibold text-slate-500">
+                        {field.points}{tr("đ", "pt")}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFields((prev) => prev.filter((x) => x.id !== field.id));
+                          setSelectedIds((prev) => prev.filter((x) => x !== field.id));
+                        }}
+                        className="text-slate-400 hover:text-red-500"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Question text (from Word or typed): visible and editable right on the card */}
+                  <div className="mt-2.5" onClick={(e) => e.stopPropagation()}>
+                    <Label className="text-[10px] font-bold uppercase text-slate-400">
+                      {tr("Câu hỏi", "Question")}
+                    </Label>
+                    <Textarea
+                      value={field.prompt ?? ""}
+                      onChange={(e) => updateField(field.id, { prompt: e.target.value })}
+                      onFocus={() => setSelectedIds([field.id])}
+                      placeholder={tr("Nhập nội dung câu hỏi…", "Type the question…")}
+                      rows={2}
+                      className="mt-1 min-h-[52px] text-xs leading-relaxed"
+                    />
+                    <Label className="mt-2 block text-[10px] font-bold uppercase text-slate-400">
+                      {field.type === "ESSAY"
+                        ? tr("Hướng dẫn chấm", "Rubric")
+                        : tr("Đáp án", "Answer")}
+                    </Label>
+                  </div>
+
+                  {/* Quick inline answer editor */}
+                  <div className="mt-1" onClick={(e) => e.stopPropagation()}>
+                    {field.type === "MULTIPLE_CHOICE" && (
+                      <div className="flex gap-1.5">
+                        {(field.options ?? []).map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() =>
+                              updateField(field.id, { answerKey: { correct: opt.id } })
+                            }
+                            className={cn(
+                              "flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold transition",
+                              field.answerKey.correct === opt.id
+                                ? "bg-[#4F46E5] text-white"
+                                : "bg-slate-100 text-slate-600 hover:bg-indigo-100"
+                            )}
+                          >
+                            {opt.id}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {field.type === "TRUE_FALSE" && (
+                      <div className="flex gap-1.5">
+                        {[
+                          { v: true, label: tr("Đúng", "True") },
+                          { v: false, label: tr("Sai", "False") },
+                        ].map((o) => (
+                          <button
+                            key={String(o.v)}
+                            type="button"
+                            onClick={() =>
+                              updateField(field.id, { answerKey: { correct: o.v } })
+                            }
+                            className={cn(
+                              "rounded-lg px-2.5 py-1 text-xs font-semibold",
+                              field.answerKey.correct === o.v
+                                ? "bg-[#4F46E5] text-white"
+                                : "bg-slate-100 text-slate-600"
+                            )}
+                          >
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {field.type === "TEXT" && (
+                      <Input
+                        value={
+                          Array.isArray(field.answerKey.accepted)
+                            ? (field.answerKey.accepted as string[]).join("|")
+                            : ""
+                        }
+                        onChange={(e) =>
+                          updateField(field.id, {
+                            answerKey: {
+                              accepted: e.target.value.split("|").map((s) => s.trim()),
+                            },
+                          })
+                        }
+                        placeholder={tr("Đáp án chấp nhận (vd: don't|do not)", "Accepted answer (e.g. don't|do not)")}
+                        className="h-8 text-xs"
+                      />
+                    )}
+
+                    {field.type === "NUMBER" && (
+                      <Input
+                        type="number"
+                        step="any"
+                        value={String(field.answerKey.value ?? 0)}
+                        onChange={(e) =>
+                          updateField(field.id, {
+                            answerKey: {
+                              ...field.answerKey,
+                              value: Number(e.target.value),
+                            },
+                          })
+                        }
+                        className="h-8 text-xs"
+                      />
+                    )}
+
+                    {field.type === "DICTATION" && (
+                      <Textarea
+                        rows={2}
+                        value={String(field.answerKey.transcript ?? "")}
+                        onChange={(e) =>
+                          updateField(field.id, {
+                            answerKey: { transcript: e.target.value },
+                          })
+                        }
+                        placeholder={tr("Nhập transcript chuẩn…", "Enter expected transcript…")}
+                        className="text-xs"
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+  );
 
   return (
     <div className="space-y-4">
@@ -1454,7 +1753,39 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
         </aside>
 
         {/* CENTER: PDF Canvas + Draw + React-Rnd Overlays */}
-        <section className="lg:col-span-7">
+        <section className="space-y-3 lg:col-span-7">
+          {hasPdf && (
+            <div
+              role="tablist"
+              aria-label={tr("Khu vực biên tập", "Editing area")}
+              className="grid grid-cols-2 gap-1 rounded-xl bg-[#EFF4FF] p-1"
+            >
+              {(
+                [
+                  ["pdf", tr(`Đề PDF (${pages.length} trang · ${overlayFields.length} ô)`, `PDF (${pages.length} pages · ${overlayFields.length} boxes)`)],
+                  ["sheet", tr(`Phiếu trả lời (${sheetFields.length} câu)`, `Answer sheet (${sheetFields.length} questions)`)],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={studioView === id}
+                  data-testid={`studio-view-${id}`}
+                  onClick={() => setStudioView(id)}
+                  className={cn(
+                    "min-h-10 truncate rounded-lg px-3 text-xs font-bold transition",
+                    studioView === id ? "bg-white text-[#3525CD] shadow-sm" : "text-[#464555] hover:text-[#0B1C30]"
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          {hasPdf && studioView === "sheet" ? (
+            answerSheetSection
+          ) : (
           <div
             className={cn(
               "rounded-2xl border border-slate-200/80 bg-[#EFF4FF]/60 p-4 overflow-x-auto",
@@ -1746,6 +2077,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
               </div>
             )}
           </div>
+          )}
         </section>
 
         {/* RIGHT PANEL: Properties Inspector */}
@@ -2293,287 +2625,8 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
         </aside>
       </div>
 
-      {/* BOTTOM SECTION: Mode B — Answer Sheet & Quick Answer Key (Stitch style) */}
-      <section className="stitch-card p-5 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#FFEDD5] text-[#F97316]">
-              <Sparkles className="h-5 w-5" />
-            </span>
-            <div>
-              <h3 className="text-base font-bold text-[#0B1C30]">
-                {vi.worksheets.modes.sheetTab} ({sheetFields.length} {tr("câu)", "questions)")}
-              </h3>
-              <p className="text-xs text-[#464555]">
-                {tr("Thêm nhanh câu hỏi phiếu trả lời, nhập tự động từ Word (__đáp án__) hoặc dán chuỗi đáp án trắc nghiệm.", "Quickly add questions, auto-import from Word (__answer__) or paste a multiple-choice key.")}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              ref={wordAppendInputRef}
-              type="file"
-              accept=".docx,.txt"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void handleAppendFromWord(f);
-                e.target.value = "";
-              }}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={importingWord}
-              onClick={() => wordAppendInputRef.current?.click()}
-            >
-              <FileUp className="h-4 w-4 text-[#F97316]" />
-              {importingWord
-                ? tr("Đang phân tích…", "Parsing…")
-                : tr("Nhập tự động từ Word (.docx)", "Auto-import from Word (.docx)")}
-            </Button>
-          </div>
-        </div>
-
-        {/* Quick Add + Bulk Answer Key Controls */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {/* Quick Add N questions */}
-          <div className="rounded-xl border border-slate-200 bg-[#F8F9FF] p-3.5 space-y-2.5">
-            <p className="text-xs font-bold text-[#0B1C30]">
-              {vi.worksheets.editor.quickAddTitle}
-            </p>
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="w-20">
-                <Label className="text-[11px]">{vi.worksheets.editor.quickAddCount}</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={quickCount}
-                  onChange={(e) => setQuickCount(Number(e.target.value) || 1)}
-                  className="mt-1 h-9 text-xs"
-                />
-              </div>
-              <div className="flex-1 min-w-[140px]">
-                <Label className="text-[11px]">{vi.worksheets.editor.quickAddType}</Label>
-                <select
-                  value={quickType}
-                  onChange={(e) => setQuickType(e.target.value as FieldType)}
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-medium outline-none focus:border-[#4F46E5]"
-                >
-                  <option value="MULTIPLE_CHOICE">{tr("Trắc nghiệm A–D", "Multiple choice A–D")}</option>
-                  <option value="TRUE_FALSE">{tr("Đúng / Sai", "True / False")}</option>
-                  <option value="TEXT">{tr("Điền ngắn", "Short answer")}</option>
-                  <option value="NUMBER">{tr("Điền số", "Number")}</option>
-                  <option value="ESSAY">{tr("Tự luận", "Essay")}</option>
-                  <option value="DICTATION">{tr("Chép chính tả (Dictation)", "Dictation")}</option>
-                </select>
-              </div>
-              <div className="w-24">
-                <Label className="text-[11px]">{vi.worksheets.editor.quickAddStart}</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={quickStart}
-                  onChange={(e) => setQuickStart(Number(e.target.value) || 1)}
-                  className="mt-1 h-9 text-xs"
-                />
-              </div>
-              <Button type="button" size="sm" onClick={handleQuickAdd} className="h-9">
-                <Plus className="h-4 w-4" />
-                {vi.worksheets.editor.quickAddButton}
-              </Button>
-            </div>
-          </div>
-
-          {/* Bulk Answer Key String */}
-          <div className="rounded-xl border border-indigo-100 bg-[#EEF2FF]/50 p-3.5 space-y-2.5">
-            <p className="text-xs font-bold text-[#3525CD]">
-              {vi.worksheets.editor.bulkKeyTitle}
-            </p>
-            <div className="flex items-center gap-2">
-              <Input
-                value={bulkKeyInput}
-                onChange={(e) => setBulkKeyInput(e.target.value)}
-                placeholder={vi.worksheets.editor.bulkKeyPlaceholder}
-                className="h-9 flex-1 bg-white font-mono text-xs tracking-wider"
-              />
-              <Button type="button" size="sm" onClick={handleApplyBulkKey} className="h-9 shrink-0">
-                {vi.worksheets.editor.bulkKeyApply}
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* List of ANSWER_SHEET fields */}
-        {sheetFields.length > 0 && (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {sheetFields.map((field) => {
-              const isSelected = selectedIds.includes(field.id);
-              return (
-                <div
-                  key={field.id}
-                  onClick={() => setSelectedIds([field.id])}
-                  className={cn(
-                    "cursor-pointer rounded-xl border p-3 transition",
-                    isSelected
-                      ? "border-[#4F46E5] bg-[#EEF2FF]/60 ring-2 ring-indigo-100"
-                      : "border-slate-200 bg-white hover:border-indigo-200"
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="flex h-6 min-w-[24px] items-center justify-center rounded-md bg-[#4F46E5] px-1.5 text-xs font-bold text-white">
-                        {field.label}
-                      </span>
-                      <span className="text-xs font-semibold text-[#0B1C30]">
-                        {vi.worksheets.tools[field.type]}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-semibold text-slate-500">
-                        {field.points}{tr("đ", "pt")}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setFields((prev) => prev.filter((x) => x.id !== field.id));
-                          setSelectedIds((prev) => prev.filter((x) => x !== field.id));
-                        }}
-                        className="text-slate-400 hover:text-red-500"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Question text (from Word or typed): visible and editable right on the card */}
-                  <div className="mt-2.5" onClick={(e) => e.stopPropagation()}>
-                    <Label className="text-[10px] font-bold uppercase text-slate-400">
-                      {tr("Câu hỏi", "Question")}
-                    </Label>
-                    <Textarea
-                      value={field.prompt ?? ""}
-                      onChange={(e) => updateField(field.id, { prompt: e.target.value })}
-                      onFocus={() => setSelectedIds([field.id])}
-                      placeholder={tr("Nhập nội dung câu hỏi…", "Type the question…")}
-                      rows={2}
-                      className="mt-1 min-h-[52px] text-xs leading-relaxed"
-                    />
-                    <Label className="mt-2 block text-[10px] font-bold uppercase text-slate-400">
-                      {field.type === "ESSAY"
-                        ? tr("Hướng dẫn chấm", "Rubric")
-                        : tr("Đáp án", "Answer")}
-                    </Label>
-                  </div>
-
-                  {/* Quick inline answer editor */}
-                  <div className="mt-1" onClick={(e) => e.stopPropagation()}>
-                    {field.type === "MULTIPLE_CHOICE" && (
-                      <div className="flex gap-1.5">
-                        {(field.options ?? []).map((opt) => (
-                          <button
-                            key={opt.id}
-                            type="button"
-                            onClick={() =>
-                              updateField(field.id, { answerKey: { correct: opt.id } })
-                            }
-                            className={cn(
-                              "flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold transition",
-                              field.answerKey.correct === opt.id
-                                ? "bg-[#4F46E5] text-white"
-                                : "bg-slate-100 text-slate-600 hover:bg-indigo-100"
-                            )}
-                          >
-                            {opt.id}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
-                    {field.type === "TRUE_FALSE" && (
-                      <div className="flex gap-1.5">
-                        {[
-                          { v: true, label: tr("Đúng", "True") },
-                          { v: false, label: tr("Sai", "False") },
-                        ].map((o) => (
-                          <button
-                            key={String(o.v)}
-                            type="button"
-                            onClick={() =>
-                              updateField(field.id, { answerKey: { correct: o.v } })
-                            }
-                            className={cn(
-                              "rounded-lg px-2.5 py-1 text-xs font-semibold",
-                              field.answerKey.correct === o.v
-                                ? "bg-[#4F46E5] text-white"
-                                : "bg-slate-100 text-slate-600"
-                            )}
-                          >
-                            {o.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
-                    {field.type === "TEXT" && (
-                      <Input
-                        value={
-                          Array.isArray(field.answerKey.accepted)
-                            ? (field.answerKey.accepted as string[]).join("|")
-                            : ""
-                        }
-                        onChange={(e) =>
-                          updateField(field.id, {
-                            answerKey: {
-                              accepted: e.target.value.split("|").map((s) => s.trim()),
-                            },
-                          })
-                        }
-                        placeholder={tr("Đáp án chấp nhận (vd: don't|do not)", "Accepted answer (e.g. don't|do not)")}
-                        className="h-8 text-xs"
-                      />
-                    )}
-
-                    {field.type === "NUMBER" && (
-                      <Input
-                        type="number"
-                        step="any"
-                        value={String(field.answerKey.value ?? 0)}
-                        onChange={(e) =>
-                          updateField(field.id, {
-                            answerKey: {
-                              ...field.answerKey,
-                              value: Number(e.target.value),
-                            },
-                          })
-                        }
-                        className="h-8 text-xs"
-                      />
-                    )}
-
-                    {field.type === "DICTATION" && (
-                      <Textarea
-                        rows={2}
-                        value={String(field.answerKey.transcript ?? "")}
-                        onChange={(e) =>
-                          updateField(field.id, {
-                            answerKey: { transcript: e.target.value },
-                          })
-                        }
-                        placeholder={tr("Nhập transcript chuẩn…", "Enter expected transcript…")}
-                        className="text-xs"
-                      />
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
+      {/* Without a PDF the answer sheet is the whole worksheet: keep it below the studio grid */}
+      {!hasPdf && answerSheetSection}
     </div>
   );
 }

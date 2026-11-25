@@ -46,8 +46,8 @@ function todayYmd(now = new Date()): string {
 }
 
 /**
- * Pure helper to build the EngClass Drive folder hierarchy (PLAN 12.4):
- *   EngClass/
+ * Pure helper to build the Pivora Drive folder hierarchy (PLAN 12.4):
+ *   Pivora/   (folders created before the rename keep the name "EngClass")
  *   └── <Teacher Name>/
  *       ├── Worksheets/<Worksheet Title>/           (de.pdf, audio-1.mp3, nguon.docx)
  *       ├── Backups/<yyyy-mm-dd>/                   (<Worksheet>.engclass.zip, thu-vien.zip)

@@ -10,6 +10,7 @@ import {
   Bell,
   Camera,
   CheckCircle2,
+  ChevronDown,
   ClipboardX,
   Clock,
   Headphones,
@@ -35,10 +36,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { WorksheetPicker } from "@/components/assignments/WorksheetPicker";
+import { ClassPicker } from "@/components/assignments/ClassPicker";
 
 interface WorksheetOption {
   id: string;
   title: string;
+  updatedAt?: string;
   owner?: { name: string };
   _count: { fields: number; audios?: number };
 }
@@ -89,6 +93,84 @@ function toLocalInput(iso: string | null): string {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+const DUE_PRESETS = [
+  { days: 0, vi: "Hết hôm nay", en: "End of today" },
+  { days: 1, vi: "+1 ngày", en: "+1 day" },
+  { days: 3, vi: "+3 ngày", en: "+3 days" },
+  { days: 7, vi: "+1 tuần", en: "+1 week" },
+] as const;
+
+/** 23:59 local time, `days` days from today, as a datetime-local value. */
+function endOfDayInput(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  d.setHours(23, 59, 0, 0);
+  return toLocalInput(d.toISOString());
+}
+
+function StepHeader({
+  n,
+  title,
+  subtitle,
+  done,
+  badge,
+}: {
+  n: number;
+  title: string;
+  subtitle?: string;
+  done?: boolean;
+  badge?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <span
+          className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold",
+            done ? "bg-[#4F46E5] text-white" : "bg-[#EEF2FF] text-[#4F46E5]"
+          )}
+        >
+          {n}
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-base font-bold text-[#0B1C30]">{title}</h2>
+          {subtitle && <p className="text-xs text-[#464555]">{subtitle}</p>}
+        </div>
+      </div>
+      {badge}
+    </div>
+  );
+}
+
+function ChipButton({
+  children,
+  onClick,
+  active,
+  muted,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  active?: boolean;
+  muted?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex min-h-8 items-center rounded-full border px-3 text-xs font-semibold transition",
+        active
+          ? "border-[#4F46E5] bg-[#4F46E5] text-white"
+          : muted
+            ? "border-transparent text-[#464555] hover:bg-slate-100"
+            : "border-slate-200 bg-white text-[#0B1C30] hover:border-indigo-300"
+      )}
+    >
+      {children}
+    </button>
+  );
 }
 
 function NewAssignmentForm() {
@@ -224,12 +306,6 @@ function NewAssignmentForm() {
     }
   }, [worksheetId, worksheets, title, isEdit]);
 
-  const toggleClass = (id: string) => {
-    setSelectedClassIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  };
-
   const applyPreset = (
     preset: "WARN" | "LOCK_1" | "RESTART_1" | "AUTO_SUBMIT_3" | "DICTATION" | "MEMORIZE"
   ) => {
@@ -334,12 +410,38 @@ function NewAssignmentForm() {
   };
 
   const selectedWs = worksheets.find((w) => w.id === worksheetId);
+
   const totalSelectedStudents = classes
     .filter((c) => selectedClassIds.includes(c.id))
     .reduce((sum, c) => sum + c._count.enrollments, 0);
-
+  const hasAudio = (selectedWs?._count.audios ?? 0) > 0;
+  const checklist = [
+    {
+      href: "#step-worksheet",
+      ok: Boolean(worksheetId),
+      label: selectedWs ? selectedWs.title : tr("Chưa chọn phiếu", "No worksheet yet"),
+    },
+    {
+      href: "#step-classes",
+      ok: selectedClassIds.length > 0,
+      label:
+        selectedClassIds.length > 0
+          ? tr(
+              `${selectedClassIds.length} lớp · ${totalSelectedStudents} học sinh`,
+              `${selectedClassIds.length} class(es) · ${totalSelectedStudents} students`
+            )
+          : tr("Chưa chọn lớp", "No class yet"),
+    },
+    {
+      href: "#step-timing",
+      ok: true,
+      label: dueAt
+        ? tr(`Hạn nộp ${new Date(dueAt).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" })}`, `Due ${new Date(dueAt).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" })}`)
+        : tr("Không có hạn nộp", "No deadline"),
+    },
+  ];
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 pb-12">
+    <form onSubmit={handleSubmit} className="space-y-6 pb-28 lg:pb-12">
       <div>
         <p className="text-xs font-semibold text-[#464555]">
           {tr("Worksheet Studio › Giao bài & Cấu hình giám sát", "Worksheet Studio › Assign & proctoring settings")}
@@ -363,171 +465,192 @@ function NewAssignmentForm() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-start">
         {/* Left 8 cols: 3 Stitch Cards */}
         <div className="space-y-6 lg:col-span-8">
-          {/* Section 1: Basic Info */}
-          <div className="stitch-card p-6 space-y-5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#EEF2FF] text-[#4F46E5] font-bold">
-                  1
-                </span>
-                <div>
-                  <h2 className="text-base font-bold text-[#0B1C30]">{tr("Thông tin cơ bản", "Basic information")}</h2>
-                  <p className="text-xs text-[#464555]">
-                    {tr("Chọn Worksheet, lớp học áp dụng và thời lượng kiểm tra", "Choose the worksheet, classes and duration")}
-                  </p>
+          {/* Step 1: Worksheet */}
+          <section id="step-worksheet" className="stitch-card scroll-mt-24 space-y-4 p-5 sm:p-6">
+            <StepHeader
+              n={1}
+              done={Boolean(worksheetId)}
+              title={tr("Chọn phiếu bài tập", "Choose the worksheet")}
+              subtitle={tr("Tìm nhanh theo tên, không cần gõ dấu", "Search by title")}
+            />
+            <WorksheetPicker
+              mine={ownWorksheets}
+              shared={sharedWorksheets}
+              value={worksheetId}
+              disabled={isEdit}
+              onChange={(ws) => {
+                setWorksheetId(ws.id);
+                setTitle(ws.title);
+              }}
+            />
+            <div className="space-y-1.5">
+              <Label htmlFor="assignment-title">{vi.assignments.assignmentTitle}</Label>
+              <Input
+                id="assignment-title"
+                required
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={tr("VD: Unit 7: The World of Work - Đề số 1", "e.g. Unit 7: The World of Work - Test 1")}
+              />
+              <p className="text-[11px] text-[#464555]">
+                {tr("Tên học sinh nhìn thấy; mặc định lấy theo tên phiếu.", "The name students see; defaults to the worksheet title.")}
+              </p>
+            </div>
+          </section>
+
+          {/* Step 2: Classes */}
+          <section id="step-classes" className="stitch-card scroll-mt-24 space-y-4 p-5 sm:p-6">
+            <StepHeader
+              n={2}
+              done={selectedClassIds.length > 0}
+              title={vi.assignments.selectClasses}
+              subtitle={
+                selectedClassIds.length > 0
+                  ? tr(
+                      `Đã chọn ${selectedClassIds.length} lớp · ${totalSelectedStudents} học sinh`,
+                      `${selectedClassIds.length} class(es) · ${totalSelectedStudents} students selected`
+                    )
+                  : tr("Giao cùng lúc cho nhiều lớp", "Assign to several classes at once")
+              }
+            />
+            <ClassPicker
+              classes={classes}
+              value={selectedClassIds}
+              onChange={setSelectedClassIds}
+              locked={isEdit}
+            />
+          </section>
+
+          {/* Step 3: Timing & attempts */}
+          <section id="step-timing" className="stitch-card scroll-mt-24 space-y-5 p-5 sm:p-6">
+            <StepHeader
+              n={3}
+              done
+              title={tr("Thời gian & lượt làm", "Timing & attempts")}
+              subtitle={tr("Để trống nếu không muốn giới hạn", "Leave empty for no limit")}
+            />
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="open-at">{vi.assignments.openAt}</Label>
+                <Input
+                  id="open-at"
+                  type="datetime-local"
+                  value={openAt}
+                  onChange={(e) => setOpenAt(e.target.value)}
+                />
+                <p className="text-[11px] text-[#464555]">
+                  {openAt ? tr("Học sinh chỉ thấy đề từ lúc này.", "Students see the test from this time.") : tr("Trống = mở ngay khi giao.", "Empty = open immediately.")}
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="due-at">{vi.assignments.dueAt}</Label>
+                <Input
+                  id="due-at"
+                  type="datetime-local"
+                  value={dueAt}
+                  onChange={(e) => setDueAt(e.target.value)}
+                />
+                <div className="flex flex-wrap gap-1.5">
+                  {DUE_PRESETS.map((p) => (
+                    <ChipButton key={p.days} onClick={() => setDueAt(endOfDayInput(p.days))}>
+                      {tr(p.vi, p.en)}
+                    </ChipButton>
+                  ))}
+                  {dueAt && (
+                    <ChipButton onClick={() => setDueAt("")} muted>
+                      {tr("Không hạn", "No deadline")}
+                    </ChipButton>
+                  )}
                 </div>
               </div>
-              <Badge variant="neutral">{tr("Bắt buộc", "Required")}</Badge>
             </div>
 
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>{vi.assignments.selectWorksheet}</Label>
-                <select
-                  required
-                  disabled={isEdit}
-                  value={worksheetId}
-                  onChange={(e) => {
-                    setWorksheetId(e.target.value);
-                    const ws = worksheets.find((w) => w.id === e.target.value);
-                    if (ws) setTitle(ws.title);
-                  }}
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium outline-none focus:border-[#4F46E5]"
-                >
-                  <option value="">{tr("— Chọn phiếu bài tập —", "— Choose a worksheet —")}</option>
-                  {ownWorksheets.length > 0 && (
-                    <optgroup label={tr("Phiếu bài tập của tôi", "My worksheets")}>
-                      {ownWorksheets.map((w) => (
-                        <option key={w.id} value={w.id}>
-                          {w.title} ({w._count.fields} {tr("câu)", "questions)")}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {sharedWorksheets.length > 0 && (
-                    <optgroup label={tr("Giáo viên khác chia sẻ", "Shared by colleagues")}>
-                      {sharedWorksheets.map((w) => (
-                        <option key={w.id} value={w.id}>
-                          [{w.owner?.name ?? "GV"}] {w.title} ({w._count.fields} {tr("câu)", "questions)")}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>{vi.assignments.assignmentTitle}</Label>
+                <Label htmlFor="time-limit">{vi.assignments.timeLimitMin}</Label>
                 <Input
-                  required
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder={tr("VD: Unit 7: The World of Work - Đề số 1", "e.g. Unit 7: The World of Work - Test 1")}
+                  id="time-limit"
+                  type="number"
+                  min={1}
+                  max={600}
+                  value={timeLimitMin}
+                  onChange={(e) => setTimeLimitMin(e.target.value)}
+                  placeholder={tr("Không giới hạn", "Unlimited")}
                 />
-              </div>
-
-              <div className="space-y-2">
-                <Label>{vi.assignments.selectClasses}</Label>
-                <div className="flex flex-wrap gap-2">
-                  {classes.map((c) => {
-                    const active = selectedClassIds.includes(c.id);
-                    return (
-                      <button
-                        key={c.id}
-                        type="button"
-                        disabled={isEdit && !active}
-                        onClick={() => !isEdit && toggleClass(c.id)}
-                        className={cn(
-                          "inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition",
-                          active
-                            ? "border-[#4F46E5] bg-[#4F46E5] text-white shadow-sm"
-                            : "border-slate-200 bg-[#F8F9FF] text-[#0B1C30] hover:border-indigo-300"
-                        )}
-                      >
-                        {active && <CheckCircle2 className="h-3.5 w-3.5" />}
-                        {c.name} ({c._count.enrollments} HS)
-                      </button>
-                    );
-                  })}
+                <div className="flex flex-wrap gap-1.5">
+                  {[15, 30, 45, 60, 90].map((m) => (
+                    <ChipButton key={m} active={timeLimitMin === String(m)} onClick={() => setTimeLimitMin(String(m))}>
+                      {m}′
+                    </ChipButton>
+                  ))}
+                  <ChipButton active={!timeLimitMin} onClick={() => setTimeLimitMin("")}>
+                    ∞
+                  </ChipButton>
                 </div>
               </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">{vi.assignments.openAt}</Label>
-                  <Input
-                    type="datetime-local"
-                    value={openAt}
-                    onChange={(e) => setOpenAt(e.target.value)}
-                    className="text-xs"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">{vi.assignments.dueAt}</Label>
-                  <Input
-                    type="datetime-local"
-                    value={dueAt}
-                    onChange={(e) => setDueAt(e.target.value)}
-                    className="text-xs"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">{vi.assignments.timeLimitMin}</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={600}
-                    value={timeLimitMin}
-                    onChange={(e) => setTimeLimitMin(e.target.value)}
-                    placeholder={tr("Không giới hạn", "Unlimited")}
-                    className="text-xs"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">{vi.assignments.maxAttempts}</Label>
-                  <div className="space-y-1.5">
-                    <Input
-                      type="number"
-                      min={1}
-                      max={50}
-                      disabled={unlimitedAttempts}
-                      value={unlimitedAttempts ? "" : maxAttempts}
-                      placeholder={unlimitedAttempts ? tr("Không giới hạn (∞)", "Unlimited (∞)") : undefined}
-                      onChange={(e) => setMaxAttempts(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
-                      className="text-xs"
-                      data-testid="max-attempts-input"
+              <div className="space-y-1.5">
+                <Label htmlFor="max-attempts">{vi.assignments.maxAttempts}</Label>
+                <Input
+                  id="max-attempts"
+                  type="number"
+                  min={1}
+                  max={50}
+                  disabled={unlimitedAttempts}
+                  value={unlimitedAttempts ? "" : maxAttempts}
+                  placeholder={unlimitedAttempts ? tr("Không giới hạn (∞)", "Unlimited (∞)") : undefined}
+                  onChange={(e) => setMaxAttempts(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+                  data-testid="max-attempts-input"
+                />
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {[1, 2, 3].map((n) => (
+                    <ChipButton
+                      key={n}
+                      active={!unlimitedAttempts && maxAttempts === n}
+                      onClick={() => {
+                        setUnlimitedAttempts(false);
+                        setMaxAttempts(n);
+                      }}
+                    >
+                      {tr(`${n} lượt`, `${n}×`)}
+                    </ChipButton>
+                  ))}
+                  <label className="inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-full border border-slate-200 px-3 text-xs font-semibold text-[#464555]">
+                    <input
+                      type="checkbox"
+                      checked={unlimitedAttempts}
+                      onChange={(e) => setUnlimitedAttempts(e.target.checked)}
+                      className="h-3.5 w-3.5 rounded border-slate-300 text-[#4F46E5] focus:ring-[#4F46E5]"
+                      data-testid="unlimited-attempts-checkbox"
                     />
-                    <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-[#464555]">
-                      <input
-                        type="checkbox"
-                        checked={unlimitedAttempts}
-                        onChange={(e) => setUnlimitedAttempts(e.target.checked)}
-                        className="h-3.5 w-3.5 rounded border-slate-300 text-[#4F46E5] focus:ring-[#4F46E5]"
-                        data-testid="unlimited-attempts-checkbox"
-                      />
-                      {tr("Không giới hạn lượt làm", "Unlimited attempts")}
-                    </label>
-                  </div>
+                    {tr("Không giới hạn", "Unlimited")}
+                  </label>
                 </div>
               </div>
+            </div>
 
-              {/* Audio playback settings (per assignment, default = unlimited + allow pause + allow seek) */}
-              <div className="rounded-xl border border-slate-200 bg-[#F8F9FF] p-4 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Headphones className="h-4 w-4 text-[#4F46E5]" />
-                    <span className="text-xs font-bold text-[#0B1C30]">
-                      {tr("Cài đặt file nghe (Listening / Chép chính tả)", "Listening audio settings")}
-                    </span>
-                  </div>
+            {/* Audio playback settings (per assignment, default = unlimited + allow pause + allow seek) */}
+            <details
+              className="group rounded-xl border border-slate-200 bg-[#F8F9FF]"
+              open={hasAudio || limitAudioPlays || audioBlockPause || audioBlockSeek}
+            >
+              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-2 px-4 py-2.5">
+                <span className="flex items-center gap-2 text-xs font-bold text-[#0B1C30]">
+                  <Headphones className="h-4 w-4 text-[#4F46E5]" />
+                  {tr("File nghe (Listening / Chép chính tả)", "Listening audio")}
+                </span>
+                <span className="flex items-center gap-2">
                   {selectedWs && (
-                    <Badge variant={(selectedWs._count.audios ?? 0) > 0 ? "default" : "neutral"}>
-                      {(selectedWs._count.audios ?? 0) > 0
+                    <Badge variant={hasAudio ? "default" : "neutral"}>
+                      {hasAudio
                         ? tr(`${selectedWs._count.audios} file nghe`, `${selectedWs._count.audios} audio track(s)`)
                         : tr("Phiếu chưa có file nghe", "No audio attached")}
                     </Badge>
                   )}
-                </div>
+                  <ChevronDown className="h-4 w-4 text-slate-400 transition group-open:rotate-180" />
+                </span>
+              </summary>
+              <div className="space-y-3 border-t border-slate-200 px-4 pb-4 pt-3">
                 <p className="text-[11px] text-[#464555]">
                   {tr(
                     "Mặc định học sinh được nghe không giới hạn, được dừng và được tua. Tích vào các ô bên dưới nếu muốn siết chặt (áp dụng cho từng file nghe trong lượt làm).",
@@ -535,8 +658,8 @@ function NewAssignmentForm() {
                   )}
                 </p>
                 <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-                  <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
-                    <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-[#0B1C30]">
+                  <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+                    <label className="flex min-h-6 cursor-pointer items-center gap-2 text-xs font-semibold text-[#0B1C30]">
                       <input
                         type="checkbox"
                         checked={limitAudioPlays}
@@ -556,12 +679,10 @@ function NewAssignmentForm() {
                           onChange={(e) =>
                             setAudioMaxPlays(Math.max(1, Math.min(20, Number(e.target.value) || 1)))
                           }
-                          className="h-8 w-20 text-xs"
+                          className="h-9 w-20 text-xs"
                           data-testid="audio-max-plays-input"
                         />
-                        <span className="text-[11px] text-[#464555]">
-                          {tr("lần / file", "plays / track")}
-                        </span>
+                        <span className="text-[11px] text-[#464555]">{tr("lần / file", "plays / track")}</span>
                       </div>
                     )}
                   </div>
@@ -587,24 +708,17 @@ function NewAssignmentForm() {
                   </label>
                 </div>
               </div>
-            </div>
-          </div>
+            </details>
+          </section>
 
-          {/* Section 2: Results & Leaderboard */}
-          <div className="stitch-card p-6 space-y-5">
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#EEF2FF] text-[#4F46E5] font-bold">
-                2
-              </span>
-              <div>
-                <h2 className="text-base font-bold text-[#0B1C30]">
-                  {tr("Kết quả & Bảng xếp hạng", "Results & leaderboard")}
-                </h2>
-                <p className="text-xs text-[#464555]">
-                  {tr("Chính sách công bố điểm số, đáp án đúng và bảng vinh danh học sinh", "When scores, correct answers and the leaderboard are shown")}
-                </p>
-              </div>
-            </div>
+          {/* Step 4: Results & Leaderboard */}
+          <section id="step-results" className="stitch-card scroll-mt-24 space-y-5 p-5 sm:p-6">
+            <StepHeader
+              n={4}
+              done
+              title={tr("Kết quả & Bảng xếp hạng", "Results & leaderboard")}
+              subtitle={tr("Khi nào học sinh thấy điểm, đáp án và bảng vinh danh", "When scores, correct answers and the leaderboard are shown")}
+            />
 
             <div className="space-y-4">
               <div className="space-y-1.5">
@@ -730,28 +844,21 @@ function NewAssignmentForm() {
                 )}
               </div>
             </div>
-          </div>
+          </section>
 
-          {/* Section 3: Anti-cheat Proctoring (Stitch Section 3) */}
-          <div className="stitch-card p-6 space-y-5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#EEF2FF] text-[#4F46E5] font-bold">
-                  3
-                </span>
-                <div>
-                  <h2 className="text-base font-bold text-[#0B1C30]">
-                    {tr("Chống gian lận & Bảo mật ca thi", "Anti-cheating & exam security")}
-                  </h2>
-                  <p className="text-xs text-[#464555]">
-                    {tr("Thiết lập mức giám sát hành vi và phản ứng tự động khi phát hiện vi phạm", "Set the monitoring level and the automatic response to violations")}
-                  </p>
-                </div>
-              </div>
-              <Badge variant="orange">
-                <Shield className="h-3 w-3" /> Proctor Guard
-              </Badge>
-            </div>
+          {/* Step 5: Anti-cheat proctoring */}
+          <section id="step-proctor" className="stitch-card scroll-mt-24 space-y-5 p-5 sm:p-6">
+            <StepHeader
+              n={5}
+              done
+              title={tr("Chống gian lận & Bảo mật ca thi", "Anti-cheating & exam security")}
+              subtitle={tr("Mức giám sát và phản ứng tự động khi vi phạm (tuỳ chọn)", "Monitoring level and automatic response to violations (optional)")}
+              badge={
+                <Badge variant="orange">
+                  <Shield className="h-3 w-3" /> Proctor Guard
+                </Badge>
+              }
+            />
 
             {/* Proctor Mode selector */}
             <div className="space-y-1.5">
@@ -1032,7 +1139,7 @@ function NewAssignmentForm() {
                 </div>
               )}
             </div>
-          </div>
+          </section>
         </div>
 
         {/* Right 4 cols: Live Preview ("Học sinh sẽ thấy") + Submit Button */}
@@ -1153,9 +1260,23 @@ function NewAssignmentForm() {
               </ul>
             </div>
 
-            <div className="rounded-xl bg-[#EFF4FF] px-3.5 py-2.5 text-xs font-semibold text-[#3525CD]">
-              {tr("Sẽ giao cho", "Will be assigned to")} {selectedClassIds.length} {tr("lớp (", "class(es) (")}{totalSelectedStudents} {tr("học sinh)", "students)")}
-            </div>
+            <ul className="space-y-1.5 rounded-xl bg-[#EFF4FF] p-3 text-xs" aria-label={tr("Kiểm tra trước khi giao", "Checklist")}>
+              {checklist.map((item) => (
+                <li key={item.href}>
+                  <a
+                    href={item.href}
+                    className="flex items-center gap-2 rounded-lg px-1.5 py-1 font-semibold text-[#0B1C30] hover:bg-white/70"
+                  >
+                    {item.ok ? (
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                    ) : (
+                      <span className="h-4 w-4 shrink-0 rounded-full border-2 border-dashed border-slate-400" />
+                    )}
+                    <span className="min-w-0 truncate">{item.label}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
 
             <Button
               type="submit"
@@ -1175,6 +1296,33 @@ function NewAssignmentForm() {
             </Button>
           </div>
         </aside>
+      </div>
+
+      {/* Phone / tablet: keep the submit button reachable while scrolling the long form */}
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur lg:hidden">
+        <div className="mx-auto flex max-w-3xl items-center gap-3">
+          <div className="min-w-0 flex-1 text-xs">
+            <p className="truncate font-semibold text-[#0B1C30]">{title || tr("Chưa nhập tên bài", "Untitled")}</p>
+            <p className="truncate text-[#464555]">
+              {selectedClassIds.length > 0
+                ? tr(`${selectedClassIds.length} lớp · ${totalSelectedStudents} HS`, `${selectedClassIds.length} class(es) · ${totalSelectedStudents} students`)
+                : tr("Chưa chọn lớp", "No class yet")}
+            </p>
+          </div>
+          <Button
+            type="submit"
+            variant="accent"
+            className="min-h-11 shrink-0"
+            disabled={submitting || (isEdit && (editLoading || !prefilled))}
+          >
+            <Rocket className="h-4 w-4" />
+            {submitting
+              ? tr("Đang lưu…", "Saving…")
+              : isEdit
+                ? tr("Lưu", "Save")
+                : tr("Giao bài", "Assign")}
+          </Button>
+        </div>
       </div>
     </form>
   );

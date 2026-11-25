@@ -1,4 +1,4 @@
-# EngClass LMS — production image (Next.js 15 + Prisma + PostgreSQL)
+# Pivora — production image (Next.js 15 + Prisma + PostgreSQL)
 FROM node:22-bookworm-slim AS base
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH NEXT_TELEMETRY_DISABLED=1
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates curl \
@@ -15,7 +15,7 @@ COPY prisma ./prisma
 RUN pnpm install --frozen-lockfile
 COPY . .
 # NEXT_PUBLIC_* values are inlined at build time
-ARG NEXT_PUBLIC_APP_NAME=EngClass
+ARG NEXT_PUBLIC_APP_NAME=Pivora
 ARG NEXT_PUBLIC_APP_URL=http://localhost:3000
 ARG NEXT_PUBLIC_SHOW_DEMO_ACCOUNTS=false
 ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=

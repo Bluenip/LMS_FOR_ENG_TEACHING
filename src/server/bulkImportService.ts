@@ -112,7 +112,7 @@ export function parseImportRole(raw: string): Role | null {
 
 export async function generateBulkImportTemplate(): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "EngClass LMS";
+  wb.creator = "Pivora";
   wb.created = new Date();
 
   const sheet = wb.addWorksheet("Tai khoan");
@@ -578,7 +578,7 @@ export async function claimBulkImportCredentialsExcel(
   const credentials = JSON.parse(decrypted) as GeneratedCredentialEntry[];
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = "EngClass LMS";
+  wb.creator = "Pivora";
   wb.created = now;
   const sheet = wb.addWorksheet("Mat khau tam");
   sheet.columns = [

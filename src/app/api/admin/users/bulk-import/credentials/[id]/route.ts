@@ -12,7 +12,7 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": 'attachment; filename="engclass-temp-passwords.xlsx"',
+        "Content-Disposition": 'attachment; filename="pivora-temp-passwords.xlsx"',
         "Cache-Control": "no-store, max-age=0",
       },
     });

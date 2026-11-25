@@ -11,7 +11,7 @@ export async function GET() {
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "Content-Disposition": 'attachment; filename="engclass-mau-dien-tu.docx"',
+        "Content-Disposition": 'attachment; filename="pivora-mau-dien-tu.docx"',
         "Content-Length": String(buffer.length),
       },
     });

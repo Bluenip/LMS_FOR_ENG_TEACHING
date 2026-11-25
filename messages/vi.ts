@@ -1,6 +1,6 @@
 export const vi = {
   app: {
-    defaultName: "EngClass",
+    defaultName: "Pivora",
     tagline: "Hệ sinh thái học tập & phiếu bài tập tiếng Anh tương tác",
   },
   common: {

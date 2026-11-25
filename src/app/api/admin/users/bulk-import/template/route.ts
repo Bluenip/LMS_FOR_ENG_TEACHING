@@ -11,7 +11,7 @@ export async function GET() {
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": 'attachment; filename="engclass-users-template.xlsx"',
+        "Content-Disposition": 'attachment; filename="pivora-users-template.xlsx"',
         "Cache-Control": "no-store",
       },
     });

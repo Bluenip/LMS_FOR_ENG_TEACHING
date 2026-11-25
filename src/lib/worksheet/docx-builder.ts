@@ -82,7 +82,7 @@ export async function buildDocxBuffer(paragraphs: DocxParagraph[]): Promise<Buff
  */
 export async function buildSampleFillBlankDocx(): Promise<Buffer> {
   return buildDocxBuffer([
-    { text: "BÀI TẬP ĐIỀN TỪ MẪU (EngClass)", heading: true },
+    { text: "BÀI TẬP ĐIỀN TỪ MẪU (Pivora)", heading: true },
     {
       text: "Hướng dẫn: Bọc phần đáp án cần điền trong hai dấu gạch dưới liên tiếp ở đầu và cuối. Nếu có nhiều đáp án đúng thì ngăn cách bằng dấu /.",
       italic: true,

@@ -6,7 +6,7 @@ export function cn(...inputs: ClassValue[]): string {
 }
 
 export function getAppName(): string {
-  return process.env.NEXT_PUBLIC_APP_NAME?.trim() || "EngClass";
+  return process.env.NEXT_PUBLIC_APP_NAME?.trim() || "Pivora";
 }
 
 export function getHomeForRole(role: "ADMIN" | "TEACHER" | "STUDENT" | "PARENT"): string {

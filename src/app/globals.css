@@ -366,3 +366,13 @@ html {
     -webkit-overflow-scrolling: touch;
   }
 }
+
+/* Pivora brand mark/wordmark (src/components/brand/PivoraLogo.tsx) */
+.pivora-ink {
+  color: #08143D;
+  --pivora-accent: #1F5EFD;
+}
+html.dark .pivora-ink {
+  color: #E6ECFF;
+  --pivora-accent: #6B97FF;
+}

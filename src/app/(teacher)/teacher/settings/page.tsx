@@ -210,8 +210,8 @@ function TeacherSettingsContent() {
               </div>
               <p className="mt-1 text-xs text-[#464555]">
                 {tr(
-                  "File của bạn sẽ được lưu trong thư mục EngClass trên Google Drive cá nhân (quyền tối thiểu drive.file, mọi file riêng tư).",
-                  "Your files will be stored inside the EngClass folder in your personal Google Drive (minimal drive.file scope, private by default)."
+                  "File của bạn sẽ được lưu trong thư mục Pivora trên Google Drive cá nhân (quyền tối thiểu drive.file, mọi file riêng tư).",
+                  "Your files will be stored inside the Pivora folder in your personal Google Drive (minimal drive.file scope, private by default)."
                 )}
               </p>
             </div>

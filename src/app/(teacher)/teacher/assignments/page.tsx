@@ -6,11 +6,27 @@ import { formatDateTime } from "@/lib/utils";
 import { getI18n } from "@/lib/i18n/server";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { AssignmentListFilters } from "@/components/classes/AssignmentListFilters";
+import { ASSIGNMENT_SORTS, type AssignmentSort } from "@/lib/assignment-list";
+import { foldText } from "@/lib/text-search";
+
+/** "YYYY-MM" of a date in Vietnam time (the month an assignment was given). */
+function monthKey(d: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(d);
+  const y = parts.find((p) => p.type === "year")?.value ?? "0000";
+  const m = parts.find((p) => p.type === "month")?.value ?? "01";
+  return `${y}-${m}`;
+}
+
 
 export default async function TeacherAssignmentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ teacher?: string }>;
+  searchParams: Promise<{ teacher?: string; q?: string; class?: string; month?: string; sort?: string }>;
 }) {
   const { m: vi, tr } = await getI18n();
   const user = await requireLayoutUser(["TEACHER", "ADMIN"]);
@@ -18,14 +34,58 @@ export default async function TeacherAssignmentsPage({
   const all = await listTeacherAssignments(user.id, { allClasses: isAdmin });
 
   // admin: optional filter by teacher (?teacher=<id>)
-  const { teacher: teacherFilter } = await searchParams;
+  const {
+    teacher: teacherFilter,
+    q: rawQuery,
+    class: classFilter,
+    month: monthFilter,
+    sort: rawSort,
+  } = await searchParams;
+  const sort: AssignmentSort = ASSIGNMENT_SORTS.includes(rawSort as AssignmentSort)
+    ? (rawSort as AssignmentSort)
+    : "newest";
   const teachers = isAdmin
     ? [...new Map(all.map((a) => [a.class.teacher.id, a.class.teacher.name])).entries()].sort((x, y) =>
         x[1].localeCompare(y[1], "vi")
       )
     : [];
-  const assignments =
+  const byTeacher =
     isAdmin && teacherFilter ? all.filter((a) => a.class.teacher.id === teacherFilter) : all;
+
+  // options for the filter bar come from the teacher-filtered list
+  const classOptions = [...new Map(byTeacher.map((a) => [a.class.id, a.class.name])).entries()]
+    .map(([id, name]) => ({ id, name }))
+    .sort((x, y) => x.name.localeCompare(y.name, "vi"));
+  const monthOptions = [...new Set(byTeacher.map((a) => monthKey(a.createdAt)))].sort().reverse();
+
+  const needle = foldText(rawQuery?.trim() ?? "");
+  const assignments = byTeacher
+    .filter((a) => !classFilter || a.class.id === classFilter)
+    .filter((a) => !monthFilter || monthKey(a.createdAt) === monthFilter)
+    .filter(
+      (a) =>
+        !needle ||
+        foldText(`${a.title} ${a.class.name} ${a.worksheet.title} ${a.class.teacher.name}`).includes(needle)
+    )
+    .sort((x, y) => {
+      const due = (d: Date | null, missing: number) => (d ? d.getTime() : missing);
+      switch (sort) {
+        case "oldest":
+          return x.createdAt.getTime() - y.createdAt.getTime();
+        case "due_asc":
+          return due(x.dueAt, Infinity) - due(y.dueAt, Infinity);
+        case "due_desc":
+          return due(y.dueAt, -Infinity) - due(x.dueAt, -Infinity);
+        case "class":
+          return (
+            x.class.name.localeCompare(y.class.name, "vi", { numeric: true }) || y.createdAt.getTime() - x.createdAt.getTime()
+          );
+        case "title":
+          return x.title.localeCompare(y.title, "vi", { numeric: true });
+        default:
+          return y.createdAt.getTime() - x.createdAt.getTime();
+      }
+    });
 
   return (
     <div className="space-y-6">
@@ -78,9 +138,20 @@ export default async function TeacherAssignmentsPage({
         </div>
       )}
 
+      {byTeacher.length > 0 && (
+        <AssignmentListFilters
+          classes={classOptions}
+          months={monthOptions}
+          shown={assignments.length}
+          total={byTeacher.length}
+        />
+      )}
+
       {assignments.length === 0 ? (
         <div className="stitch-card p-12 text-center text-sm text-slate-400">
-          {tr("Chưa có bài tập nào được giao.", "No assignments yet.")}
+          {byTeacher.length === 0
+            ? tr("Chưa có bài tập nào được giao.", "No assignments yet.")
+            : tr("Không có bài tập nào khớp bộ lọc.", "No assignments match the filters.")}
         </div>
       ) : (
         <div className="space-y-3">
@@ -122,6 +193,7 @@ export default async function TeacherAssignmentsPage({
                         {a.timeLimitMin} {tr("phút", "min")}
                       </span>
                     )}
+                    <span>{tr("Giao:", "Assigned:")} {formatDateTime(a.createdAt)}</span>
                     <span>{tr("Hạn nộp:", "Due:")} {formatDateTime(a.dueAt)}</span>
                     <span className="font-semibold text-[#3525CD]">
                       {tr("Đã nộp:", "Submitted:")} {submittedCount}/{a.class._count.enrollments}

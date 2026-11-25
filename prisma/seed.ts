@@ -13,7 +13,7 @@ async function generateMixedOrientationWorksheetPdf(): Promise<Buffer> {
   // Page 1: Portrait A4 (595 x 842 pt)
   const p1 = doc.addPage([595, 842]);
   p1.drawRectangle({ x: 36, y: 760, width: 523, height: 52, color: rgb(0.93, 0.95, 1) });
-  p1.drawText("ENGCLASS - ENGLISH 12 PRACTICE WORKSHEET", {
+  p1.drawText("PIVORA - ENGLISH 12 PRACTICE WORKSHEET", {
     x: 52,
     y: 790,
     size: 14,
@@ -207,7 +207,7 @@ function generateSampleWavBuffer(durationSec = 2, freqHz = 440): Buffer {
 }
 
 async function main() {
-  console.log("Seeding EngClass LMS database...");
+  console.log("Seeding Pivora database...");
   const passwordHash = await bcrypt.hash("password123", 10);
 
   // Clean existing data in dependency order for idempotent re-seeding

@@ -241,7 +241,7 @@ export async function generateAssignmentGradebookExcel(
   const report = await getAssignmentReport(assignmentId, locale);
   const isEn = locale === "en";
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "EngClass LMS";
+  workbook.creator = "Pivora";
   workbook.created = new Date();
 
   const sheet = workbook.addWorksheet(isEn ? "Gradebook" : "Bảng điểm");
