@@ -1,13 +1,12 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/BackLink";
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetchJson } from "@/lib/api-client";
 import { toast } from "sonner";
 import {
-  ArrowLeft,
   Bell,
   Camera,
   CameraOff,
@@ -248,11 +247,11 @@ export default function TeacherLiveProctorPage() {
       <div className="stitch-card p-5 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
-            <Button variant="ghost" size="icon" asChild>
-              <Link href={`/teacher/assignments/${assignmentId}/grading`}>
-                <ArrowLeft className="h-4 w-4" />
-              </Link>
-            </Button>
+            <BackLink
+              iconOnly
+              fallbackHref={`/teacher/assignments/${assignmentId}/grading`}
+              label={tr("Quay lại", "Back")}
+            />
             <Badge variant="danger" className="gap-1.5 px-3 py-1">
               <Radio className="h-3.5 w-3.5 animate-pulse" />
               {tr("TRỰC TIẾP (LIVE)", "LIVE")}

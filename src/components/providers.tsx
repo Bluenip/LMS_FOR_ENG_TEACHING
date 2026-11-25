@@ -14,6 +14,7 @@ import type { Locale } from "@/lib/i18n/config";
 import { ThemeProvider, useTheme } from "@/lib/theme/client";
 import { getSessionExpiryReason } from "@/lib/api-client";
 import { ErrorReporter } from "@/components/ErrorReporter";
+import { NavigationTracker } from "@/components/navigation/NavigationTracker";
 
 function ThemedToaster() {
   const { resolved } = useTheme();
@@ -53,6 +54,7 @@ export function Providers({ children, locale }: { children: ReactNode; locale: L
           <QueryClientProvider client={queryClient}>
             {children}
             <ErrorReporter />
+            <NavigationTracker />
             <ThemedToaster />
           </QueryClientProvider>
         </I18nProvider>

@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/BackLink";
 import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -8,7 +9,6 @@ import { apiFetchJson } from "@/lib/api-client";
 import { toast } from "sonner";
 import {
   AlertTriangle,
-  ArrowLeft,
   BarChart3,
   Camera,
   CheckCircle2,
@@ -552,13 +552,11 @@ export default function AssignmentGradingPage() {
       {/* Stitch Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <Link
-            href={`/teacher/classes/${report.assignment.classId}`}
-            className="inline-flex items-center gap-1 text-xs font-semibold text-[#4F46E5] hover:underline"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            {report.assignment.className}
-          </Link>
+          <BackLink
+            fallbackHref={`/teacher/classes/${report.assignment.classId}?tab=assignments`}
+            label={report.assignment.className}
+            className="text-xs"
+          />
           <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-[#0B1C30]">
             {report.assignment.title}
           </h1>

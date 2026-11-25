@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/BackLink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Rnd } from "react-rnd";
@@ -10,7 +11,6 @@ import {
   AlignRight,
   AlignStartHorizontal,
   AlignStartVertical,
-  ArrowLeft,
   CheckCircle2,
   CheckSquare,
   ChevronDownSquare,
@@ -1331,11 +1331,11 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           {/* Left: Back + Title + Autosave status */}
           <div className="flex items-center gap-2.5 min-w-0">
-            <Button variant="ghost" size="icon" asChild>
-              <Link href="/teacher/worksheets" title={tr("Quay lại danh sách Worksheet", "Back to worksheets")}>
-                <ArrowLeft className="h-4 w-4" />
-              </Link>
-            </Button>
+            <BackLink
+              iconOnly
+              fallbackHref="/teacher/worksheets"
+              label={tr("Quay lại", "Back")}
+            />
             <div className="min-w-0">
               <input
                 value={title}

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { BackLink } from "@/components/navigation/BackLink";
 import { getI18n } from "@/lib/i18n/server";
 import { getAppName } from "@/lib/utils";
 
@@ -78,9 +78,7 @@ export default async function PrivacyPage() {
           </section>
         ))}
       </div>
-      <Link href="/login" className="mt-10 inline-block text-sm font-semibold text-[#4F46E5] hover:underline">
-        ← {tr("Về trang đăng nhập", "Back to sign in")}
-      </Link>
+      <BackLink fallbackHref="/login" label={tr("Quay lại", "Back")} className="mt-10" />
     </main>
   );
 }

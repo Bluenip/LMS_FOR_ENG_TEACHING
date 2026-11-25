@@ -103,7 +103,7 @@ export default function TeacherWorksheetsPage() {
     const url = new URL(window.location.href);
     if (next === "lessons") url.searchParams.set("tab", "lessons");
     else url.searchParams.delete("tab");
-    window.history.replaceState(null, "", url.toString());
+    window.history.replaceState(window.history.state, "", url.toString());
   };
   const [wsQuery, setWsQuery] = useState("");
   const [wsSort, setWsSort] = useState<WorksheetSort>("updated_desc");

@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/BackLink";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -8,7 +9,6 @@ import { apiFetchJson } from "@/lib/api-client";
 import { toast } from "sonner";
 import {
   AlertTriangle,
-  ArrowLeft,
   Camera,
   CheckCircle2,
   ClipboardX,
@@ -501,11 +501,11 @@ export default function StudentAssignmentRulesPage() {
                   : vi.proctor.startExam}
             </Button>
 
-            <Button variant="secondary" className="w-full" asChild>
-              <Link href="/student">
-                <ArrowLeft className="h-4 w-4" /> {tr("Quay lại danh sách bài tập", "Back to assignments")}
-              </Link>
-            </Button>
+            <BackLink
+              fallbackHref="/student"
+              label={tr("Quay lại", "Back")}
+              className="w-full justify-center rounded-xl bg-[#EFF4FF] px-4 hover:no-underline"
+            />
           </div>
         </div>
       </div>

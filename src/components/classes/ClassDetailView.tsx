@@ -1,8 +1,9 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/BackLink";
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiFetchJson } from "@/lib/api-client";
@@ -180,6 +181,8 @@ function LessonPdfModal({ fileKey, title, onClose }: { fileKey: string; title: s
   );
 }
 
+const CLASS_TABS = ["feed", "assignments", "lessons", "students", "settings"] as const;
+
 export function ClassDetailView({
   initialClass,
   isTeacher,
@@ -213,6 +216,20 @@ export function ClassDetailView({
   const uploadAbortRef = useRef<AbortController | null>(null);
   const uploadJobIdRef = useRef<string | null>(null);
   const [viewingPdf, setViewingPdf] = useState<{ fileKey: string; title: string } | null>(null);
+  // Selected tab lives in the URL (?tab=assignments) so Back from a grading / leaderboard page
+  // returns to the same tab, and links can open a tab directly.
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() => {
+    const t = searchParams.get("tab");
+    return t && CLASS_TABS.includes(t as (typeof CLASS_TABS)[number]) ? t : "feed";
+  });
+  const changeTab = (next: string) => {
+    setActiveTab(next);
+    const url = new URL(window.location.href);
+    if (next === "feed") url.searchParams.delete("tab");
+    else url.searchParams.set("tab", next);
+    window.history.replaceState(window.history.state, "", url.toString());
+  };
   const [removingLesson, setRemovingLesson] = useState<{ id: string; title: string } | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const canEditLesson = (lesson: { ownerId?: string | null }) =>
@@ -490,6 +507,11 @@ export function ClassDetailView({
 
   return (
     <div className="space-y-6">
+      <BackLink
+        fallbackHref={isTeacher ? "/teacher" : "/student/classes"}
+        label={tr("Lớp học", "Classes")}
+        className="-mb-3"
+      />
       {/* Stitch Class Banner */}
       <div className="rounded-3xl bg-gradient-to-r from-[#3525CD] via-[#4F46E5] to-[#6366F1] p-6 sm:p-8 text-white shadow-lg">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -563,7 +585,7 @@ export function ClassDetailView({
       </div>
 
       {/* Main Class Tabs */}
-      <Tabs defaultValue="feed">
+      <Tabs value={activeTab} onValueChange={changeTab}>
         <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="feed" className="gap-1.5">
             <MessageSquare className="h-4 w-4" />

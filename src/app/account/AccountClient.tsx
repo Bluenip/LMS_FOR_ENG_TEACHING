@@ -1,7 +1,7 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/BackLink";
 import { useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { toast } from "sonner";
@@ -119,12 +119,7 @@ export function AccountClient({
   return (
     <div className="mx-auto max-w-xl space-y-5">
         {!isForced && (
-          <Link
-            href={homeHref}
-            className="inline-flex min-h-[40px] items-center text-sm font-semibold text-[#4F46E5] hover:underline"
-          >
-            ← {tr("Về trang chính", "Back to home")}
-          </Link>
+          <BackLink fallbackHref={homeHref} label={tr("Quay lại", "Back")} />
         )}
 
         <div className="flex flex-wrap items-center gap-2.5">

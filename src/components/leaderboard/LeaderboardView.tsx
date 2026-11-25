@@ -1,5 +1,6 @@
 "use client";
 
+import { BackLink } from "@/components/navigation/BackLink";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetchJson } from "@/lib/api-client";
@@ -98,8 +99,13 @@ export function LeaderboardView({
       {/* Stitch Header & Controls */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
+          <BackLink
+            fallbackHref={isTeacher ? `/teacher/classes/${classId}` : `/student/classes/${classId}`}
+            label={className}
+            className="text-xs"
+          />
           <p className="text-xs font-semibold text-[#464555]">
-            {className} {tr("› Bảng vinh danh & Xếp hạng", "› Hall of fame & ranking")}
+            {tr("Bảng vinh danh & Xếp hạng", "Hall of fame & ranking")}
           </p>
           <h1 className="mt-0.5 text-2xl font-bold text-[#0B1C30]">
             {vi.leaderboard.title} — {className}

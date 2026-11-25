@@ -37,6 +37,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { WorksheetPicker } from "@/components/assignments/WorksheetPicker";
+import { BackLink } from "@/components/navigation/BackLink";
+import { previousInAppUrl } from "@/lib/navigation-history";
 import { ClassPicker } from "@/components/assignments/ClassPicker";
 
 interface WorksheetOption {
@@ -93,6 +95,17 @@ function toLocalInput(iso: string | null): string {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/**
+ * Where to go after saving: back to the class page / assignment list / dashboard the teacher came
+ * from (with its tab and filters), otherwise the assignment list. Pushing (not history.back) makes
+ * sure the page shows the new data.
+ */
+function afterSaveUrl(): string {
+  const prev = previousInAppUrl();
+  if (prev && /^\/teacher(\/classes\/[^/?]+|\/assignments)?(\?|$)/.test(prev)) return prev;
+  return "/teacher/assignments";
 }
 
 const DUE_PRESETS = [
@@ -400,7 +413,7 @@ function NewAssignmentForm() {
           ? tr("Đã cập nhật bài tập đã giao.", "Assignment updated.")
           : tr(`Đã giao bài cho ${json.assignments.length} lớp thành công!`, `Assigned to ${json.assignments.length} class(es) successfully!`)
       );
-      router.push("/teacher/assignments");
+      router.push(afterSaveUrl());
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : vi.common.errorGeneric);
@@ -443,8 +456,9 @@ function NewAssignmentForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-6 pb-28 lg:pb-12">
       <div>
+        <BackLink fallbackHref="/teacher/assignments" label={tr("Quay lại", "Back")} className="text-xs" />
         <p className="text-xs font-semibold text-[#464555]">
-          {tr("Worksheet Studio › Giao bài & Cấu hình giám sát", "Worksheet Studio › Assign & proctoring settings")}
+          {tr("Giao bài & Cấu hình giám sát", "Assign & proctoring settings")}
         </p>
         <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-[#0B1C30]">
           {isEdit ? tr("Sửa bài tập đã giao", "Edit assignment") : vi.assignments.createTitle}
