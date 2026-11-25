@@ -440,7 +440,7 @@ export default function TeacherWorksheetsPage() {
       <div
         role="tablist"
         aria-label={tr("Kho lưu trữ", "Library")}
-        className="inline-grid grid-cols-3 gap-1 rounded-xl bg-[#EFF4FF] p-1"
+        className="grid w-full grid-cols-3 gap-1 rounded-xl bg-[#EFF4FF] p-1 sm:inline-grid sm:w-auto"
       >
         {(
           [
@@ -457,7 +457,7 @@ export default function TeacherWorksheetsPage() {
             data-testid={`library-tab-${id}`}
             onClick={() => switchLibraryTab(id)}
             className={cn(
-              "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-5 text-sm font-bold transition",
+              "inline-flex min-h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-xs font-bold transition sm:gap-2 sm:px-5 sm:text-sm",
               libraryTab === id ? "bg-white text-[#3525CD] shadow-sm" : "text-[#464555] hover:text-[#0B1C30]"
             )}
           >
