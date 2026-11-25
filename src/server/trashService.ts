@@ -1,5 +1,6 @@
 import type { DriveFileKind, Role } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { TRASH_DAYS } from "@/lib/trash";
 import { AppError } from "@/lib/errors";
 import { getStorageProvider } from "@/lib/storage";
 import { listTrashedDriveFileIds, trashDriveFile, untrashDriveFile } from "@/lib/drive/google-drive";
@@ -18,7 +19,7 @@ import { deleteWorksheet } from "@/server/worksheetService";
  * restore it; if a file is restored in Drive, the item is restored in Pivora too.
  */
 
-export const CONTENT_TRASH_DAYS = 30;
+export const CONTENT_TRASH_DAYS = TRASH_DAYS;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 type Actor = { id: string; role: Role };

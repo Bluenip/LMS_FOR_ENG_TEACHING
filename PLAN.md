@@ -16,7 +16,7 @@
   - 4 vai trò Admin / Giáo viên / Học sinh / Phụ huynh; phân quyền ở `src/middleware.ts` và `src/lib/permissions.ts` (`requireLayoutUser`, `requireAuth`, `requireRole`, `requireTeacherOfClass`, `requireTeacherOfAssignment`…).
   - **Không cho tự đăng ký:** admin tạo mọi tài khoản ở `/admin`; giáo viên tạo học sinh và phụ huynh trong lớp (`CreateAccountForm`).
   - Admin: reset mật khẩu (mật khẩu tạm, bắt đổi khi đăng nhập: `mustChangePassword`), khoá/mở, đổi vai trò (có xác nhận; đổi vai trò thì đăng xuất người đó; **chặn** hạ quyền giáo viên còn sở hữu lớp/worksheet).
-  - **Thùng rác tài khoản:** xoá = chuyển vào thùng rác (`User.deletedAt`), khôi phục được trong 90 ngày, sau đó tự xoá vĩnh viễn (`purgeExpiredTrash`, chạy khi admin mở dashboard); có "Xoá vĩnh viễn" (gõ lại email).
+  - **Thùng rác tài khoản:** xoá = chuyển vào thùng rác (`User.deletedAt`), khôi phục được trong 30 ngày, sau đó tự xoá vĩnh viễn (`purgeExpiredTrash`, chạy khi admin mở dashboard); có "Xoá vĩnh viễn" (gõ lại email).
   - Trang `/account` cho mọi vai trò: sửa hồ sơ (tên, email, SĐT, ngày sinh, giới tính, giới thiệu), ảnh đại diện, đổi mật khẩu (đăng xuất các thiết bị khác qua `passwordChangedAt`).
   - Phiên cũ (user bị xoá / khoá / đổi vai trò / đổi mật khẩu) được xoá qua `/api/auth/clear-session?reason=...`.
 - **Admin xem toàn hệ thống:** tất cả lớp (`/teacher`), tất cả bài đã giao (`/teacher/assignments`, lọc theo giáo viên), tất cả worksheet (tab "Của giáo viên khác (tất cả)"); sửa / sao chép / giao được mọi thứ.

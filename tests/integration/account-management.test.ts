@@ -298,11 +298,11 @@ describe("Account deletion (getDeletionImpact & deleteAccount)", () => {
     await restoreAccount({ id: adminId, role: "ADMIN" }, created.user.id);
     expect((await prisma.user.findUnique({ where: { id: created.user.id } }))?.deletedAt).toBeNull();
 
-    // trashed again, then the 90-day window passes -> purged with everything it owns
+    // trashed again, then the trash window passes -> purged with everything it owns
     await deleteAccount({ id: adminId, role: "ADMIN" }, created.user.id, emails.deletableUser);
     await prisma.user.update({
       where: { id: created.user.id },
-      data: { deletedAt: new Date(Date.now() - 91 * 86_400_000) },
+      data: { deletedAt: new Date(Date.now() - 31 * 86_400_000) },
     });
     expect(await purgeExpiredTrash()).toBeGreaterThanOrEqual(1);
 

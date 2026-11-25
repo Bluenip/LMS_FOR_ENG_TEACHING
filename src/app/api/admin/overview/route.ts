@@ -19,7 +19,7 @@ export async function GET(req: Request) {
         ? (roleParam as Role)
         : undefined;
 
-    // accounts past the 90-day trash window are purged whenever an admin opens the dashboard
+    // accounts past the trash window (TRASH_DAYS) are purged whenever an admin opens the dashboard
     await purgeExpiredTrash();
     const [stats, users, parentLinks, trash] = await Promise.all([
       getAdminSystemStats(),

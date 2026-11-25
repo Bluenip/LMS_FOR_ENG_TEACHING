@@ -4,6 +4,7 @@ import type { Instrumentation } from "next";
  * Runs once when the Next.js Node.js server starts.
  * 1. Schedules Google Drive cleanup (`pruneDrive`) every DRIVE_PRUNE_INTERVAL_MINUTES (default 60; 0 disables).
  * 2. Schedules daily incremental teacher auto-backup (`runDailyAutoBackup`) at DRIVE_AUTO_BACKUP_HOUR (default 02:00).
+ *    The same daily run moves orphaned Pivora files on Drive to Drive's trash (`trashDriveOrphans`).
  * 3. Hourly: syncs the library trash with Google Drive's trash and deletes items older than 30 days.
  */
 export async function register() {
@@ -51,8 +52,10 @@ export async function register() {
         if (now.getHours() !== backupHour || lastRanDay === dayKey) return;
         lastRanDay = dayKey;
         try {
-          const { runDailyAutoBackup } = await import("./server/driveService");
+          const { runDailyAutoBackup, trashDriveOrphans } = await import("./server/driveService");
           await runDailyAutoBackup();
+          // daily: Pivora files on Drive that no record points to go to Drive's trash
+          await trashDriveOrphans();
         } catch (err) {
           console.error(
             "[Drive Instrumentation] Scheduled auto-backup failed:",

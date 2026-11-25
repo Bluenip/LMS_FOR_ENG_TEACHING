@@ -1,5 +1,6 @@
 "use client";
 
+import { TRASH_DAYS } from "@/lib/trash";
 import { useEffect, useState } from "react";
 import { AlertTriangle, ArrowRightLeft, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -42,7 +43,7 @@ export function DeleteAccountDialog({
   onClose: () => void;
   onDeleted: () => void;
   onRequestTransfer?: (target: DeleteAccountTarget) => void;
-  /** "trash": move to the 90-day trash (restorable). "purge": delete forever from the trash. */
+  /** "trash": move to the trash (restorable for TRASH_DAYS). "purge": delete forever from the trash. */
   mode?: "trash" | "purge";
 }) {
   const purge = mode === "purge";
@@ -103,8 +104,8 @@ export function DeleteAccountDialog({
         purge
           ? tr("Đã xoá vĩnh viễn tài khoản.", "Account permanently deleted.")
           : tr(
-              "Đã chuyển tài khoản vào thùng rác (khôi phục được trong 90 ngày).",
-              "Account moved to the trash (restorable for 90 days)."
+              `Đã chuyển tài khoản vào thùng rác (khôi phục được trong ${TRASH_DAYS} ngày).`,
+              `Account moved to the trash (restorable for ${TRASH_DAYS} days).`
             )
       );
       onDeleted();
@@ -145,8 +146,8 @@ export function DeleteAccountDialog({
                     "This action cannot be undone. The following linked data will also be removed:"
                   )
                 : tr(
-                    "Tài khoản bị đăng xuất và không đăng nhập được nữa. Bạn có thể khôi phục trong 90 ngày; sau đó tài khoản và toàn bộ dữ liệu sau sẽ bị xoá vĩnh viễn:",
-                    "The account is signed out and can no longer sign in. You can restore it within 90 days; after that the account and all of this data are deleted forever:"
+                    `Tài khoản bị đăng xuất và không đăng nhập được nữa. Bạn có thể khôi phục trong ${TRASH_DAYS} ngày; sau đó tài khoản và toàn bộ dữ liệu sau sẽ bị xoá vĩnh viễn:`,
+                    `The account is signed out and can no longer sign in. You can restore it within ${TRASH_DAYS} days; after that the account and all of this data are deleted forever:`
                   )}
             </p>
             {loadingImpact ? (

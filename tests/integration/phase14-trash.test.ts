@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 const drive = vi.hoisted(() => ({
   trashed: new Set<string>(),
   gone: new Set<string>(),
+  active: [] as Array<{ id: string; name: string; createdTime?: string; appProperties?: Record<string, string> }>,
 }));
 vi.mock("@/lib/drive/google-drive", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/drive/google-drive")>();
@@ -18,6 +19,7 @@ vi.mock("@/lib/drive/google-drive", async (importOriginal) => {
       return !drive.gone.has(id);
     }),
     listTrashedDriveFileIds: vi.fn(async () => [...drive.trashed]),
+    listActiveAppFiles: vi.fn(async () => drive.active.filter((f) => !drive.trashed.has(f.id))),
   };
 });
 
@@ -26,6 +28,7 @@ import { createAccount } from "@/server/accountService";
 import { createClass } from "@/server/classService";
 import { createLesson, createLessonItem, listClassLessons, listLibraryLessons } from "@/server/lessonService";
 import { createWorksheet, listTeacherWorksheets } from "@/server/worksheetService";
+import { trashDriveOrphans } from "@/server/driveService";
 import {
   deleteForever,
   listTrash,
@@ -96,6 +99,7 @@ beforeAll(async () => {
 beforeEach(() => {
   drive.trashed.clear();
   drive.gone.clear();
+  drive.active = [];
 });
 
 afterAll(async () => {
@@ -179,5 +183,26 @@ describe("Phase 14: library trash", () => {
     });
     await purgeExpiredContentTrash();
     expect(await prisma.worksheet.findUnique({ where: { id: ws.id } })).toBeNull();
+  });
+});
+
+describe("Phase 14: Drive orphan cleanup", () => {
+  it("trashes only old Pivora files that no record points to", async () => {
+    const { driveFileId: knownId } = await worksheetOnDrive(`${prefix} Known`);
+    const old = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    const fresh = new Date().toISOString();
+    drive.active = [
+      { id: knownId, name: "known.pdf", createdTime: old, appProperties: { engclassKind: "WORKSHEET_PDF" } },
+      { id: `${prefix}-orphan`, name: "orphan.pdf", createdTime: old, appProperties: { engclassKind: "WORKSHEET_PDF" } },
+      { id: `${prefix}-uploading`, name: "new.mp4", createdTime: fresh, appProperties: { engclassKind: "LESSON_FILE" } },
+      { id: `${prefix}-foreign`, name: "not-ours.pdf", createdTime: old },
+    ];
+
+    const res = await trashDriveOrphans();
+    expect(res.orphansTrashed).toBe(1);
+    expect(drive.trashed.has(`${prefix}-orphan`)).toBe(true);
+    expect(drive.trashed.has(knownId)).toBe(false);
+    expect(drive.trashed.has(`${prefix}-uploading`)).toBe(false);
+    expect(drive.trashed.has(`${prefix}-foreign`)).toBe(false);
   });
 });

@@ -1,5 +1,6 @@
 "use client";
 
+import { TRASH_DAYS } from "@/lib/trash";
 import { Suspense, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetchJson } from "@/lib/api-client";
@@ -458,7 +459,7 @@ export default function AdminPortalPage() {
         </div>
       </section>
 
-      {/* Trash: deleted accounts, restorable for 90 days */}
+      {/* Trash: deleted accounts, restorable for TRASH_DAYS */}
       {data.trash.length > 0 && (
         <section className="stitch-card overflow-hidden">
           <div className="border-b border-slate-100 px-6 py-4">
@@ -468,8 +469,8 @@ export default function AdminPortalPage() {
             </h2>
             <p className="mt-1 text-xs text-[#464555]">
               {tr(
-                "Tài khoản đã xoá được giữ 90 ngày để khôi phục, sau đó bị xoá vĩnh viễn cùng toàn bộ dữ liệu.",
-                "Deleted accounts are kept for 90 days so they can be restored, then removed forever with all their data."
+                `Tài khoản đã xoá được giữ ${TRASH_DAYS} ngày để khôi phục, sau đó bị xoá vĩnh viễn cùng toàn bộ dữ liệu.`,
+                `Deleted accounts are kept for ${TRASH_DAYS} days so they can be restored, then removed forever with all their data.`
               )}
             </p>
           </div>

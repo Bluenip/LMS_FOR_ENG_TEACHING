@@ -1037,6 +1037,34 @@ export async function untrashDriveFile(connectionId: string, driveFileId: string
   return true;
 }
 
+/** A non-folder file this app created on Drive (with Pivora's appProperties markers). */
+export interface DriveAppFile {
+  id: string;
+  name: string;
+  createdTime?: string;
+  appProperties?: Record<string, string>;
+}
+
+/** Lists this app's non-trashed files (drive.file scope only returns files the app created). */
+export async function listActiveAppFiles(connectionId: string, maxPages = 20): Promise<DriveAppFile[]> {
+  const files: DriveAppFile[] = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < maxPages; page++) {
+    const params = new URLSearchParams({
+      q: "trashed = false and mimeType != 'application/vnd.google-apps.folder'",
+      pageSize: "1000",
+      fields: "nextPageToken,files(id,name,createdTime,appProperties)",
+      ...(pageToken ? { pageToken } : {}),
+    });
+    const res = await driveFetch(connectionId, `${getDriveApiBase()}/files?${params}`);
+    const body = await parseJsonOrThrow<{ nextPageToken?: string; files?: DriveAppFile[] }>(res);
+    files.push(...(body.files ?? []));
+    if (!body.nextPageToken) break;
+    pageToken = body.nextPageToken;
+  }
+  return files;
+}
+
 /**
  * Ids of this app's files that are currently in Google Drive's trash (drive.file scope only lists
  * files the app created or was given), e.g. after an admin deleted them directly in Drive.

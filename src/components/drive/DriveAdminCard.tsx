@@ -139,16 +139,26 @@ export function DriveAdminCard() {
         unshared: number;
         failed: number;
         skippedNoConnection: boolean;
+        orphans: { scanned: number; orphansTrashed: number; failed: number };
+        trashSync: { trashedFromDrive: number; restoredFromDrive: number };
       }>("/api/drive/maintenance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: "{}",
       });
+      const failed = res.failed + res.orphans.failed;
       toast.success(
         tr(
-          `Đã dọn xong: chuyển thùng rác ${res.trashedOnDrive} file, xoá ${res.removedRecords} bản ghi, thu hồi chia sẻ ${res.unshared} file.`,
-          `Cleanup finished: trashed ${res.trashedOnDrive} file(s), removed ${res.removedRecords} record(s), unshared ${res.unshared} file(s).`
-        )
+          `Đã dọn xong. Quét ${res.orphans.scanned} file của Pivora trên Drive: ${res.orphans.orphansTrashed} file mồ côi vào thùng rác Drive. ` +
+            `Hàng chờ xoá: ${res.trashedOnDrive} file. Thu hồi link công khai: ${res.unshared}. ` +
+            `Đồng bộ thùng rác: ${res.trashSync.trashedFromDrive} mục vào, ${res.trashSync.restoredFromDrive} mục khôi phục.` +
+            (failed > 0 ? ` (${failed} thao tác lỗi, sẽ thử lại lần sau)` : ""),
+          `Cleanup done. Scanned ${res.orphans.scanned} Pivora files on Drive: ${res.orphans.orphansTrashed} orphan(s) moved to Drive's trash. ` +
+            `Delete queue: ${res.trashedOnDrive} file(s). Public links revoked: ${res.unshared}. ` +
+            `Trash sync: ${res.trashSync.trashedFromDrive} moved in, ${res.trashSync.restoredFromDrive} restored.` +
+            (failed > 0 ? ` (${failed} action(s) failed, retried next time)` : "")
+        ),
+        { duration: 10000 }
       );
       void refetch();
     } catch (err) {
@@ -233,9 +243,13 @@ export function DriveAdminCard() {
                   onClick={handlePrune}
                   disabled={pruning}
                   data-testid="drive-prune-btn"
+                  title={tr(
+                    "Chạy ngay các việc vốn tự chạy định kỳ: chuyển file mồ côi của Pivora (không còn thuộc phiếu, bài giảng, bài nộp nào) và file chờ xoá vào thùng rác Drive, thu hồi link công khai lỡ bật, đồng bộ thùng rác. Không xoá vĩnh viễn gì.",
+                    "Runs the periodic jobs now: moves Pivora's orphaned files and queued deletions to Drive's trash, revokes accidental public links, syncs the trash. Nothing is deleted forever."
+                  )}
                 >
                   <Trash2 className="h-4 w-4 text-[#F97316]" />
-                  {pruning ? tr("Đang dọn…", "Cleaning…") : tr("Dọn file mồ côi", "Prune orphan files")}
+                  {pruning ? tr("Đang dọn…", "Cleaning…") : tr("Dọn dẹp Drive ngay", "Run Drive cleanup")}
                 </Button>
                 <Button
                   size="sm"

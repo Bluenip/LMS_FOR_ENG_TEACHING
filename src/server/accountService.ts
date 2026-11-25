@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { TRASH_DAYS } from "@/lib/trash";
 import bcrypt from "bcryptjs";
 import type { Role } from "@prisma/client";
 import { prisma } from "@/lib/db";
@@ -259,7 +260,7 @@ export async function getDeletionImpact(targetId: string) {
 }
 
 /** Deleted accounts stay in the trash this long (restorable), then everything they own is purged. */
-export const TRASH_RETENTION_DAYS = 90;
+export const TRASH_RETENTION_DAYS = TRASH_DAYS;
 
 async function loadDeleteTarget(actor: { id: string; role: Role }, targetId: string, confirmEmail: string) {
   if (actor.role !== "ADMIN") throw new AppError("Chỉ quản trị viên được xoá tài khoản.", 403, "FORBIDDEN");

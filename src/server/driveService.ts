@@ -39,6 +39,7 @@ import {
   startResumableUpload,
   statesMatch,
   trashDriveFile,
+  listActiveAppFiles,
   uploadBufferToDrive,
   userScopeKey,
   downloadDriveBuffer,
@@ -1590,6 +1591,71 @@ export async function pruneDrive(graceHours = 24, at = Date.now()): Promise<Driv
   });
   result.removedRecords += staleTombstones.count;
 
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Orphan scan: Pivora files on Drive that nothing in the database points to
+// ---------------------------------------------------------------------------
+
+export interface DriveOrphanScanResult {
+  scanned: number;
+  orphansTrashed: number;
+  failed: number;
+  failedConnections: number;
+}
+
+/**
+ * Moves to Google Drive's trash (never deletes forever) the files Pivora created that no worksheet,
+ * lesson, submission, backup or upload record references any more — e.g. left behind when the server
+ * restarted between uploading a file and saving its record.
+ * Safety: only files carrying Pivora's `engclassKind` marker, older than `graceHours` (so uploads in
+ * progress are never touched); folders are excluded.
+ */
+export async function trashDriveOrphans(graceHours = 24, at = Date.now()): Promise<DriveOrphanScanResult> {
+  const result: DriveOrphanScanResult = { scanned: 0, orphansTrashed: 0, failed: 0, failedConnections: 0 };
+  const cutoff = at - graceHours * 3600 * 1000;
+
+  const [driveFiles, uploads, lessonItems, backups, queued] = await Promise.all([
+    prisma.driveFile.findMany({ select: { driveFileId: true } }),
+    prisma.driveUpload.findMany({ where: { driveFileId: { not: null } }, select: { driveFileId: true } }),
+    prisma.lessonItem.findMany({ where: { driveFileId: { not: null } }, select: { driveFileId: true } }),
+    prisma.worksheet.findMany({ where: { lastDriveBackupFileId: { not: null } }, select: { lastDriveBackupFileId: true } }),
+    prisma.driveTrash.findMany({ select: { driveFileId: true } }),
+  ]);
+  const known = new Set<string>([
+    ...driveFiles.map((f) => f.driveFileId),
+    ...uploads.map((u) => u.driveFileId!),
+    ...lessonItems.map((i) => i.driveFileId!),
+    ...backups.map((w) => w.lastDriveBackupFileId!),
+    ...queued.map((q) => q.driveFileId),
+  ]);
+
+  const connections = await prisma.driveConnection.findMany({ where: { status: "ACTIVE" }, select: { id: true } });
+  for (const conn of connections) {
+    let files;
+    try {
+      files = await listActiveAppFiles(conn.id);
+    } catch (err) {
+      result.failedConnections++;
+      console.error("[Drive Orphans] listing failed:", err instanceof Error ? err.message : "unknown");
+      continue;
+    }
+    for (const f of files) {
+      if (!f.appProperties?.engclassKind) continue; // not created by Pivora's storage
+      result.scanned++;
+      if (known.has(f.id)) continue;
+      const created = f.createdTime ? Date.parse(f.createdTime) : NaN;
+      if (!Number.isFinite(created) || created > cutoff) continue;
+      try {
+        await trashDriveFile(conn.id, f.id);
+        result.orphansTrashed++;
+      } catch (err) {
+        result.failed++;
+        console.error("[Drive Orphans] trash failed:", err instanceof Error ? err.message : "unknown");
+      }
+    }
+  }
   return result;
 }
 
