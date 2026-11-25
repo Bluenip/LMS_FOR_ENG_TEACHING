@@ -510,7 +510,7 @@ export function ClassDetailView({
       <BackLink
         fallbackHref={isTeacher ? "/teacher" : "/student/classes"}
         label={tr("Lớp học", "Classes")}
-        className="-mb-3"
+        className="-mb-2"
       />
       {/* Stitch Class Banner */}
       <div className="rounded-3xl bg-gradient-to-r from-[#3525CD] via-[#4F46E5] to-[#6366F1] p-6 sm:p-8 text-white shadow-lg">

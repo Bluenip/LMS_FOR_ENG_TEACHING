@@ -17,6 +17,9 @@ export interface ClassPickerOption {
  * selected classes show as removable chips, the rest sit in a scrollable checklist with
  * an accent-insensitive search and "select all results" / "clear".
  */
+/** Up to this many classes are shown as cards; above it the picker adds search and chips. */
+const COMPACT_LIMIT = 8;
+
 export function ClassPicker({
   classes,
   value,
@@ -58,6 +61,63 @@ export function ClassPicker({
             {c.name}
           </span>
         ))}
+      </div>
+    );
+  }
+
+  // Few classes: show them all as tappable cards (search would only add noise)
+  if (classes.length <= COMPACT_LIMIT) {
+    return (
+      <div className="space-y-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {[...classes]
+            .sort((a, b) => a.name.localeCompare(b.name, "vi", { numeric: true }))
+            .map((c) => {
+              const active = selectedSet.has(c.id);
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  role="checkbox"
+                  aria-checked={active}
+                  onClick={() => toggle(c.id)}
+                  className={cn(
+                    "flex min-h-12 items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
+                    active
+                      ? "border-[#4F46E5] bg-[#EEF2FF] ring-1 ring-[#4F46E5]"
+                      : "border-slate-200 bg-white hover:border-indigo-300"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border",
+                      active ? "border-[#4F46E5] bg-[#4F46E5] text-white" : "border-slate-300 bg-white"
+                    )}
+                  >
+                    {active && <Check className="h-3.5 w-3.5" />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-[#0B1C30]">{c.name}</span>
+                    <span className="flex items-center gap-1 text-[11px] text-[#464555]">
+                      <Users className="h-3 w-3" />
+                      {tr(`${c._count.enrollments} học sinh`, `${c._count.enrollments} students`)}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+        </div>
+        {classes.length === 0 ? (
+          <p className="text-sm text-[#464555]">{tr("Bạn chưa có lớp nào đang hoạt động.", "You have no active classes.")}</p>
+        ) : classes.length > 1 ? (
+          <button
+            type="button"
+            onClick={() => onChange(value.length === classes.length ? [] : classes.map((c) => c.id))}
+            className="inline-flex min-h-9 items-center rounded-lg px-2 text-xs font-semibold text-[#3525CD] hover:bg-[#EFF4FF]"
+          >
+            {value.length === classes.length ? tr("Bỏ chọn tất cả", "Unselect all") : tr("Chọn tất cả", "Select all")}
+          </button>
+        ) : null}
       </div>
     );
   }

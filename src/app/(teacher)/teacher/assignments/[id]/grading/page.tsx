@@ -555,7 +555,7 @@ export default function AssignmentGradingPage() {
           <BackLink
             fallbackHref={`/teacher/classes/${report.assignment.classId}?tab=assignments`}
             label={report.assignment.className}
-            className="text-xs"
+            className="mb-2"
           />
           <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-[#0B1C30]">
             {report.assignment.title}

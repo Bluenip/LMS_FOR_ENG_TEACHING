@@ -504,7 +504,7 @@ export default function StudentAssignmentRulesPage() {
             <BackLink
               fallbackHref="/student"
               label={tr("Quay lại", "Back")}
-              className="w-full justify-center rounded-xl bg-[#EFF4FF] px-4 hover:no-underline"
+              className="w-full justify-center rounded-xl"
             />
           </div>
         </div>

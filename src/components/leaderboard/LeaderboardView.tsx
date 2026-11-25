@@ -102,7 +102,7 @@ export function LeaderboardView({
           <BackLink
             fallbackHref={isTeacher ? `/teacher/classes/${classId}` : `/student/classes/${classId}`}
             label={className}
-            className="text-xs"
+            className="mb-3"
           />
           <p className="text-xs font-semibold text-[#464555]">
             {tr("Bảng vinh danh & Xếp hạng", "Hall of fame & ranking")}

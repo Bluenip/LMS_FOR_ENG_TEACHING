@@ -255,6 +255,50 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activePage, setActivePage] = useState(0);
   const [zoom, setZoom] = useState(1.0);
+  const pdfScrollRef = useRef<HTMLDivElement | null>(null);
+  /** set while a thumbnail jump is animating, so the scroll handler does not fight it */
+  const jumpingToPageRef = useRef<number | null>(null);
+
+  /** Jumps to a PDF page: inside the PDF panel on desktop, in the window on phones. */
+  const goToPage = (pageIndex: number) => {
+    setActivePage(pageIndex);
+    const container = pdfScrollRef.current;
+    const pageEl = container?.querySelector<HTMLElement>(`[data-pdf-page="${pageIndex}"]`);
+    if (!container || !pageEl) return;
+    const label = (pageEl.parentElement as HTMLElement | null) ?? pageEl; // include the "Page n / N" caption
+    jumpingToPageRef.current = pageIndex;
+    window.setTimeout(() => {
+      if (jumpingToPageRef.current === pageIndex) jumpingToPageRef.current = null;
+    }, 900);
+    const scrollsInside = container.scrollHeight > container.clientHeight + 1 &&
+      getComputedStyle(container).overflowY !== "visible";
+    if (scrollsInside) {
+      const top = label.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop - 12;
+      container.scrollTo({ top, behavior: "smooth" });
+    } else {
+      // phones: the window scrolls; keep the page below the sticky editor toolbar
+      const toolbar = document.querySelector<HTMLElement>("[data-editor-toolbar]");
+      const offset = (toolbar?.getBoundingClientRect().bottom ?? 80) + 12;
+      window.scrollTo({ top: window.scrollY + label.getBoundingClientRect().top - offset, behavior: "smooth" });
+    }
+  };
+
+  /** Highlights the thumbnail of the page currently at the top of the PDF panel. */
+  const syncActivePageFromScroll = () => {
+    const container = pdfScrollRef.current;
+    if (!container || jumpingToPageRef.current !== null) return;
+    const top = container.getBoundingClientRect().top + 80;
+    let current = 0;
+    container.querySelectorAll<HTMLElement>("[data-pdf-page]").forEach((el) => {
+      if (el.getBoundingClientRect().top <= top) current = Number(el.dataset.pdfPage ?? 0);
+    });
+    if (current !== activePage) {
+      setActivePage(current);
+      document
+        .querySelector<HTMLElement>(`[data-thumb-page="${current}"]`)
+        ?.scrollIntoView({ block: "nearest" });
+    }
+  };
   const [snapToGrid, setSnapToGrid] = useState(false);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "dirty" | "error">("saved");
   const [uploadingPdf, setUploadingPdf] = useState(false);
@@ -1327,7 +1371,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
   return (
     <div className="space-y-4">
       {/* Top Floating Stitch Toolbar */}
-      <div className="sticky top-16 z-30 rounded-2xl border border-slate-200/90 bg-white/95 p-3 shadow-toolbar backdrop-blur">
+      <div data-editor-toolbar className="sticky top-16 z-30 rounded-2xl border border-slate-200/90 bg-white/95 p-3 shadow-toolbar backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-3">
           {/* Left: Back + Title + Autosave status */}
           <div className="flex items-center gap-2.5 min-w-0">
@@ -1554,11 +1598,8 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                   <button
                     key={p.pageIndex}
                     type="button"
-                    onClick={() => {
-                      setActivePage(p.pageIndex);
-                      const el = document.querySelector(`[data-pdf-page="${p.pageIndex}"]`);
-                      el?.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }}
+                    data-thumb-page={p.pageIndex}
+                    onClick={() => goToPage(p.pageIndex)}
                     className={cn(
                       "w-full rounded-xl border p-2 text-left transition",
                       activePage === p.pageIndex
@@ -1787,9 +1828,13 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
             answerSheetSection
           ) : (
           <div
+            ref={pdfScrollRef}
+            onScroll={syncActivePageFromScroll}
+            data-testid="pdf-scroll"
             className={cn(
               "rounded-2xl border border-slate-200/80 bg-[#EFF4FF]/60 p-4 overflow-x-auto",
-              pdfFileKey && pages.length > 0 && "min-h-[540px]"
+              // desktop: the PDF scrolls inside its own panel so toolbar, pages and properties stay in view
+              hasPdf && "min-h-[540px] lg:h-[calc(100vh-17rem)] lg:min-h-[420px] lg:overflow-y-auto lg:overscroll-contain"
             )}
           >
             {pdfError && (
