@@ -126,7 +126,7 @@ Các biến môi trường quan trọng trong `.env`:
 | `DATABASE_URL` | `postgresql://engclass:...` | Chuỗi kết nối PostgreSQL |
 | `AUTH_SECRET` | *(tự sinh ≥ 32 ký tự)* | Khoá ký phiên đăng nhập & stream token audio |
 | `NEXT_PUBLIC_APP_NAME` | `Pivora` | Tên hiển thị trên giao diện |
-| `STORAGE_DRIVER` | `local` | `local` (`./uploads`) hoặc `s3` (S3/R2/MinIO) |
+| `STORAGE_DRIVER` | `local` | `drive` (khuyên dùng cho production: Google Drive là ổ lưu file chính), `local` (`./uploads`) hoặc `s3` (S3/R2/MinIO) |
 | `MAX_UPLOAD_SIZE_MB` | `20` | Giới hạn dung lượng upload PDF / Audio (MB) |
 | `PROCTOR_SNAPSHOT_RETENTION_DAYS` | `30` | Số ngày lưu ảnh bằng chứng camera trước khi xoá |
 | `SKIP_MEDIAPIPE_MODEL_DOWNLOAD` | `0` | Đặt `1` nếu cài đặt trong môi trường offline không tải model |

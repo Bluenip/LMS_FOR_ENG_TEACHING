@@ -36,7 +36,7 @@ export async function listTeacherClasses(
         select: {
           enrollments: { where: { status: "ACTIVE" } },
           assignments: true,
-          lessons: true,
+          classLessons: true,
         },
       },
     },
@@ -55,7 +55,7 @@ export async function listStudentClasses(studentId: string) {
             select: {
               enrollments: { where: { status: "ACTIVE" } },
               assignments: true,
-              lessons: true,
+              classLessons: true,
             },
           },
         },
@@ -142,8 +142,10 @@ export async function deleteClass(classId: string, actorId?: string) {
     where: { id: classId },
     select: { id: true, name: true, teacherId: true },
   });
+  // lesson files belong to library lessons (possibly shown in other classes): they are removed
+  // only when the lesson or the material itself is deleted
   const driveFiles = await prisma.driveFile.findMany({
-    where: { classId, trashedAt: null },
+    where: { classId, trashedAt: null, kind: { not: "LESSON_FILE" } },
     select: { id: true },
   });
   if (driveFiles.length > 0) {
@@ -249,11 +251,16 @@ export async function getClassDetail(classId: string) {
         },
         orderBy: { createdAt: "desc" },
       },
-      lessons: {
+      classLessons: {
         include: {
-          items: { orderBy: { order: "asc" } },
+          lesson: {
+            include: {
+              items: { orderBy: { order: "asc" } },
+              owner: { select: { id: true, name: true } },
+            },
+          },
         },
-        orderBy: { order: "asc" },
+        orderBy: [{ order: "asc" }, { createdAt: "asc" }],
       },
       assignments: {
         include: {
@@ -276,7 +283,12 @@ export async function getClassDetail(classId: string) {
   if (!cls) {
     throw new AppError("Không tìm thấy lớp học.", 404, "NOT_FOUND");
   }
-  return cls;
+  // lessons now come from the library (ClassLesson); keep the old `lessons` shape for the pages
+  const { classLessons, ...rest } = cls;
+  return {
+    ...rest,
+    lessons: classLessons.map((link) => ({ ...link.lesson, order: link.order })),
+  };
 }
 
 export async function approveEnrollment(classId: string, enrollmentId: string) {

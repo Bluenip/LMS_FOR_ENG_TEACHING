@@ -225,6 +225,7 @@ async function main() {
   await prisma.worksheetPage.deleteMany();
   await prisma.worksheet.deleteMany();
   await prisma.lessonItem.deleteMany();
+  await prisma.classLesson.deleteMany();
   await prisma.lesson.deleteMany();
   await prisma.comment.deleteMany();
   await prisma.post.deleteMany();
@@ -409,9 +410,12 @@ async function main() {
   await storage.put(lessonPdfKey, lessonPdf, "application/pdf");
 
   // Lessons for Class 1
+  // Lesson library (Phase 14): owned by the teacher, shown in class 12A1 through ClassLesson
   await prisma.lesson.create({
     data: {
       classId: class1.id,
+      ownerId: class1.teacherId,
+      classLinks: { create: { classId: class1.id, order: 0 } },
       title: "Chương 1: Thì hiện tại hoàn thành & Câu điều kiện",
       description: "Tài liệu tổng ôn ngữ pháp trọng tâm học kỳ II.",
       order: 0,
@@ -434,6 +438,25 @@ async function main() {
             type: "LINK",
             url: "https://dictionary.cambridge.org/",
             order: 2,
+          },
+        ],
+      },
+    },
+  });
+
+  // A lesson kept in the library but not given to any class yet
+  await prisma.lesson.create({
+    data: {
+      ownerId: class1.teacherId,
+      title: "Chương 2: Câu bị động (Passive Voice)",
+      description: "Lý thuyết + video luyện tập, chưa giao lớp nào.",
+      items: {
+        create: [
+          {
+            title: "Video: Passive Voice in 10 minutes",
+            type: "VIDEO",
+            url: "https://www.youtube.com/watch?v=4VDzv0Hkq1k",
+            order: 0,
           },
         ],
       },

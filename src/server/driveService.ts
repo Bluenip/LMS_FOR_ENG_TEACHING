@@ -878,8 +878,13 @@ export async function initDirectDriveUpload(
   }
 
   if (input.lessonId) {
+    // the lesson must be shown in this class and editable by the uploader (owner or admin)
     const lesson = await prisma.lesson.findFirst({
-      where: { id: input.lessonId, classId: cls.id },
+      where: {
+        id: input.lessonId,
+        classLinks: { some: { classId: cls.id } },
+        ...(user.role === "ADMIN" ? {} : { ownerId: user.id }),
+      },
       select: { id: true },
     });
     if (!lesson) {

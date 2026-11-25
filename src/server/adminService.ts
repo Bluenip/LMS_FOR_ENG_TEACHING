@@ -241,7 +241,7 @@ export async function getUserOwnedContent(fromUserId: string) {
         name: true,
         joinCode: true,
         archived: true,
-        _count: { select: { enrollments: true, assignments: true, lessons: true } },
+        _count: { select: { enrollments: true, assignments: true, classLessons: true } },
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -267,7 +267,17 @@ export async function getUserOwnedContent(fromUserId: string) {
     }),
   ]);
 
-  return { user, classes, worksheets, eligibleRecipients };
+  const ownedLessons = await prisma.lesson.count({ where: { ownerId: fromUserId } });
+  return {
+    user,
+    classes: classes.map(({ _count, ...c }) => ({
+      ...c,
+      _count: { enrollments: _count.enrollments, assignments: _count.assignments, lessons: _count.classLessons },
+    })),
+    worksheets,
+    lessonCount: ownedLessons,
+    eligibleRecipients,
+  };
 }
 
 export interface TransferOwnershipInput {
@@ -372,6 +382,32 @@ export async function transferOwnership(
       });
     }
 
+    // Library lessons follow: all of them with "transfer all", otherwise the ones shown only in
+    // the classes being moved (a lesson still used by the old owner's other classes stays theirs)
+    let lessonsMoved = 0;
+    if (input.transferAll) {
+      const res = await tx.lesson.updateMany({
+        where: { ownerId: fromUserId },
+        data: { ownerId: toUser.id },
+      });
+      lessonsMoved = res.count;
+    } else if (movedClassIds.length > 0) {
+      const candidates = await tx.lesson.findMany({
+        where: { ownerId: fromUserId, classLinks: { some: { classId: { in: movedClassIds } } } },
+        select: { id: true, classLinks: { select: { classId: true } } },
+      });
+      const movable = candidates
+        .filter((l) => l.classLinks.every((link) => movedClassIds.includes(link.classId)))
+        .map((l) => l.id);
+      if (movable.length > 0) {
+        const res = await tx.lesson.updateMany({
+          where: { id: { in: movable } },
+          data: { ownerId: toUser.id },
+        });
+        lessonsMoved = res.count;
+      }
+    }
+
     let driveFilesUpdated = 0;
     const driveOrConditions: Array<{ classId: { in: string[] } } | { worksheetId: { in: string[] } }> = [];
     if (movedClassIds.length > 0) driveOrConditions.push({ classId: { in: movedClassIds } });
@@ -410,6 +446,7 @@ export async function transferOwnership(
           worksheetCount: movedWorksheetIds.length,
           classIds: movedClassIds,
           worksheetIds: movedWorksheetIds,
+          lessonsMoved,
           driveFilesUpdated,
         },
       },
@@ -419,6 +456,7 @@ export async function transferOwnership(
     return {
       transferredClasses: movedClassIds.length,
       transferredWorksheets: movedWorksheetIds.length,
+      transferredLessons: lessonsMoved,
       driveFilesUpdated,
       fromUser: { id: fromUser.id, name: fromUser.name, email: fromUser.email },
       toUser: { id: toUser.id, name: toUser.name, email: toUser.email },

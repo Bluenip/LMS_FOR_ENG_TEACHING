@@ -19,6 +19,7 @@ import {
   Film,
   Headphones,
   KeyRound,
+  Library,
   Lock,
   MessageSquare,
   Pencil,
@@ -55,6 +56,7 @@ import {
 import { PdfCanvasPage, usePdfDocument } from "@/components/worksheet/PdfCanvasPage";
 import type { LessonItemType, ProctorMode, ViolationAction } from "@prisma/client";
 import { CreateAccountForm } from "@/components/accounts/CreateAccountForm";
+import { AddLessonsFromLibraryDialog } from "@/components/lessons/AddLessonsFromLibraryDialog";
 import {
   ResetPasswordDialog,
   type ResetPasswordTarget,
@@ -101,6 +103,9 @@ export interface ClassDetailData {
     title: string;
     description: string | null;
     order: number;
+    /** library owner: only they (or an admin) can edit the lesson's materials */
+    ownerId?: string | null;
+    owner?: { id: string; name: string } | null;
     items: Array<{
       id: string;
       title: string;
@@ -179,10 +184,12 @@ export function ClassDetailView({
   initialClass,
   isTeacher,
   currentUserId,
+  isAdmin = false,
 }: {
   initialClass: ClassDetailData;
   isTeacher: boolean;
   currentUserId: string;
+  isAdmin?: boolean;
 }) {
   const { m: vi, tr } = useI18n();
   const router = useRouter();
@@ -206,6 +213,10 @@ export function ClassDetailView({
   const uploadAbortRef = useRef<AbortController | null>(null);
   const uploadJobIdRef = useRef<string | null>(null);
   const [viewingPdf, setViewingPdf] = useState<{ fileKey: string; title: string } | null>(null);
+  const [removingLesson, setRemovingLesson] = useState<{ id: string; title: string } | null>(null);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const canEditLesson = (lesson: { ownerId?: string | null }) =>
+    isTeacher && (isAdmin || lesson.ownerId === currentUserId);
 
   const { data: driveStatus } = useQuery<DriveStatusPayload>({
     queryKey: ["drive-status", "class-detail"],
@@ -816,10 +827,28 @@ export function ClassDetailView({
                   placeholder={tr("Mô tả ngắn (tuỳ chọn)", "Short description (optional)")}
                 />
               </div>
-              <Button type="submit" size="sm">
-                <Plus className="h-4 w-4" />
-                {vi.lessons.createChapter}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="submit" size="sm">
+                  <Plus className="h-4 w-4" />
+                  {vi.lessons.createChapter}
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={() => setLibraryOpen(true)}>
+                  <Library className="h-4 w-4" />
+                  {tr("Thêm từ kho bài giảng", "Add from lesson library")}
+                </Button>
+                <Link
+                  href="/teacher/worksheets?tab=lessons"
+                  className="inline-flex min-h-9 items-center px-2 text-xs font-semibold text-[#3525CD] hover:underline"
+                >
+                  {tr("Quản lý kho bài giảng →", "Manage lesson library →")}
+                </Link>
+              </div>
+              <p className="text-[11px] text-[#464555]">
+                {tr(
+                  "Chương mới được lưu vào Kho lưu trữ › Bài giảng, có thể giao tiếp cho lớp khác. Sửa ở một nơi, mọi lớp đều cập nhật.",
+                  "New chapters are saved to Library › Lessons and can be given to other classes. Edit once, every class updates."
+                )}
+              </p>
             </form>
           )}
 
@@ -838,26 +867,29 @@ export function ClassDetailView({
                     )}
                   </div>
                   {isTeacher && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      {canEditLesson(lesson) ? (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => setAddingItemLessonId(lesson.id)}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          {vi.lessons.addItem}
+                        </Button>
+                      ) : (
+                        <Badge variant="neutral">
+                          {tr("Bài giảng của", "Lesson by")} {lesson.owner?.name ?? tr("giáo viên khác", "another teacher")}
+                        </Badge>
+                      )}
                       <Button
                         size="sm"
-                        variant="secondary"
-                        onClick={() => setAddingItemLessonId(lesson.id)}
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        {vi.lessons.addItem}
-                      </Button>
-                      <Button
-                        size="icon"
                         variant="ghost"
-                        onClick={async () => {
-                          await fetch(`/api/classes/${cls.id}/lessons/${lesson.id}`, {
-                            method: "DELETE",
-                          });
-                          await refreshClass();
-                        }}
+                        title={tr("Gỡ khỏi lớp này (vẫn còn trong kho)", "Remove from this class (stays in the library)")}
+                        onClick={() => setRemovingLesson({ id: lesson.id, title: lesson.title })}
                       >
-                        <Trash2 className="h-4 w-4 text-slate-400 hover:text-red-600" />
+                        <Trash2 className="h-4 w-4 text-slate-400" />
+                        <span className="text-xs text-[#464555]">{tr("Gỡ khỏi lớp", "Remove")}</span>
                       </Button>
                     </div>
                   )}
@@ -907,9 +939,10 @@ export function ClassDetailView({
                                 </a>
                               </Button>
                             )}
-                            {isTeacher && (
+                            {canEditLesson(lesson) && (
                               <button
                                 type="button"
+                                aria-label={tr("Xoá tài liệu", "Delete material")}
                                 onClick={async () => {
                                   await fetch(
                                     `/api/classes/${cls.id}/lessons/${lesson.id}/items/${item.id}`,
@@ -1253,6 +1286,54 @@ export function ClassDetailView({
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Remove a lesson from this class (it stays in the library) */}
+      <Dialog open={Boolean(removingLesson)} onOpenChange={(open) => !open && setRemovingLesson(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{tr("Gỡ bài giảng khỏi lớp?", "Remove lesson from this class?")}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-[#464555]">
+            {tr(
+              `“${removingLesson?.title ?? ""}” sẽ không còn hiện trong lớp ${cls.name}. Bài giảng và tài liệu vẫn nằm trong Kho lưu trữ và trong các lớp khác.`,
+              `“${removingLesson?.title ?? ""}” will no longer show in ${cls.name}. The lesson and its files stay in the library and in other classes.`
+            )}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRemovingLesson(null)}>
+              {tr("Huỷ", "Cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (!removingLesson) return;
+                const res = await fetch(`/api/classes/${cls.id}/lessons/${removingLesson.id}`, {
+                  method: "DELETE",
+                });
+                setRemovingLesson(null);
+                if (res.ok) {
+                  toast.success(tr("Đã gỡ bài giảng khỏi lớp.", "Lesson removed from the class."));
+                  await refreshClass();
+                } else {
+                  toast.error(tr("Không gỡ được bài giảng.", "Could not remove the lesson."));
+                }
+              }}
+            >
+              {tr("Gỡ khỏi lớp", "Remove")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {isTeacher && (
+        <AddLessonsFromLibraryDialog
+          open={libraryOpen}
+          onOpenChange={setLibraryOpen}
+          classId={cls.id}
+          existingLessonIds={cls.lessons.map((l) => l.id)}
+          onAdded={refreshClass}
+        />
+      )}
 
       {/* Add Lesson Item Dialog */}
       <Dialog

@@ -344,6 +344,21 @@ export const createLessonSchema = z.object({
   order: z.number().int().min(0).optional(),
 });
 
+export const updateLessonSchema = z.object({
+  title: z.string().trim().min(2).max(200).optional(),
+  description: z.string().trim().max(1000).optional().nullable(),
+});
+
+/** Exact set of classes that should show a library lesson. */
+export const lessonClassesSchema = z.object({
+  classIds: z.array(z.string().trim().min(1).max(64)).max(500),
+});
+
+/** Library lessons to show in a class (from the class page). */
+export const addLessonsToClassSchema = z.object({
+  lessonIds: z.array(z.string().trim().min(1).max(64)).min(1).max(200),
+});
+
 export const createLessonItemSchema = z.object({
   title: z.string().trim().min(2).max(200),
   type: z.nativeEnum(LessonItemType),

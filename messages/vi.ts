@@ -79,8 +79,8 @@ export const vi = {
   nav: {
     dashboard: "Tổng quan",
     classes: "Lớp học",
-    worksheets: "Worksheet",
-    assignments: "Bài tập",
+    worksheets: "Kho lưu trữ",
+    assignments: "Bài đã giao",
     leaderboard: "Bảng xếp hạng",
     liveProctor: "Phòng thi Live",
     reports: "Báo cáo",

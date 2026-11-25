@@ -4,8 +4,8 @@ import {
   requireMemberOfClass,
   requireTeacherOfClass,
 } from "@/lib/permissions";
-import { createLessonSchema } from "@/lib/validators";
-import { createLesson, listClassLessons } from "@/server/lessonService";
+import { addLessonsToClassSchema, createLessonSchema } from "@/lib/validators";
+import { addLessonsToClass, createLesson, listClassLessons } from "@/server/lessonService";
 
 export async function GET(
   _req: Request,
@@ -21,16 +21,25 @@ export async function GET(
   }
 }
 
+/**
+ * Body `{ title, description }`: creates a new lesson in the teacher's library and shows it here.
+ * Body `{ lessonIds }`: shows existing library lessons in this class.
+ */
 export async function POST(
   req: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await context.params;
-    await requireTeacherOfClass(id);
-    const body = await req.json();
+    const { user } = await requireTeacherOfClass(id);
+    const body = (await req.json()) as Record<string, unknown>;
+    if (Array.isArray(body.lessonIds)) {
+      const { lessonIds } = addLessonsToClassSchema.parse(body);
+      const result = await addLessonsToClass(user, id, lessonIds);
+      return NextResponse.json(result, { status: 201 });
+    }
     const data = createLessonSchema.parse(body);
-    const lesson = await createLesson(id, data);
+    const lesson = await createLesson(user.id, data, { classId: id });
     return NextResponse.json({ lesson }, { status: 201 });
   } catch (error) {
     return handleApiError(error);

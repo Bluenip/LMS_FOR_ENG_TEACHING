@@ -462,19 +462,33 @@ export async function authorizeFileDownload(
     return false;
   }
 
-  // Check if lesson item attachment
+  // Lesson material: owner, teachers of any class showing the lesson, and students enrolled there
   const lessonItem = await prisma.lessonItem.findFirst({
     where: { fileKey },
-    include: { lesson: { include: { class: true } } },
+    select: {
+      lesson: {
+        select: {
+          ownerId: true,
+          classLinks: { select: { classId: true, class: { select: { teacherId: true } } } },
+        },
+      },
+    },
   });
   if (lessonItem) {
-    const cls = lessonItem.lesson.class;
-    if (role === "TEACHER" && cls.teacherId === userId) return true;
-    if (role === "STUDENT") {
-      const enrolled = await prisma.enrollment.findUnique({
-        where: { classId_studentId: { classId: cls.id, studentId: userId } },
+    const { ownerId, classLinks } = lessonItem.lesson;
+    if (role === "TEACHER") {
+      return ownerId === userId || classLinks.some((l) => l.class.teacherId === userId);
+    }
+    if (role === "STUDENT" && classLinks.length > 0) {
+      const enrolled = await prisma.enrollment.findFirst({
+        where: {
+          studentId: userId,
+          status: "ACTIVE",
+          classId: { in: classLinks.map((l) => l.classId) },
+        },
+        select: { id: true },
       });
-      return enrolled?.status === "ACTIVE";
+      return Boolean(enrolled);
     }
     return false;
   }

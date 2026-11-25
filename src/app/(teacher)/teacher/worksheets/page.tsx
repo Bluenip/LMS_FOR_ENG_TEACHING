@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -8,10 +8,9 @@ import { apiFetchJson } from "@/lib/api-client";
 import { toast } from "sonner";
 import {
   AlertTriangle,
+  BookOpen,
   Archive,
   Cloud,
-  CloudDownload,
-  CloudUpload,
   Copy,
   Download,
   Edit3,
@@ -22,7 +21,6 @@ import {
   Plus,
   Search,
   Send,
-  Share2,
   Sparkles,
   Trash2,
   Upload,
@@ -31,7 +29,7 @@ import {
 import { cn, formatDateTime } from "@/lib/utils";
 import { foldText } from "@/lib/text-search";
 import { useI18n } from "@/lib/i18n/client";
-import { DriveImportDialog } from "@/components/drive/DriveImportDialog";
+import { LessonLibrary } from "@/components/lessons/LessonLibrary";
 import type { DriveStatusPayload } from "@/server/driveService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -95,15 +93,28 @@ export default function TeacherWorksheetsPage() {
   const queryClient = useQueryClient();
 
   const [tab, setTab] = useState<"mine" | "shared">("mine");
+  // Library tab lives in the URL (?tab=lessons) so links from class pages open it directly
+  const [libraryTab, setLibraryTab] = useState<"worksheets" | "lessons">("worksheets");
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tab") === "lessons") setLibraryTab("lessons");
+  }, []);
+  const switchLibraryTab = (next: "worksheets" | "lessons") => {
+    setLibraryTab(next);
+    const url = new URL(window.location.href);
+    if (next === "lessons") url.searchParams.set("tab", "lessons");
+    else url.searchParams.delete("tab");
+    window.history.replaceState(null, "", url.toString());
+  };
   const [wsQuery, setWsQuery] = useState("");
   const [wsSort, setWsSort] = useState<WorksheetSort>("updated_desc");
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [instructions, setInstructions] = useState("");
   const [creating, setCreating] = useState(false);
-  const [driveImportOpen, setDriveImportOpen] = useState(false);
-  const [backingUpWsId, setBackingUpWsId] = useState<string | null>(null);
-  const [backingUpAllDrive, setBackingUpAllDrive] = useState(false);
+  // Backup: pick some or all worksheets and download one .zip
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedWsIds, setSelectedWsIds] = useState<string[]>([]);
+  const [downloadingBackup, setDownloadingBackup] = useState(false);
 
   // Word auto-create modal state
   const [wordOpen, setWordOpen] = useState(false);
@@ -143,51 +154,40 @@ export default function TeacherWorksheetsPage() {
     queryFn: () => apiFetchJson<DriveStatusPayload>("/api/drive/status"),
   });
 
-  const driveConnected = Boolean(
-    driveStatus?.personal?.connected || driveStatus?.shared?.connected
-  );
   const driveRevoked =
     driveStatus?.personal?.status === "REVOKED" ||
     (!driveStatus?.personal?.connected && driveStatus?.shared?.status === "REVOKED");
 
-  const handleBackupWorksheetToDrive = async (wsId: string) => {
-    setBackingUpWsId(wsId);
+  /** Downloads one .zip with the selected worksheets (PDF + audio + answer keys). */
+  const handleDownloadBackup = async () => {
+    if (selectedWsIds.length === 0) return;
+    setDownloadingBackup(true);
     try {
-      const res = await apiFetchJson<{ fileName: string }>("/api/drive/backup", {
+      const res = await fetch("/api/worksheets/export-all", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ worksheetId: wsId }),
+        body: JSON.stringify({ ids: selectedWsIds }),
       });
-      toast.success(
-        tr(`Đã lưu "${res.fileName}" lên Google Drive!`, `Saved "${res.fileName}" to Google Drive!`)
-      );
-      queryClient.invalidateQueries({ queryKey: ["teacher-worksheets"] });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error ?? tr("Không tạo được file sao lưu", "Could not create the backup"));
+      }
+      const blob = await res.blob();
+      const name =
+        /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? "pivora-backup.zip";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(tr(`Đã tải ${selectedWsIds.length} phiếu.`, `Downloaded ${selectedWsIds.length} worksheet(s).`));
+      setSelectMode(false);
+      setSelectedWsIds([]);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : tr("Lưu lên Drive thất bại", "Drive backup failed"));
+      toast.error(err instanceof Error ? err.message : vi.common.errorGeneric);
     } finally {
-      setBackingUpWsId(null);
-    }
-  };
-
-  const handleBackupAllToDrive = async () => {
-    setBackingUpAllDrive(true);
-    try {
-      const res = await apiFetchJson<{ count: number; fileName: string }>("/api/drive/backup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ all: true }),
-      });
-      toast.success(
-        tr(
-          `Đã sao lưu ${res.count} worksheet lên Google Drive (${res.fileName})!`,
-          `Backed up ${res.count} worksheet(s) to Google Drive (${res.fileName})!`
-        )
-      );
-      queryClient.invalidateQueries({ queryKey: ["teacher-worksheets"] });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : tr("Sao lưu lên Drive thất bại", "Drive backup failed"));
-    } finally {
-      setBackingUpAllDrive(false);
+      setDownloadingBackup(false);
     }
   };
 
@@ -225,24 +225,6 @@ export default function TeacherWorksheetsPage() {
     }
   };
 
-  const handleToggleShare = async (ws: WorksheetRow) => {
-    const nextShared = !ws.isShared;
-    const res = await fetch(`/api/worksheets/${ws.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isShared: nextShared }),
-    });
-    if (res.ok) {
-      toast.success(
-        nextShared
-          ? tr("Đã chia sẻ phiếu cho các giáo viên khác trong hệ thống!", "Shared with other teachers in the LMS!")
-          : tr("Đã tắt chia sẻ — phiếu trở về chế độ riêng tư.", "Sharing turned off — worksheet is now private.")
-      );
-      queryClient.invalidateQueries({ queryKey: ["teacher-worksheets"] });
-    } else {
-      toast.error(tr("Không thể cập nhật trạng thái chia sẻ.", "Could not update sharing state."));
-    }
-  };
 
   const handleCloneShared = async (wsId: string) => {
     try {
@@ -409,11 +391,87 @@ export default function TeacherWorksheetsPage() {
   const currentTotal = tab === "mine" ? worksheets.length : sharedWorksheets.length;
   const currentShown = tab === "mine" ? visibleMine.length : visibleShared.length;
 
+  // Where new files (PDF, audio, lesson materials) are written: Drive works as the app's disk
+  const storageSource = driveStatus?.effectiveSource;
+  const storageOnDrive = storageSource === "personal" || storageSource === "shared";
+
+  const libraryHeader = (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-[#0B1C30]">{vi.nav.worksheets}</h1>
+        {driveStatus && (
+          <Link
+            href="/teacher/settings"
+            data-testid="storage-location"
+            className={cn(
+              "inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold",
+              storageOnDrive
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-amber-200 bg-amber-50 text-amber-800"
+            )}
+            title={tr("Nơi lưu file mới", "Where new files are stored")}
+          >
+            <Cloud className="h-3.5 w-3.5" />
+            {storageSource === "personal"
+              ? tr("File lưu trên Google Drive của bạn", "Files stored on your Google Drive")
+              : storageSource === "shared"
+                ? tr("File lưu trên Google Drive của trường", "Files stored on the school Google Drive")
+                : tr("File đang lưu trên máy chủ, kết nối Google Drive →", "Files stored on the server, connect Google Drive →")}
+          </Link>
+        )}
+      </div>
+      <div
+        role="tablist"
+        aria-label={tr("Kho lưu trữ", "Library")}
+        className="inline-grid grid-cols-2 gap-1 rounded-xl bg-[#EFF4FF] p-1"
+      >
+        {(
+          [
+            ["worksheets", tr("Worksheet", "Worksheets"), <FileText key="i" className="h-4 w-4" />],
+            ["lessons", tr("Bài giảng", "Lessons"), <BookOpen key="i" className="h-4 w-4" />],
+          ] as const
+        ).map(([id, label, icon]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={libraryTab === id}
+            data-testid={`library-tab-${id}`}
+            onClick={() => switchLibraryTab(id)}
+            className={cn(
+              "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-5 text-sm font-bold transition",
+              libraryTab === id ? "bg-white text-[#3525CD] shadow-sm" : "text-[#464555] hover:text-[#0B1C30]"
+            )}
+          >
+            {icon}
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  if (libraryTab === "lessons") {
+    return (
+      <div className="space-y-6">
+        {libraryHeader}
+        <p className="-mt-2 text-sm text-[#464555]">
+          {tr(
+            "Soạn chương bài giảng (PDF, video, file nghe, liên kết) một lần rồi giao cho nhiều lớp. Sửa ở đây là mọi lớp cùng cập nhật.",
+            "Build lesson chapters (PDF, video, audio, links) once and give them to many classes. Edits here update every class."
+          )}
+        </p>
+        <LessonLibrary isAdmin={isAdmin} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {libraryHeader}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-[#0B1C30]">{vi.worksheets.title}</h1>
+          <h2 className="text-lg font-bold text-[#0B1C30]">{vi.worksheets.title}</h2>
           <p className="mt-0.5 text-sm text-[#464555]">
             {tr(
               "Tạo phiếu từ PDF, tự động phân câu từ file Word (.docx), gắn file nghe, chia sẻ cho giáo viên khác và sao lưu (.zip).",
@@ -453,37 +511,19 @@ export default function TeacherWorksheetsPage() {
             <Upload className="h-4 w-4 text-[#4F46E5]" />
             {importingBackup ? tr("Đang nhập…", "Importing…") : tr("Nhập Backup", "Import Backup")}
           </Button>
-          {driveConnected && (
-            <Button
-              variant="outline"
-              size="sm"
-              data-testid="import-from-drive-btn"
-              onClick={() => setDriveImportOpen(true)}
-            >
-              <CloudDownload className="h-4 w-4 text-[#4F46E5]" />
-              {tr("Nhập từ Drive", "Import from Drive")}
-            </Button>
-          )}
-          {worksheets.length > 0 && driveConnected && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={backingUpAllDrive}
-              data-testid="backup-all-drive-btn"
-              onClick={() => void handleBackupAllToDrive()}
-            >
-              <CloudUpload className="h-4 w-4 text-emerald-600" />
-              {backingUpAllDrive
-                ? tr("Đang sao lưu…", "Backing up…")
-                : tr("Sao lưu tất cả lên Drive", "Backup all to Drive")}
-            </Button>
-          )}
           {worksheets.length > 0 && (
-            <Button variant="outline" size="sm" asChild data-testid="export-all-btn">
-              <a href="/api/worksheets/export-all" download>
-                <Archive className="h-4 w-4 text-emerald-600" />
-                {tr("Sao lưu tất cả (.zip)", "Backup All (.zip)")}
-              </a>
+            <Button
+              variant={selectMode ? "secondary" : "outline"}
+              size="sm"
+              data-testid="export-all-btn"
+              onClick={() => {
+                setSelectMode((on) => !on);
+                setTab("mine");
+                setSelectedWsIds([]);
+              }}
+            >
+              <Archive className="h-4 w-4 text-emerald-600" />
+              {selectMode ? tr("Thoát chọn", "Stop selecting") : tr("Sao lưu (.zip)", "Backup (.zip)")}
             </Button>
           )}
           <Button variant="accent" size="sm" onClick={() => setOpen(true)}>
@@ -511,7 +551,8 @@ export default function TeacherWorksheetsPage() {
         </div>
       )}
 
-      {/* Tabs: My Library vs Shared by Other Teachers */}
+      {/* Admin only: own worksheets vs every other teacher's (teachers share backups as files instead) */}
+      {isAdmin && (
       <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-[#EFF4FF] p-1 w-fit">
         <button
           type="button"
@@ -539,10 +580,11 @@ export default function TeacherWorksheetsPage() {
           <Users className="h-3.5 w-3.5" />
           {isAdmin
             ? tr("Của giáo viên khác (tất cả)", "Other teachers' (all)")
-            : tr("Giáo viên khác chia sẻ", "Shared by colleagues")}{" "}
+            : tr("Của giáo viên khác", "Other teachers'")}{" "}
           ({sharedWorksheets.length})
         </button>
       </div>
+      )}
 
       {(worksheets.length > 0 || sharedWorksheets.length > 0) && (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -573,6 +615,46 @@ export default function TeacherWorksheetsPage() {
               {tr(`${currentShown}/${currentTotal} phiếu`, `${currentShown} of ${currentTotal}`)}
             </span>
           )}
+        </div>
+      )}
+
+      {selectMode && (
+        <div className="sticky top-16 z-20 flex flex-wrap items-center gap-2 rounded-2xl border border-indigo-200 bg-[#EEF2FF] px-4 py-3 text-sm sm:top-20">
+          <span className="font-semibold text-[#0B1C30]">
+            {tr(`Đã chọn ${selectedWsIds.length}/${worksheets.length} phiếu`, `${selectedWsIds.length}/${worksheets.length} selected`)}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setSelectedWsIds(visibleMine.map((w) => w.id))}
+          >
+            {wsQuery.trim()
+              ? tr(`Chọn ${visibleMine.length} kết quả`, `Select ${visibleMine.length} results`)
+              : tr("Chọn tất cả", "Select all")}
+          </Button>
+          {selectedWsIds.length > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => setSelectedWsIds([])}>
+              {tr("Bỏ chọn", "Clear")}
+            </Button>
+          )}
+          <Button
+            size="sm"
+            className="ml-auto"
+            disabled={selectedWsIds.length === 0 || downloadingBackup}
+            onClick={() => void handleDownloadBackup()}
+            data-testid="download-backup-btn"
+          >
+            <Download className="h-4 w-4" />
+            {downloadingBackup
+              ? tr("Đang đóng gói…", "Packing…")
+              : tr(`Tải ${selectedWsIds.length} phiếu (.zip)`, `Download ${selectedWsIds.length} (.zip)`)}
+          </Button>
+          <p className="w-full text-[11px] text-[#464555]">
+            {tr(
+              "File .zip gồm PDF, file nghe và đáp án. Gửi cho giáo viên khác qua Zalo / Messenger, họ bấm “Nhập Backup” để dùng.",
+              "The .zip contains PDFs, audio and answer keys. Send it to colleagues (Zalo / Messenger); they use “Import Backup”."
+            )}
+          </p>
         </div>
       )}
 
@@ -607,12 +689,35 @@ export default function TeacherWorksheetsPage() {
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {visibleMine.map((ws) => (
-              <div key={ws.id} className="stitch-card-hover flex flex-col justify-between p-5 space-y-4">
+              <div
+                key={ws.id}
+                className={cn(
+                  "stitch-card-hover flex flex-col justify-between p-5 space-y-4",
+                  selectMode && selectedWsIds.includes(ws.id) && "ring-2 ring-[#4F46E5]"
+                )}
+              >
                 <div className="space-y-2">
                   <div className="flex items-start justify-between gap-2">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#EEF2FF] text-[#4F46E5]">
-                      <FileText className="h-5 w-5" />
-                    </span>
+                    {selectMode ? (
+                      <label className="flex h-10 cursor-pointer items-center gap-2 text-xs font-semibold text-[#3525CD]">
+                        <input
+                          type="checkbox"
+                          checked={selectedWsIds.includes(ws.id)}
+                          onChange={() =>
+                            setSelectedWsIds((prev) =>
+                              prev.includes(ws.id) ? prev.filter((x) => x !== ws.id) : [...prev, ws.id]
+                            )
+                          }
+                          className="h-5 w-5 rounded border-slate-300 text-[#4F46E5]"
+                          data-testid={`backup-select-${ws.id}`}
+                        />
+                        {tr("Chọn", "Select")}
+                      </label>
+                    ) : (
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#EEF2FF] text-[#4F46E5]">
+                        <FileText className="h-5 w-5" />
+                      </span>
+                    )}
                     <div className="flex flex-wrap justify-end gap-1.5">
                       <Badge variant={ws.pdfFileKey ? "default" : "neutral"}>
                         {ws.pdfFileKey
@@ -622,11 +727,6 @@ export default function TeacherWorksheetsPage() {
                       {(ws._count.audios ?? 0) > 0 && (
                         <Badge variant="purple">
                           <Headphones className="h-3 w-3" /> {ws._count.audios}
-                        </Badge>
-                      )}
-                      {ws.isShared && (
-                        <Badge variant="mint">
-                          <Share2 className="h-3 w-3" /> {tr("Đã chia sẻ", "Shared")}
                         </Badge>
                       )}
                       {ws.lastDriveBackupAt && (
@@ -657,9 +757,6 @@ export default function TeacherWorksheetsPage() {
                   </div>
                   <p className="text-[11px] text-slate-400">
                     {tr("Cập nhật:", "Updated:")} {formatDateTime(ws.updatedAt, locale)}
-                    {ws.lastDriveBackupAt && (
-                      <> • Drive: {formatDateTime(ws.lastDriveBackupAt, locale)}</>
-                    )}
                   </p>
                 </div>
 
@@ -690,34 +787,6 @@ export default function TeacherWorksheetsPage() {
                     >
                       <FileDown className="h-3 w-3" /> {tr("Word (HS)", "Word (student)")}
                     </a>
-                    <button
-                      type="button"
-                      onClick={() => void handleToggleShare(ws)}
-                      className={cn(
-                        "inline-flex items-center gap-1 rounded-lg border px-2 py-1 font-semibold transition",
-                        ws.isShared
-                          ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                          : "border-slate-200 bg-white text-slate-500 hover:border-indigo-200"
-                      )}
-                      title={tr("Bật để các giáo viên khác có thể dùng hoặc nhân bản phiếu này", "Allow other teachers in the LMS to use or clone this worksheet")}
-                    >
-                      <Share2 className="h-3 w-3" />
-                      {ws.isShared ? tr("Đang chia sẻ", "Shared") : tr("Chia sẻ GV", "Share")}
-                    </button>
-                    {driveConnected && (
-                      <button
-                        type="button"
-                        disabled={backingUpWsId === ws.id}
-                        data-testid={`backup-drive-btn-${ws.id}`}
-                        onClick={() => void handleBackupWorksheetToDrive(ws.id)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-[#EEF2FF] px-2 py-1 font-semibold text-[#3525CD] hover:bg-indigo-100 disabled:opacity-50"
-                      >
-                        <CloudUpload className="h-3 w-3" />
-                        {backingUpWsId === ws.id
-                          ? tr("Đang lưu…", "Saving…")
-                          : tr("Lưu lên Drive", "Save to Drive")}
-                      </button>
-                    )}
                   </div>
 
                   <div className="flex items-center justify-between gap-2">
@@ -1041,17 +1110,6 @@ export default function TeacherWorksheetsPage() {
         </DialogContent>
       </Dialog>
 
-      <DriveImportDialog
-        open={driveImportOpen}
-        onOpenChange={setDriveImportOpen}
-        pickerConfigured={Boolean(driveStatus?.pickerConfigured)}
-        onImported={(created) => {
-          queryClient.invalidateQueries({ queryKey: ["teacher-worksheets"] });
-          if (created.length === 1 && created[0]) {
-            router.push(`/teacher/worksheets/${created[0].id}/edit`);
-          }
-        }}
-      />
     </div>
   );
 }

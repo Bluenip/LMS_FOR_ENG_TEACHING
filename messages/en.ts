@@ -83,8 +83,8 @@ export const en: Messages = {
   nav: {
     dashboard: "Dashboard",
     classes: "Classes",
-    worksheets: "Worksheets",
-    assignments: "Assignments",
+    worksheets: "Library",
+    assignments: "Assigned work",
     leaderboard: "Leaderboard",
     liveProctor: "Live exam room",
     reports: "Reports",

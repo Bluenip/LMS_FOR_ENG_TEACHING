@@ -13,8 +13,8 @@ export async function GET() {
     const isAdmin = user.role === "ADMIN";
     const [worksheets, sharedWorksheets] = await Promise.all([
       listTeacherWorksheets(user.id),
-      // an admin sees every other teacher's worksheet, shared or not
-      listSharedWorksheets(user.id, { all: isAdmin }),
+      // only admins see other teachers' worksheets; teachers share backups (.zip) as files instead
+      isAdmin ? listSharedWorksheets(user.id, { all: true }) : Promise.resolve([]),
     ]);
     return NextResponse.json({ worksheets, sharedWorksheets, isAdmin });
   } catch (error) {

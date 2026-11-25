@@ -223,12 +223,13 @@ export async function exportWorksheetAsJson(worksheetId: string): Promise<{
   };
 }
 
-export async function exportAllTeacherWorksheetsZip(ownerId: string): Promise<{
+/** Library backup .zip; `ids` limits it to some of the owner's worksheets (others are ignored). */
+export async function exportAllTeacherWorksheetsZip(ownerId: string, ids?: string[]): Promise<{
   buffer: Buffer;
   filename: string;
 }> {
   const worksheets = await prisma.worksheet.findMany({
-    where: { ownerId },
+    where: { ownerId, ...(ids ? { id: { in: ids } } : {}) },
     select: { id: true, title: true },
     orderBy: { updatedAt: "desc" },
   });

@@ -8,8 +8,8 @@ export async function DELETE(
 ) {
   try {
     const { id, lessonId, itemId } = await context.params;
-    await requireTeacherOfClass(id);
-    await deleteLessonItem(id, lessonId, itemId);
+    const { user } = await requireTeacherOfClass(id);
+    await deleteLessonItem(user, lessonId, itemId, { classId: id });
     return NextResponse.json({ ok: true });
   } catch (error) {
     return handleApiError(error);

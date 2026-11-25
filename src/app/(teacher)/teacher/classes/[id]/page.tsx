@@ -55,6 +55,8 @@ export default async function TeacherClassDetailPage({
         title: l.title,
         description: l.description,
         order: l.order,
+        ownerId: l.ownerId,
+        owner: l.owner,
         items: l.items.map((it) => ({
           id: it.id,
           title: it.title,
@@ -83,6 +85,7 @@ export default async function TeacherClassDetailPage({
         initialClass={serialized}
         isTeacher={true}
         currentUserId={session.user.id}
+        isAdmin={session.user.role === "ADMIN"}
       />
     );
   } catch {
