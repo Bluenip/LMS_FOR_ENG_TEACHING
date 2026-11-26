@@ -26,10 +26,17 @@ import {
 import type {
   ProctorEventType,
   ProctorMode,
+  ScoreScale,
   ViolationAction,
   WorksheetSubject,
 } from "@prisma/client";
-import type { AnswerValue, DictationGradeDetail } from "@/lib/grading/types";
+import type { AnswerValue, DictationGradeDetail, RubricScoreMap } from "@/lib/grading/types";
+import type { ScaledScoreResult } from "@/lib/score-scale";
+import {
+  clearOfflineDraft,
+  loadOfflineDraft,
+  saveOfflineDraft,
+} from "@/lib/offline-answer-queue";
 import {
   cn,
   formatAttemptsLimit,
@@ -88,6 +95,9 @@ interface StudentAssignmentPayload {
     audioBlockPause: boolean;
     audioBlockSeek: boolean;
     oneQuestionPerPage?: boolean;
+    scoreScale?: ScoreScale;
+    weight?: number;
+    hasOverride?: boolean;
     class: { id: string; name: string };
     worksheet: {
       id: string;
@@ -113,6 +123,7 @@ interface StudentAssignmentPayload {
     isLate: boolean;
     maxScore: number;
     totalScore: number | null;
+    scaledScore?: ScaledScoreResult | null;
     autoScore: number | null;
     manualScore: number | null;
     teacherComment: string | null;
@@ -132,6 +143,7 @@ interface StudentAssignmentPayload {
       score: number | null;
       teacherNote: string | null;
       gradeDetail?: DictationGradeDetail | null;
+      rubricScores?: RubricScoreMap | null;
     }>;
   } | null;
   attemptsSummary: Array<{
@@ -194,6 +206,7 @@ export default function StudentDoAssignmentPage() {
   const [startingAttempt, setStartingAttempt] = useState(false);
 
   const dirtyFieldIdsRef = useRef<Set<string>>(new Set());
+  const pendingOfflineRestoreRef = useRef(false);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const answersRef = useRef(answers);
   answersRef.current = answers;
@@ -232,6 +245,25 @@ export default function StudentDoAssignmentPage() {
         const map: Record<string, AnswerValue> = {};
         for (const a of data.submission.answers) {
           map[a.fieldId] = a.value;
+        }
+        if (data.submission.status === "IN_PROGRESS") {
+          const draft = loadOfflineDraft(data.submission.id, data.submission.attemptVersion);
+          if (draft) {
+            let restored = false;
+            for (const [fid, val] of Object.entries(draft.answers)) {
+              if (JSON.stringify(map[fid]) !== JSON.stringify(val)) {
+                map[fid] = val;
+                dirtyFieldIdsRef.current.add(fid);
+                restored = true;
+              }
+            }
+            if (restored) {
+              pendingOfflineRestoreRef.current = true;
+              setSaveState(navigator.onLine ? "saving" : "offline");
+            }
+          }
+        } else {
+          clearOfflineDraft(data.submission.id);
         }
         setAnswers(map);
         setAudioPlayCounts(data.submission.audioPlayCounts ?? {});
@@ -315,6 +347,7 @@ export default function StudentDoAssignmentPage() {
         if (json.code === "STALE_ATTEMPT_VERSION") {
           toast.error(tr("Bài làm vừa bị đặt lại từ đầu. Đang đồng bộ lại…", "Your attempt was just restarted. Re-syncing…"));
           dirtyFieldIdsRef.current.clear();
+          clearOfflineDraft(submission.id);
           await fetchPayload();
           return;
         }
@@ -323,26 +356,47 @@ export default function StudentDoAssignmentPage() {
           return;
         }
         if (json.code === "TIME_EXPIRED" || json.code === "ALREADY_SUBMITTED") {
+          clearOfflineDraft(submission.id);
           await fetchPayload();
           return;
         }
         throw new Error(json.error ?? "Autosave failed");
       }
       dirtyIds.forEach((id) => dirtyFieldIdsRef.current.delete(id));
+      if (dirtyFieldIdsRef.current.size === 0) {
+        clearOfflineDraft(submission.id);
+      }
       if (json.remainingSeconds !== undefined) {
         setRemainingSeconds(json.remainingSeconds);
       }
       setSaveState("saved");
     } catch {
+      saveOfflineDraft(submission.id, attemptVersionRef.current, answersRef.current);
       setSaveState(navigator.onLine ? "error" : "offline");
     }
   }, [submission, isLocked, fetchPayload, tr]);
 
+  useEffect(() => {
+    if (
+      pendingOfflineRestoreRef.current &&
+      submission?.status === "IN_PROGRESS" &&
+      navigator.onLine
+    ) {
+      pendingOfflineRestoreRef.current = false;
+      void flushAutosave();
+    }
+  }, [submission?.id, submission?.status, attemptVersion, flushAutosave]);
+
   const handleAnswerChange = (fieldId: string, value: AnswerValue) => {
     if (!isInProgress || isLocked) return;
-    setAnswers((prev) => ({ ...prev, [fieldId]: value }));
+    const nextAnswers = { ...answersRef.current, [fieldId]: value };
+    answersRef.current = nextAnswers;
+    setAnswers(nextAnswers);
     dirtyFieldIdsRef.current.add(fieldId);
-    setSaveState("saving");
+    if (submission) {
+      saveOfflineDraft(submission.id, attemptVersionRef.current, nextAnswers);
+    }
+    setSaveState(typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "saving");
 
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = setTimeout(() => {
@@ -384,6 +438,7 @@ export default function StudentDoAssignmentPage() {
       if (document.fullscreenElement && document.exitFullscreen) {
         await document.exitFullscreen().catch(() => undefined);
       }
+      clearOfflineDraft(submission.id);
       setConfirmSubmitOpen(false);
       toast.success(tr("Nộp bài thành công!", "Submitted successfully!"));
       await fetchPayload();
@@ -453,6 +508,7 @@ export default function StudentDoAssignmentPage() {
         } else if (result.restarted) {
           // Server wiped all answers & incremented attemptVersion; timer is NOT reset!
           dirtyFieldIdsRef.current.clear();
+          clearOfflineDraft(submission.id);
           setAnswers({});
           setRestartedBanner(
             tr(`Vi phạm quy chế thi! Toàn bộ ${result.clearedAnswersCount} đáp án đã bị xoá và bài thi được đặt lại từ câu 1. Đồng hồ không đặt lại.`, `Exam rule violation! All ${result.clearedAnswersCount} answers were cleared and the exam restarted from question 1. The timer was not reset.`)
@@ -764,6 +820,7 @@ export default function StudentDoAssignmentPage() {
         score: a.score,
         teacherNote: a.teacherNote,
         gradeDetail: a.gradeDetail ?? null,
+        rubricScores: a.rubricScores ?? null,
       },
     ])
   );
@@ -859,7 +916,8 @@ export default function StudentDoAssignmentPage() {
                   {saveState === "offline" && <WifiOff className="h-3 w-3" />}
                   {saveState === "saved" && tr("• Đã lưu tự động", "• Auto-saved")}
                   {saveState === "saving" && tr("• Đang lưu…", "• Saving…")}
-                  {saveState === "offline" && tr("Ngoại tuyến", "Offline")}
+                  {saveState === "offline" &&
+                    tr("Ngoại tuyến — đã lưu tạm trên máy", "Offline — draft saved locally")}
                   {saveState === "error" && tr("Lỗi lưu", "Save error")}
                 </span>
               )}
@@ -960,7 +1018,7 @@ export default function StudentDoAssignmentPage() {
           {payload.revealResult ? (
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="space-y-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                   <h2 className="text-lg font-bold text-[#0B1C30]">
                     {vi.assignments.do.yourScore}:{" "}
@@ -968,6 +1026,16 @@ export default function StudentDoAssignmentPage() {
                       {formatScore(submission.totalScore, submission.maxScore)}
                     </span>
                   </h2>
+                  {submission.scaledScore &&
+                    assignment.scoreScale &&
+                    assignment.scoreScale !== "SCALE_10" && (
+                      <Badge variant="indigo" data-testid="scaled-score-badge">
+                        {submission.scaledScore.formatted}
+                      </Badge>
+                    )}
+                  {assignment.hasOverride && (
+                    <Badge variant="sky">{tr("Có điều chỉnh riêng", "Custom extension")}</Badge>
+                  )}
                   {submission.status === "SUBMITTED" && (
                     <Badge variant="orange">{tr("Chờ chấm câu tự luận", "Essay awaiting grading")}</Badge>
                   )}

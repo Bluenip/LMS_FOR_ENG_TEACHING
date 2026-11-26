@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import type { Locale } from "@/lib/i18n/config";
 import { isManualFieldType, isPhotoUploadAnswer, isTrueFalseGroupAnswer } from "@/lib/grading";
+import { convertScoreToScale, scoreScaleLabel } from "@/lib/score-scale";
 import { compareQuestionLabels, formatDateTime } from "@/lib/utils";
 
 export type WrongAnswerCode = "BLANK" | "TRUE" | "FALSE";
@@ -62,12 +63,14 @@ export async function getAssignmentReport(assignmentId: string, locale: Locale =
       class: {
         include: {
           enrollments: {
-            where: { status: "ACTIVE" },
+            where: { status: "ACTIVE", student: { deletedAt: null } },
             include: { student: { select: { id: true, name: true, email: true } } },
             orderBy: { student: { name: "asc" } },
           },
         },
       },
+      targets: { select: { studentId: true } },
+      overrides: true,
       worksheet: {
         include: {
           fields: { orderBy: { order: "asc" } },
@@ -87,7 +90,16 @@ export async function getAssignmentReport(assignmentId: string, locale: Locale =
     throw new AppError("Không tìm thấy bài tập.", 404, "NOT_FOUND");
   }
 
-  const totalStudents = assignment.class.enrollments.length;
+  const targetSet =
+    assignment.targets.length > 0
+      ? new Set(assignment.targets.map((t) => t.studentId))
+      : null;
+  const scopedEnrollments = targetSet
+    ? assignment.class.enrollments.filter((e) => targetSet.has(e.studentId))
+    : assignment.class.enrollments;
+  const overrideByStudent = new Map(assignment.overrides.map((o) => [o.studentId, o]));
+
+  const totalStudents = scopedEnrollments.length;
   const fields = assignment.worksheet.fields;
   const maxPossibleScore = fields.reduce((s, f) => s + f.points, 0);
 
@@ -100,7 +112,7 @@ export async function getAssignmentReport(assignmentId: string, locale: Locale =
   }
 
   const viCollator = new Intl.Collator("vi", { sensitivity: "base" });
-  const sortedEnrollments = [...assignment.class.enrollments].sort((a, b) =>
+  const sortedEnrollments = [...scopedEnrollments].sort((a, b) =>
     viCollator.compare(a.student.name, b.student.name)
   );
   const studentRows = sortedEnrollments.map((enr) => {
@@ -121,6 +133,9 @@ export async function getAssignmentReport(assignmentId: string, locale: Locale =
       best && best.submittedAt
         ? Math.max(0, best.submittedAt.getTime() - best.startedAt.getTime())
         : null;
+    const ov = overrideByStudent.get(enr.studentId) ?? null;
+    const rawScore = best ? (best.totalScore ?? best.autoScore ?? null) : null;
+    const rowMax = best?.maxScore ?? maxPossibleScore;
 
     return {
       studentId: enr.student.id,
@@ -134,12 +149,24 @@ export async function getAssignmentReport(assignmentId: string, locale: Locale =
       flagged: best?.flagged ?? false,
       lockedAt: best?.lockedAt?.toISOString() ?? null,
       violationCount: best?.violationCount ?? 0,
-      score: best ? (best.totalScore ?? best.autoScore ?? null) : null,
-      maxScore: best?.maxScore ?? maxPossibleScore,
+      score: rawScore,
+      maxScore: rowMax,
       scoreScale10:
-        best && best.maxScore > 0 && (best.totalScore ?? best.autoScore) !== null
-          ? Math.round(((best.totalScore ?? best.autoScore ?? 0) / best.maxScore) * 1000) / 100
+        best && rowMax > 0 && rawScore !== null
+          ? Math.round((rawScore / rowMax) * 1000) / 100
           : null,
+      scaledScore:
+        rawScore !== null
+          ? convertScoreToScale(rawScore, rowMax, assignment.scoreScale)
+          : null,
+      override: ov
+        ? {
+            extraAttempts: ov.extraAttempts,
+            dueAt: ov.dueAt?.toISOString() ?? null,
+            timeLimitMin: ov.timeLimitMin,
+            note: ov.note,
+          }
+        : null,
       correctCount,
       totalQuestions: fields.length,
       durationMs,
@@ -231,6 +258,10 @@ export async function getAssignmentReport(assignmentId: string, locale: Locale =
       worksheetTitle: assignment.worksheet.title,
       dueAt: assignment.dueAt?.toISOString() ?? null,
       proctorMode: assignment.proctorMode,
+      scoreScale: assignment.scoreScale,
+      weight: assignment.weight,
+      isTargeted: assignment.targets.length > 0,
+      targetCount: assignment.targets.length,
       totalQuestions: fields.length,
       maxScore: Math.round(maxPossibleScore * 100) / 100,
     },
@@ -261,6 +292,8 @@ export async function generateAssignmentGradebookExcel(
   workbook.creator = "Pivora";
   workbook.created = new Date();
 
+  const scale = report.assignment.scoreScale;
+  const trFn = (viText: string, enText: string) => (isEn ? enText : viText);
   const sheet = workbook.addWorksheet(isEn ? "Gradebook" : "Bảng điểm");
   sheet.columns = [
     { header: isEn ? "#" : "STT", key: "stt", width: 6 },
@@ -272,6 +305,9 @@ export async function generateAssignmentGradebookExcel(
     { header: isEn ? "Score" : "Điểm", key: "score", width: 12 },
     { header: isEn ? "Max score" : "Điểm tối đa", key: "maxScore", width: 14 },
     { header: isEn ? "Scale 10" : "Quy đổi thang 10", key: "scale10", width: 18 },
+    ...(scale !== "SCALE_10"
+      ? [{ header: scoreScaleLabel(scale, trFn), key: "scaled", width: 18 }]
+      : []),
     { header: isEn ? "Violations" : "Vi phạm thi", key: "violations", width: 14 },
     { header: isEn ? "Submitted at" : "Thời gian nộp", key: "submittedAt", width: 22 },
   ];
@@ -310,6 +346,7 @@ export async function generateAssignmentGradebookExcel(
       score: row.score ?? "",
       maxScore: row.maxScore,
       scale10: row.scoreScale10 ?? "",
+      ...(scale !== "SCALE_10" ? { scaled: row.scaledScore?.formatted ?? "" } : {}),
       violations: row.violationCount,
       submittedAt: formatDateTime(row.submittedAt, locale),
     });
@@ -357,5 +394,119 @@ export async function generateAssignmentGradebookExcel(
   return {
     buffer: Buffer.from(arrayBuffer),
     filename: `${isEn ? "Gradebook" : "Bang_diem"}_${safeName || assignmentId}.xlsx`,
+  };
+}
+
+/**
+ * Loads submissions grouped for a single question (Grade-by-Question workflow).
+ */
+export async function getAssignmentQuestionGradingData(
+  assignmentId: string,
+  requestedFieldId?: string
+) {
+  const assignment = await prisma.assignment.findUnique({
+    where: { id: assignmentId },
+    include: {
+      class: { select: { id: true, name: true } },
+      targets: { select: { studentId: true } },
+      worksheet: {
+        include: {
+          fields: { orderBy: { order: "asc" } },
+          audios: { orderBy: { order: "asc" } },
+        },
+      },
+      submissions: {
+        where: { status: { in: ["SUBMITTED", "GRADED"] } },
+        orderBy: [{ attemptNo: "desc" }],
+        include: {
+          student: { select: { id: true, name: true, email: true } },
+          answers: true,
+        },
+      },
+    },
+  });
+
+  if (!assignment) {
+    throw new AppError("Không tìm thấy bài tập.", 404, "NOT_FOUND");
+  }
+
+  const targetSet =
+    assignment.targets.length > 0
+      ? new Set(assignment.targets.map((t) => t.studentId))
+      : null;
+
+  // One latest completed submission per student
+  const latestByStudent = new Map<string, (typeof assignment.submissions)[number]>();
+  for (const sub of assignment.submissions) {
+    if (targetSet && !targetSet.has(sub.studentId)) continue;
+    if (!latestByStudent.has(sub.studentId)) {
+      latestByStudent.set(sub.studentId, sub);
+    }
+  }
+  const subs = Array.from(latestByStudent.values());
+
+  const fieldsMeta = assignment.worksheet.fields.map((f) => {
+    let ungradedCount = 0;
+    for (const s of subs) {
+      const ans = s.answers.find((a) => a.fieldId === f.id);
+      if (isManualFieldType(f.type) && (ans?.score === null || ans?.score === undefined)) {
+        ungradedCount++;
+      }
+    }
+    return {
+      id: f.id,
+      label: f.label,
+      type: f.type,
+      prompt: f.prompt,
+      points: f.points,
+      rubric: f.rubric,
+      options: f.options,
+      answerKey: f.answerKey,
+      ungradedCount,
+    };
+  });
+
+  const selectedField =
+    (requestedFieldId ? fieldsMeta.find((f) => f.id === requestedFieldId) : null) ??
+    fieldsMeta.find((f) => f.ungradedCount > 0) ??
+    fieldsMeta[0] ??
+    null;
+
+  const viCollator = new Intl.Collator("vi", { sensitivity: "base" });
+  const orderedSubs = [...subs].sort((a, b) => viCollator.compare(a.student.name, b.student.name));
+
+  const items = selectedField
+    ? orderedSubs.map((s) => {
+        const ans = s.answers.find((a) => a.fieldId === selectedField.id) ?? null;
+        return {
+          submissionId: s.id,
+          attemptNo: s.attemptNo,
+          status: s.status,
+          submittedAt: s.submittedAt?.toISOString() ?? null,
+          student: s.student,
+          answer: ans
+            ? {
+                value: ans.value,
+                score: ans.score,
+                isCorrect: ans.isCorrect,
+                teacherNote: ans.teacherNote,
+                rubricScores: ans.rubricScores,
+              }
+            : null,
+        };
+      })
+    : [];
+
+  return {
+    assignment: {
+      id: assignment.id,
+      title: assignment.title,
+      classId: assignment.class.id,
+      className: assignment.class.name,
+      scoreScale: assignment.scoreScale,
+    },
+    fields: fieldsMeta,
+    selectedField,
+    items,
   };
 }

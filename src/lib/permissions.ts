@@ -252,6 +252,22 @@ export async function requireStudentForAssignment(assignmentId: string) {
   if (!enrollment || enrollment.status !== "ACTIVE") {
     throw new AppError("Bạn không thuộc lớp được giao bài tập này.", 403, "FORBIDDEN");
   }
+  const targetCount = await prisma.assignmentTarget.count({
+    where: { assignmentId },
+  });
+  if (targetCount > 0) {
+    const isTargeted = await prisma.assignmentTarget.findUnique({
+      where: { assignmentId_studentId: { assignmentId, studentId: user.id } },
+      select: { id: true },
+    });
+    if (!isTargeted) {
+      throw new AppError(
+        "Bạn không nằm trong danh sách học sinh được giao bài tập này.",
+        403,
+        "FORBIDDEN"
+      );
+    }
+  }
   return { user, assignment };
 }
 

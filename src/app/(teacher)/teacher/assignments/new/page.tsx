@@ -21,11 +21,14 @@ import {
 import type {
   LeaderboardMode,
   ProctorMode,
+  ScoreScale,
   ShowResultMode,
   ViolationAction,
   WorksheetSubject,
 } from "@prisma/client";
 import { getSubjectProfile } from "@/lib/subjects";
+import { scoreScaleLabel } from "@/lib/score-scale";
+import { foldText } from "@/lib/text-search";
 import { cn, formatAttemptsLimit } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
@@ -82,9 +85,23 @@ interface EditableAssignment {
   audioBlockPause: boolean;
   audioBlockSeek: boolean;
   oneQuestionPerPage: boolean;
-  class: { id: string; name: string };
+  remindBeforeDue?: boolean;
+  scoreScale?: ScoreScale;
+  weight?: number;
+  targets?: Array<{ studentId: string }>;
+  class: {
+    id: string;
+    name: string;
+    enrollments?: Array<{ student: { id: string; name: string; email: string } }>;
+  };
   worksheet?: { id: string; title: string; subject?: WorksheetSubject; _count: { fields: number; audios?: number } };
   _count: { submissions: number };
+}
+
+interface ClassStudentOption {
+  id: string;
+  name: string;
+  email: string;
 }
 
 /** ISO date -> value for <input type="datetime-local"> in the browser's time zone. */
@@ -196,6 +213,12 @@ function NewAssignmentForm() {
   const [shuffle, setShuffle] = useState(false);
   const [allowLate, setAllowLate] = useState(false);
   const [oneQuestionPerPage, setOneQuestionPerPage] = useState(false);
+  const [remindBeforeDue, setRemindBeforeDue] = useState(true);
+  const [scoreScale, setScoreScale] = useState<ScoreScale>("SCALE_10");
+  const [weight, setWeight] = useState<number>(1);
+  const [targetMode, setTargetMode] = useState<"ALL" | "SELECTED">("ALL");
+  const [targetStudentIds, setTargetStudentIds] = useState<string[]>([]);
+  const [studentFilter, setStudentFilter] = useState("");
 
   // Audio playback settings (default: unlimited, allow pause, allow seek)
   const [limitAudioPlays, setLimitAudioPlays] = useState(false);
@@ -233,6 +256,45 @@ function NewAssignmentForm() {
       apiFetchJson<{ assignment: EditableAssignment }>(`/api/assignments/${editId}/settings`),
   });
   const editing = editData?.assignment ?? null;
+  const singleSelectedClassId = selectedClassIds.length === 1 ? selectedClassIds[0]! : null;
+  const { data: singleClassDetail } = useQuery<{
+    class: {
+      enrollments: Array<{
+        status: string;
+        student: ClassStudentOption;
+      }>;
+    };
+  }>({
+    queryKey: ["class-students-for-assign", singleSelectedClassId],
+    enabled: Boolean(singleSelectedClassId) && !isEdit,
+    queryFn: () => apiFetchJson(`/api/classes/${singleSelectedClassId}`),
+  });
+
+  const singleClassStudents: ClassStudentOption[] = useMemo(() => {
+    if (isEdit && editing?.class.enrollments) {
+      return editing.class.enrollments.map((e) => e.student);
+    }
+    const enrollments = singleClassDetail?.class?.enrollments ?? [];
+    return enrollments
+      .filter((e) => e.status === "ACTIVE")
+      .map((e) => e.student);
+  }, [isEdit, editing, singleClassDetail]);
+
+  const filteredSingleClassStudents = useMemo(() => {
+    const q = foldText(studentFilter.trim());
+    if (!q) return singleClassStudents;
+    return singleClassStudents.filter((s) =>
+      foldText(`${s.name} ${s.email}`).includes(q)
+    );
+  }, [singleClassStudents, studentFilter]);
+
+  useEffect(() => {
+    if (selectedClassIds.length !== 1 && targetMode !== "ALL") {
+      setTargetMode("ALL");
+      setTargetStudentIds([]);
+    }
+  }, [selectedClassIds.length, targetMode]);
+
   const [prefilled, setPrefilled] = useState(false);
   useEffect(() => {
     if (!editing || prefilled) return;
@@ -248,6 +310,16 @@ function NewAssignmentForm() {
     setShuffle(editing.shuffle);
     setAllowLate(editing.allowLate);
     setOneQuestionPerPage(editing.oneQuestionPerPage);
+    setRemindBeforeDue(editing.remindBeforeDue ?? true);
+    setScoreScale(editing.scoreScale ?? "SCALE_10");
+    setWeight(editing.weight ?? 1);
+    if (editing.targets && editing.targets.length > 0) {
+      setTargetMode("SELECTED");
+      setTargetStudentIds(editing.targets.map((t) => t.studentId));
+    } else {
+      setTargetMode("ALL");
+      setTargetStudentIds([]);
+    }
     setLimitAudioPlays(editing.audioMaxPlays !== null);
     setAudioMaxPlays(editing.audioMaxPlays ?? 2);
     setAudioBlockPause(editing.audioBlockPause);
@@ -335,6 +407,15 @@ function NewAssignmentForm() {
       toast.error(tr("Vui lòng chọn ít nhất một lớp học.", "Please choose at least one class."));
       return;
     }
+    if (selectedClassIds.length === 1 && targetMode === "SELECTED" && targetStudentIds.length === 0) {
+      toast.error(
+        tr(
+          "Vui lòng chọn ít nhất 1 học sinh hoặc chuyển về Giao cả lớp.",
+          "Please select at least 1 student or switch back to Whole class."
+        )
+      );
+      return;
+    }
     setSubmitting(true);
     try {
       const res = await fetch(isEdit ? `/api/assignments/${editId}` : "/api/assignments", {
@@ -368,6 +449,13 @@ function NewAssignmentForm() {
           audioBlockPause,
           audioBlockSeek,
           oneQuestionPerPage,
+          remindBeforeDue,
+          scoreScale,
+          weight,
+          targetStudentIds:
+            selectedClassIds.length === 1 && targetMode === "SELECTED"
+              ? targetStudentIds
+              : [],
         }),
       });
       const json = await res.json();
@@ -492,9 +580,122 @@ function NewAssignmentForm() {
               <ClassPicker
                 classes={classes}
                 value={selectedClassIds}
-                onChange={setSelectedClassIds}
+                onChange={(ids) => {
+                  setSelectedClassIds(ids);
+                  setTargetStudentIds([]);
+                }}
                 locked={isEdit}
               />
+
+              {selectedClassIds.length === 1 && (
+                <div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-[#F8F9FF] p-3.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-[#0B1C30]">
+                      {tr("Đối tượng nhận bài", "Assign to")}
+                    </span>
+                    <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs font-semibold">
+                      <button
+                        type="button"
+                        onClick={() => setTargetMode("ALL")}
+                        data-testid="target-mode-all"
+                        className={cn(
+                          "rounded-md px-2.5 py-1 transition",
+                          targetMode === "ALL"
+                            ? "bg-[#4F46E5] text-white"
+                            : "text-[#464555] hover:text-[#0B1C30]"
+                        )}
+                      >
+                        {tr("Cả lớp", "Whole class")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTargetMode("SELECTED")}
+                        data-testid="target-mode-selected"
+                        className={cn(
+                          "rounded-md px-2.5 py-1 transition",
+                          targetMode === "SELECTED"
+                            ? "bg-[#4F46E5] text-white"
+                            : "text-[#464555] hover:text-[#0B1C30]"
+                        )}
+                      >
+                        {tr("Nhóm học sinh", "Selected students")}
+                        {targetMode === "SELECTED" && targetStudentIds.length > 0
+                          ? ` (${targetStudentIds.length})`
+                          : ""}
+                      </button>
+                    </div>
+                  </div>
+
+                  {targetMode === "SELECTED" && (
+                    <div className="space-y-2" data-testid="target-student-picker">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Input
+                          value={studentFilter}
+                          onChange={(e) => setStudentFilter(e.target.value)}
+                          placeholder={tr("Tìm học sinh theo tên hoặc email…", "Search student by name or email…")}
+                          className="h-9 flex-1 text-xs"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setTargetStudentIds(singleClassStudents.map((s) => s.id))}
+                        >
+                          {tr("Chọn hết", "Select all")}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setTargetStudentIds([])}
+                        >
+                          {tr("Bỏ chọn", "Clear")}
+                        </Button>
+                      </div>
+                      <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2">
+                        {filteredSingleClassStudents.length === 0 ? (
+                          <p className="py-3 text-center text-xs text-slate-400">
+                            {tr("Không có học sinh nào.", "No students found.")}
+                          </p>
+                        ) : (
+                          filteredSingleClassStudents.map((stu) => {
+                            const checked = targetStudentIds.includes(stu.id);
+                            return (
+                              <label
+                                key={stu.id}
+                                className={cn(
+                                  "flex min-h-10 cursor-pointer items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs transition",
+                                  checked ? "bg-[#EEF2FF] text-[#3525CD]" : "hover:bg-slate-50"
+                                )}
+                              >
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(e) => {
+                                      setTargetStudentIds((prev) =>
+                                        e.target.checked
+                                          ? [...prev, stu.id]
+                                          : prev.filter((x) => x !== stu.id)
+                                      );
+                                    }}
+                                    className="h-4 w-4 rounded border-slate-300 text-[#4F46E5]"
+                                    data-testid={`target-student-cb-${stu.id}`}
+                                  />
+                                  <span className="truncate font-semibold">{stu.name}</span>
+                                </span>
+                                <span className="hidden truncate text-[11px] text-slate-400 sm:inline">
+                                  {stu.email}
+                                </span>
+                              </label>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </FormRow>
 
             <FormRow
@@ -676,6 +877,52 @@ function NewAssignmentForm() {
                   onChange={setOneQuestionPerPage}
                   testId="one-question-per-page-switch"
                 />
+                <ToggleRow
+                  label={tr("Nhắc hạn nộp trước 24 giờ", "Remind students 24h before due")}
+                  checked={remindBeforeDue}
+                  onChange={setRemindBeforeDue}
+                  testId="remind-before-due-switch"
+                />
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label={tr("Thang điểm hiển thị", "Score display scale")} htmlFor="score-scale">
+                  <select
+                    id="score-scale"
+                    value={scoreScale}
+                    onChange={(e) => setScoreScale(e.target.value as ScoreScale)}
+                    data-testid="score-scale-select"
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-semibold text-[#0B1C30] outline-none focus:border-[#4F46E5]"
+                  >
+                    {(["SCALE_10", "SCALE_100", "IELTS", "RAW"] as const).map((sc) => (
+                      <option key={sc} value={sc}>
+                        {scoreScaleLabel(sc, tr)}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label={tr("Hệ số điểm", "Score weight")} htmlFor="score-weight">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {[1, 2, 3].map((w) => (
+                      <ChipButton key={w} active={weight === w} onClick={() => setWeight(w)}>
+                        ×{w}
+                      </ChipButton>
+                    ))}
+                    <Input
+                      id="score-weight"
+                      type="number"
+                      min={0.5}
+                      max={10}
+                      step={0.5}
+                      value={weight}
+                      onChange={(e) =>
+                        setWeight(Math.max(0.5, Math.min(10, Number(e.target.value) || 1)))
+                      }
+                      className="h-9 w-20 text-xs tabular-nums"
+                      data-testid="score-weight-input"
+                    />
+                  </div>
+                </Field>
               </div>
             </FormRow>
 
@@ -941,9 +1188,14 @@ function NewAssignmentForm() {
                     : tr(`${selectedClasses.length} lớp`, `${selectedClasses.length} classes`)}
                 {selectedClasses.length > 0 && (
                   <span className="block text-[11px] font-normal text-[#464555]">
-                    {tr(`${totalSelectedStudents} học sinh`, `${totalSelectedStudents} students`)}
+                    {selectedClassIds.length === 1 && targetMode === "SELECTED"
+                      ? tr(`${targetStudentIds.length} học sinh được chọn`, `${targetStudentIds.length} selected students`)
+                      : tr(`${totalSelectedStudents} học sinh`, `${totalSelectedStudents} students`)}
                   </span>
                 )}
+              </SummaryRow>
+              <SummaryRow label={tr("Thang điểm", "Scale")}>
+                {scoreScaleLabel(scoreScale, tr)} · ×{weight}
               </SummaryRow>
               <SummaryRow label={tr("Mở đề", "Opens")}>{fmt(openAt) ?? tr("Ngay khi giao", "Immediately")}</SummaryRow>
               <SummaryRow label={tr("Hạn nộp", "Due")}>{fmt(dueAt) ?? tr("Không có", "None")}</SummaryRow>

@@ -12,6 +12,15 @@ export interface FieldStyle {
   transparentBg?: boolean;
 }
 
+export interface RubricCriterion {
+  id: string;
+  title: string;
+  description?: string;
+  maxPoints: number;
+}
+
+export type RubricScoreMap = Record<string, number>;
+
 export type TrueFalseScoringMode = "THPT_2025" | "ALL_OR_NOTHING" | "EQUAL";
 
 export interface GradingOptions {

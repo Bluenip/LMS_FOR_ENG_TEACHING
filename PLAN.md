@@ -78,6 +78,8 @@
    - Kiểm tra `~/apps/engclass/.deploy/cron.log` cho tới khi thấy `Deployed <short-sha>; app is healthy`.
    - Kiểm tra `docker compose -f compose.production.yml --env-file .env.production exec -T app node_modules/.bin/prisma migrate status` báo migration đã chạy đủ. (**Không seed dữ liệu mẫu trên production.**)
    - Kiểm tra `https://lms.thaituan.site/login` trả `HTTP 200`.
+8. **Chuyển thư mục làm việc sang repo mới `PIVORA` (chỉ thực hiện SAU KHI đã push xong xuôi toàn bộ các Phase):**
+   - Clone mới về `/run/media/bluenip/BACKUP/Code/PIVORA` (`https://github.com/Bluenip/PIVORA.git`), chép các file local không commit (`.env`, `file word test/`, `uploads/`), chạy `pnpm i` kiểm tra sạch sẽ rồi mới xoá thư mục cũ `/run/media/bluenip/BACKUP/Code/LMS_teaching_eng`. (Không xoá thư mục cũ giữa chừng vì shell đang chạy trong thư mục đó.)
 
 ---
 
@@ -703,3 +705,16 @@ _(Agent ghi vào đây sau mỗi Phase: đã làm gì, còn thiếu gì, quyết
 - **Commit trên `main`:** `a6a71ba`.
 - **Migration Prisma:** `20261126012953_phase15_multi_subject_worksheets`.
 - **Đã làm:** 11 môn học (`WorksheetSubject`, `src/lib/subjects.ts`), KaTeX (`MathText`), ngữ liệu đọc hiểu dùng chung (`Worksheet.passages`), loại câu `TRUE_FALSE_GROUP` (Đúng/Sai 4 ý chấm luỹ tiến THPT 2025), loại câu `PHOTO_UPLOAD` (chụp ảnh vở / tải PDF + nén ảnh client + `PhotoLightboxModal`), tab Thùng rác cho lớp học.
+
+### Phase 16 — Giao bài linh hoạt, Chấm nâng cao & Trải nghiệm làm bài (26/11/2026)
+
+- **Nhánh:** `phase-16` (merged fast-forward vào `main`).
+- **Migration Prisma:** `20261126153353_phase16_flexible_assignments_grading` — tương thích ngược 100%.
+- **Đã làm:**
+  - **Giao bài theo nhóm & Ngoại lệ cá nhân:** Bảng `AssignmentTarget` (giao cho toàn lớp hoặc chọn từng học sinh, chặn IDOR ở API/permission/report/parent/proctor) và `AssignmentOverride` (`extraAttempts`, hạn riêng `dueAt`, `timeLimitMin`, ghi chú lý do, thông báo + `AuditLog`, UI `OverrideDialog` trong trang chấm bài).
+  - **Nhắc nhở trước hạn 24h:** `Assignment.remindBeforeDue`, bảng `AssignmentReminderSent` (chống gửi trùng), `sendDueSoonReminders` chạy định kỳ mỗi 60 phút ở `src/instrumentation.ts`.
+  - **Thang điểm quy đổi & Hệ số:** Enum `ScoreScale` (`SCALE_10`, `SCALE_100`, `IELTS`, `RAW`), `Assignment.weight`, `convertScoreToScale()` hiển thị trên kết quả học sinh, bảng điểm GV và cột quy đổi trong Excel export.
+  - **Chấm nâng cao:** `Field.rubric` & `Answer.rubricScores` (`RubricEditor`, `computeRubricTotal`, chi tiết tiêu chí cho học sinh khi `revealResult` bật), ngân hàng nhận xét nhanh `TeacherCommentPreset` (`CommentPresetBar`, tối đa 100 mẫu), **Chấm theo câu** (`GradeByQuestionPanel`) kèm **Chấm ẩn danh (`Blind Grading`)** và `PATCH /api/submissions/[id]/grade` (`saveSingleFieldGrade`).
+  - **Trải nghiệm làm bài & Đồng bộ:** Hàng đợi bản nháp ngoại tuyến `src/lib/offline-answer-queue.ts` (khôi phục an toàn theo `attemptVersion`, tự đồng bộ khi có mạng, xoá khi nộp/reset/stale), lưu bền trạng thái **Gắn cờ xem lại (Flag)** qua `F5`, thay `window.confirm` ở `/teacher/settings` bằng Radix `Dialog`.
+  - **Tài liệu & Đổi tên PIVORA:** Cập nhật `README.md` (11 môn học, 11 loại câu, tính năng Phase 13–16, ngưỡng Camera AI chuẩn từ `camera-rules.ts`, URL clone `https://github.com/Bluenip/PIVORA.git`) và `docs/GOOGLE_DRIVE.md`, đổi remote `origin` sang `https://github.com/Bluenip/PIVORA.git`.
+- **Kết quả kiểm tra:** `pnpm db:seed` pass; `pnpm lint` 0 lỗi / 0 cảnh báo; `pnpm typecheck` 0 lỗi; `pnpm test` 21/21 files (144/144 tests) pass; `pnpm test:e2e` 19/19 tests pass; `pnpm build:check` pass.

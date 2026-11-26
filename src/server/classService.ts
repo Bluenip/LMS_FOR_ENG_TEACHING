@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import ExcelJS from "exceljs";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { resolveEffectiveAssignment } from "@/lib/assignment-effective";
 import { generateJoinCode } from "@/lib/utils";
 import { createNotification } from "./notificationService";
 import { enqueueDriveTrashByFileIds } from "./driveService";
@@ -215,12 +216,14 @@ export async function joinClassByCode(studentId: string, joinCode: string) {
   return { enrollment, class: cls, alreadyJoined: false };
 }
 
-export async function getClassDetail(classId: string) {
+export async function getClassDetail(classId: string, opts?: { studentId?: string }) {
+  const studentId = opts?.studentId;
   const cls = await prisma.class.findUnique({
     where: { id: classId },
     include: {
       teacher: { select: { id: true, name: true, email: true } },
       enrollments: {
+        where: { student: { deletedAt: null } },
         include: {
           student: {
             select: {
@@ -265,6 +268,13 @@ export async function getClassDetail(classId: string) {
         orderBy: [{ order: "asc" }, { createdAt: "asc" }],
       },
       assignments: {
+        ...(studentId
+          ? {
+              where: {
+                OR: [{ targets: { none: {} } }, { targets: { some: { studentId } } }],
+              },
+            }
+          : {}),
         include: {
           worksheet: {
             select: {
@@ -274,6 +284,14 @@ export async function getClassDetail(classId: string) {
               _count: { select: { fields: true } },
             },
           },
+          ...(studentId
+            ? {
+                overrides: {
+                  where: { studentId },
+                  take: 1,
+                },
+              }
+            : {}),
           _count: {
             select: { submissions: true },
           },
@@ -286,9 +304,24 @@ export async function getClassDetail(classId: string) {
     throw new AppError("Không tìm thấy lớp học.", 404, "NOT_FOUND");
   }
   // lessons now come from the library (ClassLesson); keep the old `lessons` shape for the pages
-  const { classLessons, ...rest } = cls;
+  const { classLessons, assignments, ...rest } = cls;
+  const resolvedAssignments = assignments.map((a) => {
+    const maybeOverrides = "overrides" in a && Array.isArray(a.overrides) ? a.overrides : [];
+    const effective = studentId ? resolveEffectiveAssignment(a, maybeOverrides[0] ?? null) : null;
+    return {
+      ...a,
+      ...(effective
+        ? {
+            dueAt: effective.dueAt,
+            timeLimitMin: effective.timeLimitMin,
+            maxAttempts: effective.maxAttempts,
+          }
+        : {}),
+    };
+  });
   return {
     ...rest,
+    assignments: resolvedAssignments,
     lessons: classLessons.map((link) => ({ ...link.lesson, order: link.order })),
   };
 }

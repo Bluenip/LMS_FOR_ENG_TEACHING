@@ -42,6 +42,9 @@ export default async function StudentDashboardPage() {
       proctorMode: a.proctorMode,
       requireCamera: a.requireCamera,
       proctorSummary: describeProctorRuleSummary(a, tr),
+      scoreScale: a.scoreScale,
+      weight: a.weight,
+      hasOverride: a.hasOverride,
       attemptsUsed: a.submissions.length,
       latestSubmission: latestSub
         ? {

@@ -1,14 +1,19 @@
 import crypto from "node:crypto";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { resolveEffectiveAssignment } from "@/lib/assignment-effective";
+import { convertScoreToScale } from "@/lib/score-scale";
 import {
+  computeRubricTotal,
   gradeSubmission,
   isManualFieldType,
   isPhotoUploadAnswer,
   sanitizeDictationDetail,
   type AnswerValue,
   type GradingOptions,
+  type RubricCriterion,
+  type RubricScoreMap,
 } from "@/lib/grading";
 import { STUDENT_FIELD_SELECT } from "./worksheetService";
 import { createNotificationsBulk } from "./notificationService";
@@ -110,6 +115,16 @@ export async function startOrResumeSubmission(
     throw new AppError("Không tìm thấy bài tập.", 404, "NOT_FOUND");
   }
 
+  const override = await prisma.assignmentOverride.findUnique({
+    where: { assignmentId_studentId: { assignmentId, studentId } },
+  });
+  const effective = resolveEffectiveAssignment(assignment, override);
+  const effectiveTiming = {
+    dueAt: effective.dueAt,
+    timeLimitMin: effective.timeLimitMin,
+    allowLate: assignment.allowLate,
+  };
+
   if (assignment.openAt && now < assignment.openAt) {
     throw new AppError("Bài tập chưa đến thời gian mở.", 403, "NOT_OPEN_YET");
   }
@@ -129,7 +144,7 @@ export async function startOrResumeSubmission(
   // If there is an active in-progress submission
   if (inProgress) {
     // Check if its server timer already expired -> auto-finalize it!
-    const deadline = getServerDeadline(inProgress, assignment);
+    const deadline = getServerDeadline(inProgress, effectiveTiming);
     if (deadline && now >= deadline) {
       const finalized = await finalizeSubmissionInternal(inProgress.id);
       return { submission: finalized, alreadySubmitted: true };
@@ -187,13 +202,13 @@ export async function startOrResumeSubmission(
   }
 
   // Starting a brand-new attempt
-  if (assignment.dueAt && now > assignment.dueAt && !assignment.allowLate) {
+  if (effective.dueAt && now > effective.dueAt && !assignment.allowLate) {
     throw new AppError("Đã quá hạn nộp bài tập này.", 403, "PAST_DUE");
   }
 
-  if (assignment.maxAttempts !== null && existingSubmissions.length >= assignment.maxAttempts) {
+  if (effective.maxAttempts !== null && existingSubmissions.length >= effective.maxAttempts) {
     throw new AppError(
-      `Bạn đã dùng hết ${assignment.maxAttempts} lượt làm bài cho phép.`,
+      `Bạn đã dùng hết ${effective.maxAttempts} lượt làm bài cho phép.`,
       403,
       "MAX_ATTEMPTS_REACHED"
     );
@@ -305,6 +320,13 @@ export async function getStudentAssignmentPayload(
       audioBlockPause: true,
       audioBlockSeek: true,
       oneQuestionPerPage: true,
+      remindBeforeDue: true,
+      scoreScale: true,
+      weight: true,
+      overrides: {
+        where: { studentId },
+        take: 1,
+      },
       class: { select: { id: true, name: true } },
       worksheet: {
         select: {
@@ -373,6 +395,7 @@ export async function getStudentAssignmentPayload(
           score: true,
           teacherNote: true,
           gradeDetail: true,
+          rubricScores: true,
         },
       },
       audioPlays: {
@@ -383,13 +406,21 @@ export async function getStudentAssignmentPayload(
     },
   });
 
+  const effective = resolveEffectiveAssignment(assignment, assignment.overrides[0] ?? null);
+  const effectiveAssignmentForTiming = {
+    dueAt: effective.dueAt,
+    timeLimitMin: effective.timeLimitMin,
+    allowLate: assignment.allowLate,
+    showResult: assignment.showResult,
+  };
+
   const activeSubmission = requestedSubmissionId
     ? submissions.find((s) => s.id === requestedSubmissionId) ?? submissions[0] ?? null
     : submissions.find((s) => s.status === "IN_PROGRESS") ?? submissions[0] ?? null;
 
   // Auto-finalize if active in-progress attempt exceeded server timer
   if (activeSubmission && activeSubmission.status === "IN_PROGRESS") {
-    const deadline = getServerDeadline(activeSubmission, assignment);
+    const deadline = getServerDeadline(activeSubmission, effectiveAssignmentForTiming);
     if (deadline && now >= deadline) {
       await finalizeSubmissionInternal(activeSubmission.id);
       return getStudentAssignmentPayload(assignmentId, studentId, activeSubmission.id);
@@ -397,26 +428,45 @@ export async function getStudentAssignmentPayload(
   }
 
   const revealResult = activeSubmission
-    ? canRevealResult(assignment, activeSubmission.status, now)
+    ? canRevealResult(
+        { showResult: assignment.showResult, dueAt: effective.dueAt },
+        activeSubmission.status,
+        now
+      )
     : false;
   // Never reveal the answer key while the student can still start another attempt,
   // otherwise they could copy the key into the next attempt.
   const canStillAttempt =
-    (assignment.maxAttempts === null || submissions.length < assignment.maxAttempts) &&
-    (!assignment.dueAt || now <= assignment.dueAt || assignment.allowLate);
+    (effective.maxAttempts === null || submissions.length < effective.maxAttempts) &&
+    (!effective.dueAt || now <= effective.dueAt || assignment.allowLate);
   const revealKey = revealResult && assignment.showAnswerKey && !canStillAttempt;
 
-  // Only fetch answerKey separately when strictly authorized to reveal after submit/due!
-  let revealedKeysByFieldId: Record<string, { correctAnswer: unknown; explanation: string | null }> =
-    {};
-  if (revealKey) {
-    const keys = await prisma.field.findMany({
+  // Fetch rubric only when revealResult is allowed, and answerKey/explanation only when revealKey is allowed
+  const revealedKeysByFieldId: Record<
+    string,
+    { correctAnswer: unknown; explanation: string | null }
+  > = {};
+  const revealedRubricByFieldId: Record<string, RubricCriterion[]> = {};
+  if (revealResult) {
+    const extraFields = await prisma.field.findMany({
       where: { worksheetId: assignment.worksheet.id },
-      select: { id: true, answerKey: true, explanation: true },
+      select: {
+        id: true,
+        rubric: true,
+        ...(revealKey ? { answerKey: true, explanation: true } : {}),
+      },
     });
-    revealedKeysByFieldId = Object.fromEntries(
-      keys.map((k) => [k.id, { correctAnswer: k.answerKey, explanation: k.explanation }])
-    );
+    for (const k of extraFields) {
+      if (Array.isArray(k.rubric) && k.rubric.length > 0) {
+        revealedRubricByFieldId[k.id] = k.rubric as unknown as RubricCriterion[];
+      }
+      if (revealKey && "answerKey" in k) {
+        revealedKeysByFieldId[k.id] = {
+          correctAnswer: k.answerKey,
+          explanation: "explanation" in k && typeof k.explanation === "string" ? k.explanation : null,
+        };
+      }
+    }
   }
 
   // Reorder ANSWER_SHEET fields according to submission.questionOrder if shuffled
@@ -448,6 +498,14 @@ export async function getStudentAssignmentPayload(
         isLate: activeSubmission.isLate,
         maxScore: activeSubmission.maxScore,
         totalScore: revealResult ? activeSubmission.totalScore : null,
+        scaledScore:
+          revealResult && activeSubmission.totalScore !== null
+            ? convertScoreToScale(
+                activeSubmission.totalScore,
+                activeSubmission.maxScore,
+                assignment.scoreScale
+              )
+            : null,
         autoScore: revealResult ? activeSubmission.autoScore : null,
         manualScore: revealResult ? activeSubmission.manualScore : null,
         teacherComment: revealResult ? activeSubmission.teacherComment : null,
@@ -461,7 +519,7 @@ export async function getStudentAssignmentPayload(
         audioPlayCounts,
         remainingSeconds:
           activeSubmission.status === "IN_PROGRESS"
-            ? computeRemainingSeconds(activeSubmission, assignment, now)
+            ? computeRemainingSeconds(activeSubmission, effectiveAssignmentForTiming, now)
             : 0,
         answers: activeSubmission.answers.map((a) => ({
           fieldId: a.fieldId,
@@ -472,6 +530,7 @@ export async function getStudentAssignmentPayload(
           gradeDetail: revealResult
             ? sanitizeDictationDetail(a.gradeDetail, revealKey)
             : null,
+          rubricScores: revealResult ? (a.rubricScores as RubricScoreMap | null) : null,
         })),
       }
     : null;
@@ -479,13 +538,18 @@ export async function getStudentAssignmentPayload(
   // Do not expose any exam content (questions, options, PDF, audio) until the student has actually
   // started an attempt; before that only metadata (title, question count, time limit) is returned.
   const contentUnlocked = submissions.length > 0;
+  const { overrides, ...assignmentRest } = assignment;
+  void overrides;
 
   return {
     serverNow: now.toISOString(),
     assignment: {
-      ...assignment,
+      ...assignmentRest,
       openAt: assignment.openAt?.toISOString() ?? null,
-      dueAt: assignment.dueAt?.toISOString() ?? null,
+      dueAt: effective.dueAt?.toISOString() ?? null,
+      timeLimitMin: effective.timeLimitMin,
+      maxAttempts: effective.maxAttempts,
+      hasOverride: effective.hasOverride,
       worksheet: {
         ...assignment.worksheet,
         subject: assignment.worksheet.subject,
@@ -497,6 +561,9 @@ export async function getStudentAssignmentPayload(
         audios: contentUnlocked ? assignment.worksheet.audios : [],
         fields: (contentUnlocked ? orderedFields : []).map((f) => ({
           ...f,
+          ...(revealResult && revealedRubricByFieldId[f.id]
+            ? { rubric: revealedRubricByFieldId[f.id] }
+            : {}),
           ...(revealKey && revealedKeysByFieldId[f.id]
             ? {
                 revealedAnswer: revealedKeysByFieldId[f.id]!.correctAnswer,
@@ -513,15 +580,21 @@ export async function getStudentAssignmentPayload(
       status: s.status,
       startedAt: s.startedAt.toISOString(),
       submittedAt: s.submittedAt?.toISOString() ?? null,
-      totalScore: canRevealResult(assignment, s.status, now) ? s.totalScore : null,
+      totalScore: canRevealResult(
+        { showResult: assignment.showResult, dueAt: effective.dueAt },
+        s.status,
+        now
+      )
+        ? s.totalScore
+        : null,
       maxScore: s.maxScore,
     })),
     revealResult,
     revealKey,
     canStartNewAttempt:
       submissions.every((s) => s.status !== "IN_PROGRESS") &&
-      (assignment.maxAttempts === null || submissions.length < assignment.maxAttempts) &&
-      (!assignment.dueAt || now <= assignment.dueAt || assignment.allowLate) &&
+      (effective.maxAttempts === null || submissions.length < effective.maxAttempts) &&
+      (!effective.dueAt || now <= effective.dueAt || assignment.allowLate) &&
       (!assignment.openAt || now >= assignment.openAt),
   };
 }
@@ -582,8 +655,17 @@ export async function autosaveSubmissionAnswers(
     );
   }
 
-  // Enforce server deadline
-  const deadline = getServerDeadline(submission, submission.assignment);
+  // Enforce server deadline (respecting per-student AssignmentOverride)
+  const override = await prisma.assignmentOverride.findUnique({
+    where: { assignmentId_studentId: { assignmentId: submission.assignmentId, studentId } },
+  });
+  const effective = resolveEffectiveAssignment(submission.assignment, override);
+  const effectiveTiming = {
+    dueAt: effective.dueAt,
+    timeLimitMin: effective.timeLimitMin,
+    allowLate: submission.assignment.allowLate,
+  };
+  const deadline = getServerDeadline(submission, effectiveTiming);
   if (deadline && now >= deadline) {
     await finalizeSubmissionInternal(submission.id);
     throw new AppError(
@@ -649,7 +731,7 @@ export async function autosaveSubmissionAnswers(
   return {
     savedAt: now.toISOString(),
     attemptVersion: submission.attemptVersion,
-    remainingSeconds: computeRemainingSeconds(submission, submission.assignment, now),
+    remainingSeconds: computeRemainingSeconds(submission, effectiveTiming, now),
   };
 }
 
@@ -726,11 +808,23 @@ export async function finalizeSubmissionInternal(
 
   // When finalized lazily after the server deadline (timer expired while the student was away),
   // record the deadline itself as the submit time: not the moment someone reopened the page.
-  const deadline = getServerDeadline(submission, submission.assignment);
+  const override = await prisma.assignmentOverride.findUnique({
+    where: {
+      assignmentId_studentId: {
+        assignmentId: submission.assignmentId,
+        studentId: submission.studentId,
+      },
+    },
+  });
+  const effective = resolveEffectiveAssignment(submission.assignment, override);
+  const effectiveTiming = {
+    dueAt: effective.dueAt,
+    timeLimitMin: effective.timeLimitMin,
+    allowLate: submission.assignment.allowLate,
+  };
+  const deadline = getServerDeadline(submission, effectiveTiming);
   const effectiveSubmittedAt = deadline && now > deadline ? deadline : now;
-  const isLate = Boolean(
-    submission.assignment.dueAt && effectiveSubmittedAt > submission.assignment.dueAt
-  );
+  const isLate = Boolean(effective.dueAt && effectiveSubmittedAt > effective.dueAt);
   const newStatus = graded.hasManualFields ? "SUBMITTED" : "GRADED";
   const totalScore = graded.hasManualFields ? graded.autoScore : graded.autoScore;
 
@@ -855,7 +949,20 @@ export async function submitByStudent(
   }
 
   // Answers sent after the server deadline are ignored (only what was autosaved in time counts)
-  const deadline = getServerDeadline(submission, submission.assignment);
+  const override = await prisma.assignmentOverride.findUnique({
+    where: {
+      assignmentId_studentId: {
+        assignmentId: submission.assignmentId,
+        studentId,
+      },
+    },
+  });
+  const effective = resolveEffectiveAssignment(submission.assignment, override);
+  const deadline = getServerDeadline(submission, {
+    dueAt: effective.dueAt,
+    timeLimitMin: effective.timeLimitMin,
+    allowLate: submission.assignment.allowLate,
+  });
   const pastDeadline = Boolean(deadline && new Date() >= deadline);
   return finalizeSubmissionInternal(submissionId, pastDeadline ? undefined : input?.answers);
 }
@@ -906,6 +1013,7 @@ export async function saveTeacherManualGrading(
       score: number;
       isCorrect?: boolean | null;
       teacherNote?: string | null;
+      rubricScores?: RubricScoreMap | null;
     }>;
   }
 ) {
@@ -949,7 +1057,18 @@ export async function saveTeacherManualGrading(
     for (const g of input.grades) {
       const field = fieldsById.get(g.fieldId);
       if (!field) continue;
-      const clampedScore = Math.max(0, Math.min(field.points, g.score));
+      const rubricCriteria = Array.isArray(field.rubric)
+        ? (field.rubric as unknown as RubricCriterion[])
+        : [];
+      let clampedScore = Math.max(0, Math.min(field.points, g.score));
+      let rubricScoresData: Prisma.InputJsonValue | typeof Prisma.JsonNull | undefined = undefined;
+      if (rubricCriteria.length > 0 && g.rubricScores) {
+        const res = computeRubricTotal(rubricCriteria, g.rubricScores, field.points);
+        clampedScore = res.total;
+        rubricScoresData = res.clampedScores as unknown as Prisma.InputJsonValue;
+      } else if (g.rubricScores === null) {
+        rubricScoresData = Prisma.JsonNull;
+      }
       const inferredCorrect =
         g.isCorrect !== undefined && g.isCorrect !== null
           ? g.isCorrect
@@ -965,12 +1084,14 @@ export async function saveTeacherManualGrading(
           isCorrect: inferredCorrect,
           isOverridden: true,
           teacherNote: g.teacherNote ?? null,
+          ...(rubricScoresData !== undefined ? { rubricScores: rubricScoresData } : {}),
         },
         update: {
           score: clampedScore,
           isCorrect: inferredCorrect,
           isOverridden: true,
           teacherNote: g.teacherNote ?? null,
+          ...(rubricScoresData !== undefined ? { rubricScores: rubricScoresData } : {}),
         },
       });
     }
@@ -1043,5 +1164,162 @@ export async function saveTeacherManualGrading(
   }
 
   await createNotificationsBulk(notifications);
+  return updated;
+}
+
+/**
+ * Grades a single field of a submission (used by the Grade-by-Question view).
+ * Automatically marks the submission GRADED once every manual field has a score.
+ */
+export async function saveSingleFieldGrade(
+  submissionId: string,
+  input: {
+    fieldId: string;
+    score: number;
+    isCorrect?: boolean | null;
+    teacherNote?: string | null;
+    rubricScores?: RubricScoreMap | null;
+  }
+) {
+  const submission = await prisma.submission.findUnique({
+    where: { id: submissionId },
+    include: {
+      student: {
+        select: {
+          id: true,
+          name: true,
+          parentLinksAsChild: {
+            where: { verifiedAt: { not: null } },
+            select: { parentId: true },
+          },
+        },
+      },
+      assignment: {
+        include: {
+          worksheet: { include: { fields: true } },
+        },
+      },
+    },
+  });
+
+  if (!submission) {
+    throw new AppError("Không tìm thấy bài làm.", 404, "NOT_FOUND");
+  }
+  if (submission.status === "IN_PROGRESS") {
+    throw new AppError(
+      "Học sinh chưa nộp bài, chưa thể chấm điểm.",
+      409,
+      "SUBMISSION_IN_PROGRESS"
+    );
+  }
+
+  const field = submission.assignment.worksheet.fields.find((f) => f.id === input.fieldId);
+  if (!field) {
+    throw new AppError("Không tìm thấy câu hỏi trong bài tập này.", 404, "NOT_FOUND");
+  }
+
+  const rubricCriteria = Array.isArray(field.rubric)
+    ? (field.rubric as unknown as RubricCriterion[])
+    : [];
+  let clampedScore = Math.max(0, Math.min(field.points, input.score));
+  let rubricScoresData: Prisma.InputJsonValue | typeof Prisma.JsonNull | undefined = undefined;
+  if (rubricCriteria.length > 0 && input.rubricScores) {
+    const res = computeRubricTotal(rubricCriteria, input.rubricScores, field.points);
+    clampedScore = res.total;
+    rubricScoresData = res.clampedScores as unknown as Prisma.InputJsonValue;
+  } else if (input.rubricScores === null) {
+    rubricScoresData = Prisma.JsonNull;
+  }
+
+  const inferredCorrect =
+    input.isCorrect !== undefined && input.isCorrect !== null
+      ? input.isCorrect
+      : clampedScore >= field.points && field.points > 0;
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const savedAnswer = await tx.answer.upsert({
+      where: { submissionId_fieldId: { submissionId, fieldId: input.fieldId } },
+      create: {
+        submissionId,
+        fieldId: input.fieldId,
+        value: "",
+        score: clampedScore,
+        isCorrect: inferredCorrect,
+        isOverridden: true,
+        teacherNote: input.teacherNote ?? null,
+        ...(rubricScoresData !== undefined ? { rubricScores: rubricScoresData } : {}),
+      },
+      update: {
+        score: clampedScore,
+        isCorrect: inferredCorrect,
+        isOverridden: true,
+        teacherNote: input.teacherNote ?? null,
+        ...(rubricScoresData !== undefined ? { rubricScores: rubricScoresData } : {}),
+      },
+    });
+
+    const allAnswers = await tx.answer.findMany({ where: { submissionId } });
+    const answerByField = new Map(allAnswers.map((a) => [a.fieldId, a]));
+
+    let autoScore = 0;
+    let manualScore = 0;
+    let maxScore = 0;
+    let allManualGraded = true;
+    for (const f of submission.assignment.worksheet.fields) {
+      maxScore += f.points;
+      const ans = answerByField.get(f.id);
+      if (isManualFieldType(f.type)) {
+        if (ans?.score === null || ans?.score === undefined) {
+          allManualGraded = false;
+        } else {
+          manualScore += ans.score;
+        }
+      } else {
+        autoScore += ans?.score ?? 0;
+      }
+    }
+
+    const totalScore = Math.round((autoScore + manualScore) * 100) / 100;
+    const nextStatus = allManualGraded ? "GRADED" : "SUBMITTED";
+
+    const updatedSub = await tx.submission.update({
+      where: { id: submissionId },
+      data: {
+        status: nextStatus,
+        autoScore: Math.round(autoScore * 100) / 100,
+        manualScore: allManualGraded ? Math.round(manualScore * 100) / 100 : null,
+        totalScore,
+        maxScore: Math.round(maxScore * 100) / 100,
+      },
+    });
+
+    return { updatedSub, savedAnswer };
+  });
+
+  invalidateLeaderboardCache(submission.assignment.classId);
+
+  if (submission.status !== "GRADED" && updated.updatedSub.status === "GRADED") {
+    const canShowScore = canRevealResult(submission.assignment, "GRADED");
+    const scoreSuffix = canShowScore
+      ? ` Điểm tổng: ${updated.updatedSub.totalScore}/${updated.updatedSub.maxScore}.`
+      : " Điểm sẽ được công bố theo cài đặt của giáo viên.";
+    await createNotificationsBulk([
+      {
+        userId: submission.studentId,
+        type: "SUBMISSION_GRADED",
+        title: `Đã chấm bài: ${submission.assignment.title}`,
+        body: `Giáo viên đã chấm bài của bạn.${scoreSuffix}`,
+        link: `/student/assignments/${submission.assignmentId}/do`,
+      },
+      ...submission.student.parentLinksAsChild.map((pl) => ({
+        userId: pl.parentId,
+        type: "PARENT_ALERT" as const,
+        title: `${submission.student.name} đã được chấm bài`,
+        body: `${submission.assignment.title}.${scoreSuffix}`,
+        link: `/parent?childId=${submission.studentId}`,
+      })),
+    ]);
+  }
+
   return updated;
 }

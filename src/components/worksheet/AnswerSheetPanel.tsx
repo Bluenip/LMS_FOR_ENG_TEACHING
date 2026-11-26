@@ -1,8 +1,9 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { CheckCircle2, ChevronUp, ClipboardList, ClipboardX, Flag, XCircle } from "lucide-react";
-import type { AnswerValue, DictationGradeDetail } from "@/lib/grading/types";
+import type { AnswerValue, DictationGradeDetail, RubricScoreMap } from "@/lib/grading/types";
+import { loadFlaggedFieldIds, saveFlaggedFieldIds } from "@/lib/offline-answer-queue";
 import { cn, compareQuestionLabels } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +50,7 @@ interface AnswerSheetPanelProps {
       score?: number | null;
       teacherNote?: string | null;
       gradeDetail?: DictationGradeDetail | null;
+      rubricScores?: RubricScoreMap | null;
     }
   >;
 }
@@ -80,6 +82,11 @@ export function AnswerSheetPanel({
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  useEffect(() => {
+    if (!submissionId || previewOnly) return;
+    setFlaggedIds(new Set(loadFlaggedFieldIds(submissionId)));
+  }, [submissionId, previewOnly]);
+
   const answerSheetFields = allFields.filter((f) => f.placement === "ANSWER_SHEET");
   const answeredCount = allFields.filter((f) => isAnswerFilled(answers[f.id])).length;
   const pct = allFields.length > 0 ? Math.round((answeredCount / allFields.length) * 100) : 0;
@@ -89,6 +96,9 @@ export function AnswerSheetPanel({
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      if (submissionId && !previewOnly) {
+        saveFlaggedFieldIds(submissionId, Array.from(next));
+      }
       return next;
     });
   };
@@ -562,6 +572,21 @@ export function AnswerSheetPanel({
                       <p className="font-semibold text-slate-600">
                         {tr("Điểm câu này:", "Score for this question:")} {grade.score}/{field.points}
                       </p>
+                    )}
+                    {field.rubric && field.rubric.length > 0 && grade?.rubricScores && (
+                      <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-2.5 space-y-1">
+                        <p className="text-[11px] font-bold text-[#3525CD]">
+                          {tr("Chi tiết điểm theo tiêu chí (Rubric)", "Rubric Breakdown")}
+                        </p>
+                        {field.rubric.map((crit) => (
+                          <div key={crit.id} className="flex items-center justify-between gap-2 text-[11px]">
+                            <span className="text-slate-600">{crit.title}</span>
+                            <span className="font-bold text-[#0B1C30] tabular-nums">
+                              {grade.rubricScores?.[crit.id] ?? 0}/{crit.maxPoints}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     )}
                     {field.type === "DICTATION" && grade?.gradeDetail && (
                       <DictationDiffView detail={grade.gradeDetail} showExpected={revealKey} />

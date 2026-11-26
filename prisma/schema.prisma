@@ -132,6 +132,14 @@ enum NotificationType {
   PROCTOR_REMINDER
   PARENT_ALERT
   SYSTEM_ALERT
+  DUE_REMINDER
+}
+
+enum ScoreScale {
+  SCALE_10
+  SCALE_100
+  IELTS
+  RAW
 }
 
 enum DriveConnectionStatus {
@@ -200,9 +208,13 @@ model User {
   driveConnectionsLinked DriveConnection[]  @relation("DriveConnectionActor")
   driveFiles             DriveFile[]        @relation("DriveFileOwner")
   driveUploads           DriveUpload[]      @relation("DriveUploadOwner")
-  auditLogs              AuditLog[]         @relation("AuditLogActor")
-  errorLogs              ErrorLog[]         @relation("ErrorLogUser")
-  oneTimeExports         OneTimeExport[]    @relation("OneTimeExportCreator")
+  auditLogs              AuditLog[]               @relation("AuditLogActor")
+  errorLogs              ErrorLog[]               @relation("ErrorLogUser")
+  oneTimeExports         OneTimeExport[]          @relation("OneTimeExportCreator")
+  assignmentOverrides    AssignmentOverride[]     @relation("AssignmentOverrideStudent")
+  assignmentTargets      AssignmentTarget[]       @relation("AssignmentTargetStudent")
+  assignmentReminders    AssignmentReminderSent[] @relation("AssignmentReminderStudent")
+  teacherCommentPresets  TeacherCommentPreset[]   @relation("TeacherCommentPresets")
 
   @@index([deletedAt])
 }
@@ -427,6 +439,7 @@ model Field {
   options     Json?
   answerKey   Json
   gradingOpts Json?
+  rubric      Json?
 
   worksheet Worksheet @relation(fields: [worksheetId], references: [id], onDelete: Cascade)
   answers   Answer[]
@@ -479,12 +492,20 @@ model Assignment {
   // Focus mode: show 1 question at a time on screen (ideal for memorization / fill-in-the-blank)
   oneQuestionPerPage Boolean @default(false)
 
+  // Phase 16: reminders & custom scoring
+  remindBeforeDue Boolean    @default(true)
+  scoreScale      ScoreScale @default(SCALE_10)
+  weight          Float      @default(1)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  class       Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
-  worksheet   Worksheet    @relation(fields: [worksheetId], references: [id], onDelete: Cascade)
+  class       Class                    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  worksheet   Worksheet                @relation(fields: [worksheetId], references: [id], onDelete: Cascade)
   submissions Submission[]
+  overrides   AssignmentOverride[]
+  targets     AssignmentTarget[]
+  reminders   AssignmentReminderSent[]
 
   @@index([classId])
   @@index([worksheetId])
@@ -553,6 +574,7 @@ model Answer {
   score        Float?
   isOverridden Boolean  @default(false)
   gradeDetail  Json?
+  rubricScores Json?
   teacherNote  String?
   updatedAt    DateTime @updatedAt
 
@@ -762,4 +784,66 @@ model OneTimeExport {
 
   @@index([createdById])
   @@index([expiresAt])
+}
+
+/// Phase 16: per-student deadline / extra attempts / time limit overrides for an assignment.
+model AssignmentOverride {
+  id            String    @id @default(cuid())
+  assignmentId  String
+  studentId     String
+  extraAttempts Int       @default(0)
+  dueAt         DateTime?
+  timeLimitMin  Int?
+  note          String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student    User       @relation("AssignmentOverrideStudent", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, studentId])
+  @@index([studentId])
+}
+
+/// Phase 16: optional targeted student subset for an assignment (0 rows = whole class).
+model AssignmentTarget {
+  id           String   @id @default(cuid())
+  assignmentId String
+  studentId    String
+  createdAt    DateTime @default(now())
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student    User       @relation("AssignmentTargetStudent", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, studentId])
+  @@index([studentId])
+}
+
+/// Phase 16: tracks which students already received the 24h due-soon reminder for an assignment.
+model AssignmentReminderSent {
+  id           String   @id @default(cuid())
+  assignmentId String
+  studentId    String
+  sentAt       DateTime @default(now())
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student    User       @relation("AssignmentReminderStudent", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, studentId])
+  @@index([assignmentId])
+}
+
+/// Phase 16: reusable teacher comment snippets when grading.
+model TeacherCommentPreset {
+  id        String   @id @default(cuid())
+  teacherId String
+  category  String?
+  content   String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teacher User @relation("TeacherCommentPresets", fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@index([teacherId, order])
 }

@@ -1,6 +1,7 @@
 import type { Prisma, ProctorEventType, ViolationAction } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { resolveEffectiveAssignment } from "@/lib/assignment-effective";
 import { publishAssignmentLive } from "@/lib/proctor-bus";
 import { createNotification } from "./notificationService";
 import { computeRemainingSeconds, finalizeSubmissionInternal } from "./submissionService";
@@ -377,12 +378,14 @@ export async function getLiveProctoringSnapshot(assignmentId: string) {
       class: {
         include: {
           enrollments: {
-            where: { status: "ACTIVE" },
+            where: { status: "ACTIVE", student: { deletedAt: null } },
             include: { student: { select: { id: true, name: true, email: true } } },
             orderBy: { student: { name: "asc" } },
           },
         },
       },
+      targets: { select: { studentId: true } },
+      overrides: true,
       worksheet: {
         select: {
           id: true,
@@ -407,6 +410,15 @@ export async function getLiveProctoringSnapshot(assignmentId: string) {
     throw new AppError("Không tìm thấy bài tập.", 404, "NOT_FOUND");
   }
 
+  const targetSet =
+    assignment.targets.length > 0
+      ? new Set(assignment.targets.map((t) => t.studentId))
+      : null;
+  const scopedEnrollments = targetSet
+    ? assignment.class.enrollments.filter((e) => targetSet.has(e.studentId))
+    : assignment.class.enrollments;
+  const overrideByStudent = new Map(assignment.overrides.map((o) => [o.studentId, o]));
+
   const totalQuestions = assignment.worksheet._count.fields;
   const latestSubByStudent = new Map<string, (typeof assignment.submissions)[number]>();
   for (const sub of assignment.submissions) {
@@ -416,10 +428,11 @@ export async function getLiveProctoringSnapshot(assignmentId: string) {
   }
 
   const viCollator = new Intl.Collator("vi", { sensitivity: "base" });
-  const students = [...assignment.class.enrollments]
+  const students = [...scopedEnrollments]
     .sort((a, b) => viCollator.compare(a.student.name, b.student.name))
     .map((enr) => {
     const sub = latestSubByStudent.get(enr.studentId);
+    const effective = resolveEffectiveAssignment(assignment, overrideByStudent.get(enr.studentId) ?? null);
     const answeredCount = sub
       ? sub.answers.filter((a) => {
           if (a.value === null || a.value === undefined) return false;
@@ -481,7 +494,15 @@ export async function getLiveProctoringSnapshot(assignmentId: string) {
       totalAudioPlays: sub?.audioPlays.length ?? 0,
       remainingSeconds:
         sub && sub.status === "IN_PROGRESS"
-          ? computeRemainingSeconds(sub, assignment, now)
+          ? computeRemainingSeconds(
+              sub,
+              {
+                dueAt: effective.dueAt,
+                timeLimitMin: effective.timeLimitMin,
+                allowLate: assignment.allowLate,
+              },
+              now
+            )
           : null,
       events: (sub?.proctorEvents ?? []).map((ev) => ({
         id: ev.id,

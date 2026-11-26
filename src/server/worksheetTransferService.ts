@@ -59,6 +59,7 @@ export interface ExportedWorksheetManifest {
       options: unknown;
       answerKey: unknown;
       gradingOpts: unknown;
+      rubric?: unknown;
     }>;
   };
 }
@@ -205,6 +206,7 @@ async function packWorksheetIntoZip(
         options: f.options,
         answerKey: f.answerKey,
         gradingOpts: f.gradingOpts,
+        rubric: f.rubric ?? null,
       })),
     },
   };
@@ -542,6 +544,7 @@ async function restoreManifestForOwner(
         options: (f.options ?? undefined) as Prisma.InputJsonValue | undefined,
         answerKey: (f.answerKey ?? {}) as Prisma.InputJsonValue,
         gradingOpts: (f.gradingOpts ?? undefined) as Prisma.InputJsonValue | undefined,
+        rubric: (f.rubric ?? undefined) as Prisma.InputJsonValue | undefined,
       })),
     });
   }

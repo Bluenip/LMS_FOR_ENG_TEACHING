@@ -1,11 +1,13 @@
 import type {
   LeaderboardMode,
   ProctorMode,
+  ScoreScale,
   ShowResultMode,
   ViolationAction,
 } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { resolveEffectiveAssignment } from "@/lib/assignment-effective";
 import { createNotificationsBulk } from "./notificationService";
 import { canRevealResult } from "./submissionService";
 import { formatDateTime } from "@/lib/utils";
@@ -41,6 +43,10 @@ export interface CreateAssignmentInput {
   audioBlockPause: boolean;
   audioBlockSeek: boolean;
   oneQuestionPerPage?: boolean;
+  remindBeforeDue?: boolean;
+  scoreScale?: ScoreScale;
+  weight?: number;
+  targetStudentIds?: string[] | null;
 }
 
 export async function createAssignmentsForClasses(
@@ -48,6 +54,14 @@ export async function createAssignmentsForClasses(
   isAdmin: boolean,
   input: CreateAssignmentInput
 ) {
+  if (input.targetStudentIds && input.targetStudentIds.length > 0 && input.classIds.length > 1) {
+    throw new AppError(
+      "Chỉ chọn được nhóm học sinh cụ thể khi giao cho 1 lớp duy nhất.",
+      400,
+      "VALIDATION_ERROR"
+    );
+  }
+
   const worksheet = await prisma.worksheet.findUnique({
     where: { id: input.worksheetId },
     include: { _count: { select: { fields: true } } },
@@ -67,7 +81,7 @@ export async function createAssignmentsForClasses(
     },
     include: {
       enrollments: {
-        where: { status: "ACTIVE" },
+        where: { status: "ACTIVE", student: { deletedAt: null } },
         include: {
           student: {
             select: {
@@ -93,6 +107,13 @@ export async function createAssignmentsForClasses(
 
   const createdAssignments = [];
   for (const cls of classes) {
+    const enrolledSet = new Set(cls.enrollments.map((e) => e.studentId));
+    const requestedTargets =
+      input.targetStudentIds && input.targetStudentIds.length > 0
+        ? Array.from(new Set(input.targetStudentIds.filter((id) => enrolledSet.has(id))))
+        : [];
+    const targetSet = requestedTargets.length > 0 ? new Set(requestedTargets) : null;
+
     const assignment = await prisma.assignment.create({
       data: {
         classId: cls.id,
@@ -125,6 +146,12 @@ export async function createAssignmentsForClasses(
         audioBlockPause: input.audioBlockPause,
         audioBlockSeek: input.audioBlockSeek,
         oneQuestionPerPage: Boolean(input.oneQuestionPerPage),
+        remindBeforeDue: input.remindBeforeDue ?? true,
+        scoreScale: input.scoreScale ?? "SCALE_10",
+        weight: input.weight ?? 1,
+        ...(requestedTargets.length > 0
+          ? { targets: { create: requestedTargets.map((studentId) => ({ studentId })) } }
+          : {}),
       },
     });
     createdAssignments.push(assignment);
@@ -138,7 +165,11 @@ export async function createAssignmentsForClasses(
     }> = [];
 
     const dueLabel = dueAt ? ` • Hạn nộp: ${formatDateTime(dueAt)}` : "";
-    for (const enr of cls.enrollments) {
+    const recipients = targetSet
+      ? cls.enrollments.filter((e) => targetSet.has(e.studentId))
+      : cls.enrollments;
+
+    for (const enr of recipients) {
       notifications.push({
         userId: enr.studentId,
         type: "ASSIGNMENT_CREATED",
@@ -170,8 +201,20 @@ export async function getAssignmentSettings(id: string) {
   const a = await prisma.assignment.findUnique({
     where: { id },
     include: {
-      class: { select: { id: true, name: true, _count: { select: { enrollments: true } } } },
+      class: {
+        select: {
+          id: true,
+          name: true,
+          _count: { select: { enrollments: { where: { status: "ACTIVE", student: { deletedAt: null } } } } },
+          enrollments: {
+            where: { status: "ACTIVE", student: { deletedAt: null } },
+            select: { student: { select: { id: true, name: true, email: true } } },
+            orderBy: { student: { name: "asc" } },
+          },
+        },
+      },
       worksheet: { select: { id: true, title: true, subject: true, _count: { select: { fields: true, audios: true } } } },
+      targets: { select: { studentId: true } },
       _count: { select: { submissions: true } },
     },
   });
@@ -186,7 +229,11 @@ export async function getAssignmentSettings(id: string) {
  */
 export async function updateAssignment(
   id: string,
-  input: UpdateAssignmentInput,
+  input: Omit<UpdateAssignmentInput, "remindBeforeDue" | "scoreScale" | "weight"> & {
+    remindBeforeDue?: boolean;
+    scoreScale?: ScoreScale;
+    weight?: number;
+  },
   actorId?: string
 ) {
   const before = await prisma.assignment.findUnique({
@@ -230,8 +277,38 @@ export async function updateAssignment(
       audioBlockPause: input.audioBlockPause,
       audioBlockSeek: input.audioBlockSeek,
       oneQuestionPerPage: Boolean(input.oneQuestionPerPage),
+      ...(input.remindBeforeDue !== undefined ? { remindBeforeDue: input.remindBeforeDue } : {}),
+      ...(input.scoreScale !== undefined ? { scoreScale: input.scoreScale } : {}),
+      ...(input.weight !== undefined ? { weight: input.weight } : {}),
     },
   });
+
+  let targetSet: Set<string> | null = null;
+  if (input.targetStudentIds !== undefined) {
+    const activeEnrollments = await prisma.enrollment.findMany({
+      where: { classId: before.classId, status: "ACTIVE", student: { deletedAt: null } },
+      select: { studentId: true },
+    });
+    const enrolledSet = new Set(activeEnrollments.map((e) => e.studentId));
+    const validTargets = Array.isArray(input.targetStudentIds)
+      ? Array.from(new Set(input.targetStudentIds.filter((sid) => enrolledSet.has(sid))))
+      : [];
+    await prisma.$transaction(async (tx) => {
+      await tx.assignmentTarget.deleteMany({ where: { assignmentId: id } });
+      if (validTargets.length > 0) {
+        await tx.assignmentTarget.createMany({
+          data: validTargets.map((studentId) => ({ assignmentId: id, studentId })),
+        });
+      }
+    });
+    targetSet = validTargets.length > 0 ? new Set(validTargets) : null;
+  } else {
+    const existingTargets = await prisma.assignmentTarget.findMany({
+      where: { assignmentId: id },
+      select: { studentId: true },
+    });
+    targetSet = existingTargets.length > 0 ? new Set(existingTargets.map((t) => t.studentId)) : null;
+  }
 
   const moreAttempts =
     before.maxAttempts !== null &&
@@ -240,9 +317,12 @@ export async function updateAssignment(
     before.dueAt !== null && (updated.dueAt === null || updated.dueAt > before.dueAt);
   if (moreAttempts || laterDue) {
     const enrollments = await prisma.enrollment.findMany({
-      where: { classId: before.classId, status: "ACTIVE" },
+      where: { classId: before.classId, status: "ACTIVE", student: { deletedAt: null } },
       select: { studentId: true },
     });
+    const recipients = targetSet
+      ? enrollments.filter((e) => targetSet.has(e.studentId))
+      : enrollments;
     const parts = [
       moreAttempts
         ? updated.maxAttempts === null
@@ -252,7 +332,7 @@ export async function updateAssignment(
       laterDue ? (updated.dueAt ? `Hạn nộp mới: ${formatDateTime(updated.dueAt)}` : "Không còn hạn nộp") : null,
     ].filter(Boolean);
     await createNotificationsBulk(
-      enrollments.map((e) => ({
+      recipients.map((e) => ({
         userId: e.studentId,
         type: "ASSIGNMENT_CREATED" as const,
         title: `Bài tập được cập nhật: ${updated.title}`,
@@ -297,6 +377,10 @@ export async function listStudentAssignments(studentId: string) {
           some: { studentId, status: "ACTIVE" },
         },
       },
+      OR: [
+        { targets: { none: {} } },
+        { targets: { some: { studentId } } },
+      ],
     },
     include: {
       class: { select: { id: true, name: true, teacher: { select: { name: true } } } },
@@ -307,6 +391,10 @@ export async function listStudentAssignments(studentId: string) {
           pageCount: true,
           _count: { select: { fields: true } },
         },
+      },
+      overrides: {
+        where: { studentId },
+        take: 1,
       },
       submissions: {
         where: { studentId },
@@ -329,13 +417,20 @@ export async function listStudentAssignments(studentId: string) {
   });
 
   const now = new Date();
-  return assignments.map((a) => ({
-    ...a,
-    submissions: a.submissions.map((s) => ({
-      ...s,
-      totalScore: canRevealResult(a, s.status, now) ? s.totalScore : null,
-    })),
-  }));
+  return assignments.map((a) => {
+    const effective = resolveEffectiveAssignment(a, a.overrides[0] ?? null);
+    return {
+      ...a,
+      dueAt: effective.dueAt,
+      timeLimitMin: effective.timeLimitMin,
+      maxAttempts: effective.maxAttempts,
+      hasOverride: effective.hasOverride,
+      submissions: a.submissions.map((s) => ({
+        ...s,
+        totalScore: canRevealResult(a, s.status, now) ? s.totalScore : null,
+      })),
+    };
+  });
 }
 
 /** A teacher's own assignments; an admin (`allClasses`) sees every assignment in the system. */

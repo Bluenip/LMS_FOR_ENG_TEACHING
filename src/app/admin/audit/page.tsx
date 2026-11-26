@@ -74,6 +74,8 @@ export default function AdminAuditPage() {
       USER_PASSWORD_RESET: ["Đặt lại mật khẩu", "Password reset"],
       OWNERSHIP_TRANSFERRED: ["Chuyển quyền sở hữu", "Ownership transferred"],
       ASSIGNMENT_UPDATED: ["Sửa bài đã giao", "Assignment updated"],
+      ASSIGNMENT_OVERRIDE_SAVED: ["Lưu ngoại lệ bài tập", "Assignment override saved"],
+      ASSIGNMENT_OVERRIDE_REMOVED: ["Xoá ngoại lệ bài tập", "Assignment override removed"],
       CLASS_ARCHIVED: ["Lưu trữ lớp", "Class archived"],
       CLASS_UNARCHIVED: ["Mở lại lớp", "Class restored"],
       CLASS_DELETED: ["Xoá lớp", "Class deleted"],

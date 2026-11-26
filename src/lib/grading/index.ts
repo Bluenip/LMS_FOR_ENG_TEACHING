@@ -7,6 +7,8 @@ import type {
   GradingOptions,
   MultiSelectAnswerKey,
   NumberAnswerKey,
+  RubricCriterion,
+  RubricScoreMap,
   SingleChoiceAnswerKey,
   SubmissionGradeSummary,
   TextAnswerKey,
@@ -331,4 +333,26 @@ export function parseBulkAnswerString(input: string): string[] {
   // Otherwise treat as contiguous/space-separated letters "ABCDA BCDDA"
   const letters = trimmed.toUpperCase().match(/[A-Z]/g);
   return letters ?? [];
+}
+
+/**
+ * Computes and clamps rubric criterion scores and returns the summed field score.
+ */
+export function computeRubricTotal(
+  rubric: RubricCriterion[],
+  scores: RubricScoreMap,
+  fieldMaxPoints: number
+): { total: number; clampedScores: RubricScoreMap } {
+  const clampedScores: RubricScoreMap = {};
+  let sum = 0;
+  for (const c of rubric) {
+    const criterionMax = Number.isFinite(c.maxPoints) && c.maxPoints >= 0 ? c.maxPoints : 0;
+    const raw = Number(scores[c.id] ?? 0);
+    const clamped = Number.isFinite(raw) ? Math.max(0, Math.min(criterionMax, roundScore(raw))) : 0;
+    clampedScores[c.id] = clamped;
+    sum += clamped;
+  }
+  const safeFieldMax = Number.isFinite(fieldMaxPoints) && fieldMaxPoints >= 0 ? fieldMaxPoints : 0;
+  const total = Math.max(0, Math.min(safeFieldMax, roundScore(sum)));
+  return { total, clampedScores };
 }

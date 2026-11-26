@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import {
   AlertTriangle,
   BarChart3,
+  CalendarClock,
   Camera,
   CheckCircle2,
   ClipboardEdit,
@@ -17,12 +18,15 @@ import {
   FileText,
   Flag,
   Headphones,
+  ListChecks,
   Radio,
+  Scale,
   ShieldAlert,
   Trophy,
   Users,
 } from "lucide-react";
 import { cn, formatDateTime, formatDurationMs, getInitials } from "@/lib/utils";
+import { scoreScaleLabel, type ScaledScoreResult } from "@/lib/score-scale";
 import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,7 +45,11 @@ import { OverlayFieldInput } from "@/components/worksheet/OverlayFieldInput";
 import { DictationDiffView } from "@/components/worksheet/DictationDiffView";
 import { PromptText } from "@/components/worksheet/PromptText";
 import { PhotoLightboxModal } from "@/components/worksheet/PhotoLightboxModal";
+import { CommentPresetBar } from "@/components/grading/CommentPresetBar";
+import { OverrideDialog, type StudentOverrideInfo } from "@/components/grading/OverrideDialog";
+import { GradeByQuestionPanel } from "@/components/grading/GradeByQuestionPanel";
 import {
+  computeRubricTotal,
   isManualFieldType,
   isPhotoUploadAnswer,
   isTrueFalseGroupAnswer,
@@ -49,10 +57,18 @@ import {
   type DictationGradeDetail,
   type FieldOption,
   type FieldStyle,
+  type RubricCriterion,
+  type RubricScoreMap,
   type UploadedAnswerFile,
-} from "@/lib/grading/types";
+} from "@/lib/grading";
 import type { StudentFieldDTO } from "@/components/worksheet/types";
-import type { FieldPlacement, FieldType, ProctorEventType, SkillTag } from "@prisma/client";
+import type {
+  FieldPlacement,
+  FieldType,
+  ProctorEventType,
+  ScoreScale,
+  SkillTag,
+} from "@prisma/client";
 
 interface ReportPayload {
   assignment: {
@@ -62,6 +78,10 @@ interface ReportPayload {
     className: string;
     dueAt: string | null;
     proctorMode: string;
+    scoreScale: ScoreScale;
+    weight: number;
+    isTargeted?: boolean;
+    targetCount?: number;
     totalQuestions: number;
     maxScore: number;
   };
@@ -87,6 +107,8 @@ interface ReportPayload {
     score: number | null;
     maxScore: number;
     scoreScale10: number | null;
+    scaledScore: ScaledScoreResult | null;
+    override: StudentOverrideInfo | null;
     correctCount: number;
     totalQuestions: number;
     durationMs: number | null;
@@ -144,6 +166,7 @@ interface ReviewSubmissionDetail {
         style: FieldStyle | null;
         options: FieldOption[] | null;
         answerKey: Record<string, unknown>;
+        rubric?: RubricCriterion[] | null;
       }>;
     };
   };
@@ -155,6 +178,7 @@ interface ReviewSubmissionDetail {
     score: number | null;
     teacherNote: string | null;
     gradeDetail?: DictationGradeDetail | null;
+    rubricScores?: RubricScoreMap | null;
   }>;
   proctorEvents: Array<{
     id: string;
@@ -197,6 +221,7 @@ function SubmissionReviewModal({
   const { pdfDoc } = usePdfDocument(pdfUrl);
 
   const [scores, setScores] = useState<Record<string, number>>({});
+  const [rubricScoresState, setRubricScoresState] = useState<Record<string, RubricScoreMap>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [teacherComment, setTeacherComment] = useState<string | null>(null);
   const [flagged, setFlagged] = useState<boolean | null>(null);
@@ -211,14 +236,26 @@ function SubmissionReviewModal({
     try {
       const grades = sub.assignment.worksheet.fields.map((f) => {
         const existingAns = sub.answers.find((a) => a.fieldId === f.id);
+        const rubricCriteria = Array.isArray(f.rubric) ? f.rubric : [];
+        const activeRubricMap =
+          rubricScoresState[f.id] ?? existingAns?.rubricScores ?? undefined;
+        const computedRubric =
+          rubricCriteria.length > 0 && activeRubricMap
+            ? computeRubricTotal(rubricCriteria, activeRubricMap, f.points)
+            : null;
         const finalScore =
-          scores[f.id] !== undefined ? scores[f.id]! : (existingAns?.score ?? 0);
+          computedRubric !== null
+            ? computedRubric.total
+            : scores[f.id] !== undefined
+              ? scores[f.id]!
+              : (existingAns?.score ?? 0);
         const finalNote =
           notes[f.id] !== undefined ? notes[f.id]! : (existingAns?.teacherNote ?? "");
         return {
           fieldId: f.id,
           score: finalScore,
           teacherNote: finalNote || null,
+          ...(computedRubric !== null ? { rubricScores: computedRubric.clampedScores } : {}),
         };
       });
 
@@ -382,8 +419,20 @@ function SubmissionReviewModal({
               <div className="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
                 {sub.assignment.worksheet.fields.map((f) => {
                   const ans = sub.answers.find((a) => a.fieldId === f.id);
+                  const rubricCriteria = Array.isArray(f.rubric) ? f.rubric : [];
+                  const currentRubricMap =
+                    rubricScoresState[f.id] ?? ans?.rubricScores ?? {};
+                  const computedRubric =
+                    rubricCriteria.length > 0 &&
+                    (rubricScoresState[f.id] !== undefined || ans?.rubricScores)
+                      ? computeRubricTotal(rubricCriteria, currentRubricMap, f.points)
+                      : null;
                   const currentScore =
-                    scores[f.id] !== undefined ? scores[f.id]! : (ans?.score ?? 0);
+                    computedRubric !== null
+                      ? computedRubric.total
+                      : scores[f.id] !== undefined
+                        ? scores[f.id]!
+                        : (ans?.score ?? 0);
                   const currentNote =
                     notes[f.id] !== undefined ? notes[f.id]! : (ans?.teacherNote ?? "");
 
@@ -545,6 +594,52 @@ function SubmissionReviewModal({
                         )}
                       </div>
 
+                      {rubricCriteria.length > 0 && (
+                        <div className="space-y-1.5 rounded-lg border border-indigo-100 bg-white p-2.5" data-testid={`modal-rubric-${f.id}`}>
+                          <p className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-[#3525CD]">
+                            <Scale className="h-3 w-3" />
+                            {tr("Chấm theo Rubric", "Rubric breakdown")}
+                          </p>
+                          {rubricCriteria.map((c) => {
+                            const val = currentRubricMap[c.id] ?? 0;
+                            return (
+                              <div key={c.id} className="flex items-center justify-between gap-2 text-[11px]">
+                                <span className="truncate font-medium text-[#0B1C30]">
+                                  {c.title}
+                                </span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    max={c.maxPoints}
+                                    step="0.25"
+                                    value={val}
+                                    onChange={(e) => {
+                                      const nextMap: RubricScoreMap = {
+                                        ...currentRubricMap,
+                                        [c.id]: Math.max(
+                                          0,
+                                          Math.min(c.maxPoints, Number(e.target.value) || 0)
+                                        ),
+                                      };
+                                      const res = computeRubricTotal(rubricCriteria, nextMap, f.points);
+                                      setRubricScoresState((prev) => ({
+                                        ...prev,
+                                        [f.id]: res.clampedScores,
+                                      }));
+                                      setScores((prev) => ({ ...prev, [f.id]: res.total }));
+                                    }}
+                                    className="h-7 w-14 text-xs tabular-nums"
+                                    data-testid={`modal-rubric-input-${f.id}-${c.id}`}
+                                  />
+                                  <span className="text-[10px] text-slate-400">/{c.maxPoints}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
                       <div className="grid grid-cols-3 gap-2">
                         <div>
                           <Label className="text-[10px]">{tr("Điểm chấm", "Score")}</Label>
@@ -553,6 +648,7 @@ function SubmissionReviewModal({
                             step="0.25"
                             min={0}
                             max={f.points}
+                            readOnly={rubricCriteria.length > 0}
                             value={currentScore}
                             onChange={(e) =>
                               setScores((prev) => ({
@@ -581,6 +677,14 @@ function SubmissionReviewModal({
               </div>
 
               <div className="space-y-3 border-t border-slate-100 pt-3">
+                <CommentPresetBar
+                  onInsert={(text) => {
+                    const prev =
+                      teacherComment !== null ? teacherComment : (sub.teacherComment ?? "");
+                    setTeacherComment(prev ? `${prev} ${text}` : text);
+                  }}
+                />
+
                 <div className="space-y-1">
                   <Label className="text-xs">{vi.assignments.grading.overallComment}</Label>
                   <Textarea
@@ -589,6 +693,7 @@ function SubmissionReviewModal({
                     onChange={(e) => setTeacherComment(e.target.value)}
                     placeholder={tr("Nhận xét tổng thể (hiển thị cho học sinh & phụ huynh)…", "Overall comment (visible to student & parent)…")}
                     className="text-xs"
+                    data-testid="overall-teacher-comment"
                   />
                 </div>
 
@@ -637,7 +742,11 @@ export default function AssignmentGradingPage() {
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<"overview" | "by-question">("overview");
   const [reviewingSubId, setReviewingSubId] = useState<string | null>(null);
+  const [overrideTarget, setOverrideTarget] = useState<ReportPayload["studentRows"][number] | null>(
+    null
+  );
 
   const { data: report, isLoading } = useQuery<ReportPayload>({
     queryKey: ["assignment-report", assignmentId, locale],
@@ -695,9 +804,19 @@ export default function AssignmentGradingPage() {
           <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-[#0B1C30]">
             {report.assignment.title}
           </h1>
-          <p className="mt-0.5 text-xs text-[#464555]">
-            {report.assignment.totalQuestions} {tr("câu hỏi • Điểm tối đa", "questions • Max score")} {report.assignment.maxScore} {tr("• Hạn nộp:", "• Due:")} {formatDateTime(report.assignment.dueAt, locale)}
-          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#464555]">
+            <span>
+              {report.assignment.totalQuestions} {tr("câu hỏi • Điểm tối đa", "questions • Max score")} {report.assignment.maxScore} {tr("• Hạn nộp:", "• Due:")} {formatDateTime(report.assignment.dueAt, locale)}
+            </span>
+            <Badge variant="neutral">
+              {scoreScaleLabel(report.assignment.scoreScale, tr)} · ×{report.assignment.weight}
+            </Badge>
+            {report.assignment.isTargeted && (
+              <Badge variant="default">
+                {tr(`Giao nhóm ${report.assignment.targetCount ?? report.summary.totalStudents} HS`, `Targeted (${report.assignment.targetCount ?? report.summary.totalStudents} students)`)}
+              </Badge>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -726,6 +845,47 @@ export default function AssignmentGradingPage() {
         </div>
       </div>
 
+      {/* Mode Switcher */}
+      <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 text-xs font-semibold">
+        <button
+          type="button"
+          onClick={() => setViewMode("overview")}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition",
+            viewMode === "overview"
+              ? "bg-[#4F46E5] text-white"
+              : "text-[#464555] hover:text-[#0B1C30]"
+          )}
+          data-testid="tab-grading-overview"
+        >
+          <BarChart3 className="h-3.5 w-3.5" />
+          {tr("Tổng quan & Danh sách bài", "Overview & Submissions")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode("by-question")}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition",
+            viewMode === "by-question"
+              ? "bg-[#4F46E5] text-white"
+              : "text-[#464555] hover:text-[#0B1C30]"
+          )}
+          data-testid="tab-grade-by-question"
+        >
+          <ListChecks className="h-3.5 w-3.5" />
+          {tr("Chấm theo câu", "Grade by question")}
+        </button>
+      </div>
+
+      {viewMode === "by-question" ? (
+        <GradeByQuestionPanel
+          assignmentId={assignmentId}
+          onGraded={() => {
+            queryClient.invalidateQueries({ queryKey: ["assignment-report", assignmentId] });
+          }}
+        />
+      ) : (
+      <>
       {/* Stitch 4 KPI Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="stitch-card p-5">
@@ -944,6 +1104,25 @@ export default function AssignmentGradingPage() {
                       <div>
                         <p className="font-semibold text-[#0B1C30]">{row.studentName}</p>
                         <p className="text-xs text-slate-400">{row.studentEmail}</p>
+                        {row.override && (row.override.extraAttempts > 0 || row.override.dueAt || row.override.timeLimitMin) && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {row.override.extraAttempts > 0 && (
+                              <Badge variant="default" className="text-[10px]">
+                                +{row.override.extraAttempts} {tr("lượt", "attempts")}
+                              </Badge>
+                            )}
+                            {row.override.dueAt && (
+                              <Badge variant="mint" className="text-[10px]">
+                                {tr("Hạn:", "Due:")} {formatDateTime(row.override.dueAt, locale)}
+                              </Badge>
+                            )}
+                            {row.override.timeLimitMin && (
+                              <Badge variant="sky" className="text-[10px]">
+                                {row.override.timeLimitMin}′
+                              </Badge>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </td>
@@ -981,9 +1160,9 @@ export default function AssignmentGradingPage() {
                         <span className="text-base text-[#3525CD]">
                           {row.score}/{row.maxScore}
                         </span>
-                        {row.scoreScale10 !== null && (
+                        {row.scaledScore && report.assignment.scoreScale !== "RAW" && (
                           <p className="text-[11px] text-slate-400">
-                            ({row.scoreScale10}/10)
+                            ({row.scaledScore.formatted})
                           </p>
                         )}
                       </div>
@@ -992,18 +1171,30 @@ export default function AssignmentGradingPage() {
                     )}
                   </td>
                   <td className="px-6 py-3.5 text-right">
-                    {row.submissionId ? (
+                    <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
                       <Button
                         size="sm"
-                        variant="secondary"
-                        onClick={() => setReviewingSubId(row.submissionId)}
+                        variant="outline"
+                        onClick={() => setOverrideTarget(row)}
+                        data-testid={`override-btn-${row.studentId}`}
+                        title={tr("Thêm lượt hoặc gia hạn riêng", "Grant extra attempts or personal deadline")}
                       >
-                        <ClipboardEdit className="h-3.5 w-3.5" />
-                        {tr("Chấm & Xem", "Grade & view")}
+                        <CalendarClock className="h-3.5 w-3.5 text-[#4F46E5]" />
+                        {tr("Ngoại lệ", "Exception")}
                       </Button>
-                    ) : (
-                      <span className="text-xs text-slate-400">{tr("Chưa có bài", "No submission")}</span>
-                    )}
+                      {row.submissionId ? (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => setReviewingSubId(row.submissionId)}
+                        >
+                          <ClipboardEdit className="h-3.5 w-3.5" />
+                          {tr("Chấm & Xem", "Grade & view")}
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-slate-400">{tr("Chưa có bài", "No submission")}</span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1011,6 +1202,8 @@ export default function AssignmentGradingPage() {
           </table>
         </div>
       </section>
+      </>
+      )}
 
       {reviewingSubId && (
         <SubmissionReviewModal
@@ -1021,6 +1214,15 @@ export default function AssignmentGradingPage() {
           }}
         />
       )}
+
+      <OverrideDialog
+        assignmentId={assignmentId}
+        student={overrideTarget}
+        onClose={() => setOverrideTarget(null)}
+        onSaved={() => {
+          queryClient.invalidateQueries({ queryKey: ["assignment-report", assignmentId] });
+        }}
+      />
     </div>
   );
 }

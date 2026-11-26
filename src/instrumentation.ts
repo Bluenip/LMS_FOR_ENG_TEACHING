@@ -21,6 +21,21 @@ export async function register() {
     setTimeout(purgeTrash, 3 * 60 * 1000).unref();
     setInterval(purgeTrash, 60 * 60 * 1000).unref();
 
+    // Phase 16: hourly due-soon (<= 24h) assignment reminders (runs with or without Google Drive)
+    const runDueReminders = async () => {
+      try {
+        const { sendDueSoonReminders } = await import("./server/reminderService");
+        await sendDueSoonReminders();
+      } catch (err) {
+        console.error(
+          "[Reminders] Scheduled due-soon check failed:",
+          err instanceof Error ? err.message : "unknown"
+        );
+      }
+    };
+    setTimeout(runDueReminders, 5 * 60 * 1000).unref();
+    setInterval(runDueReminders, 60 * 60 * 1000).unref();
+
     if (!process.env.GOOGLE_CLIENT_ID?.trim()) return;
 
     const pruneMinutes = Number(process.env.DRIVE_PRUNE_INTERVAL_MINUTES ?? 60);

@@ -213,9 +213,12 @@ export async function getChildOverviewForParent(studentId: string, selectedClass
     };
   }
 
-  // Load assignments in child's classes
+  // Load assignments in child's classes (respecting AssignmentTarget subsets)
   const assignments = await prisma.assignment.findMany({
-    where: { classId: { in: classIds } },
+    where: {
+      classId: { in: classIds },
+      OR: [{ targets: { none: {} } }, { targets: { some: { studentId } } }],
+    },
     orderBy: { createdAt: "asc" },
     include: {
       class: {

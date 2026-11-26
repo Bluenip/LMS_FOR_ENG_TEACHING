@@ -1,6 +1,6 @@
-# Tích hợp Google Drive — EngClass LMS
+# Tích hợp Google Drive — Pivora LMS
 
-EngClass LMS hỗ trợ lưu trữ toàn bộ học liệu bài tập lên Google Drive thay cho ổ đĩa máy chủ: PDF đề thi, file nghe Listening/Dictation, file Word nguồn, gói backup `.engclass.zip`, tài liệu/video bài giảng và bài nộp của học sinh.
+Pivora LMS hỗ trợ lưu trữ toàn bộ học liệu bài tập lên Google Drive thay cho ổ đĩa máy chủ: PDF đề thi, file nghe Listening/Dictation, file Word nguồn, gói backup `.engclass.zip`, tài liệu/video bài giảng và bài nộp của học sinh.
 
 Toàn bộ tích hợp được viết bằng TypeScript dùng **Google Drive REST API v3** qua `fetch` thuần (không thêm SDK nặng).
 
@@ -8,7 +8,7 @@ Toàn bộ tích hợp được viết bằng TypeScript dùng **Google Drive RE
 
 ## 1. Kiến trúc & Chính sách bảo mật
 
-- **Scope tối thiểu:** chỉ xin `https://www.googleapis.com/auth/drive.file` — ứng dụng chỉ thấy các file do chính EngClass tạo ra hoặc file giáo viên chọn chủ động qua Google Picker.
+- **Scope tối thiểu:** chỉ xin `https://www.googleapis.com/auth/drive.file` — ứng dụng chỉ thấy các file do chính Pivora tạo ra hoặc file giáo viên chọn chủ động qua Google Picker.
 - **OAuth 2.0 + PKCE (S256):** dùng cookie `HttpOnly` lưu cặp `state` + `code_verifier` (được mã hoá AES-256-GCM), so khớp `state` bằng `timingSafeEqual`. Mọi request `POST`/`PATCH`/`DELETE` dưới `/api/drive/**` đều kiểm tra header `Origin`.
 - **Mã hoá bí mật:** `refresh_token` và `sessionUri` (upload resumable) được mã hoá **AES-256-GCM** bằng `DRIVE_ENCRYPTION_KEY` trước khi lưu PostgreSQL; không bao giờ ghi ra log hay trả về client.
 - **Hai chế độ kết nối (thứ tự ưu tiên):**
@@ -28,7 +28,7 @@ Toàn bộ tích hợp được viết bằng TypeScript dùng **Google Drive RE
 ## 2. Cấu trúc thư mục trên Google Drive
 
 ```text
-EngClass/
+Pivora/
 └── <Tên giáo viên>/
     ├── Worksheets/<Tên worksheet>/              ← de.pdf, audio-1.mp3, nguon.docx
     ├── Backups/<yyyy-mm-dd>/                    ← <Tên worksheet>.engclass.zip, thu-vien.zip
@@ -37,7 +37,7 @@ EngClass/
         └── <Tên bài tập>/<Tên học sinh>/        ← bài nộp học sinh (riêng tư)
 ```
 
-Mỗi thư mục được gắn khóa ổn định trong `appProperties.engclassFolder`. Khi giáo viên đổi tên worksheet hoặc đổi tên lớp, thư mục tương ứng trên Drive tự đổi tên ở lần ghi file kế tiếp mà không tạo trùng.
+Mỗi thư mục được gắn khóa ổn định trong `appProperties.engclassFolder` (nếu tài khoản đã từng tạo thư mục gốc tên `EngClass` trước khi đổi tên sang `Pivora`, hệ thống tự tìm lại thư mục gốc cũ để không tạo trùng). Khi giáo viên đổi tên worksheet hoặc đổi tên lớp, thư mục tương ứng trên Drive tự đổi tên ở lần ghi file kế tiếp mà không tạo trùng.
 
 ---
 
@@ -49,7 +49,7 @@ Mỗi thư mục được gắn khóa ổn định trong `appProperties.engclass
    - Nếu muốn dùng nút **Chọn trên Drive (Google Picker)**, bật thêm **Google Picker API**.
 3. Vào **Google Auth Platform / OAuth consent screen**:
    - Chọn **External** (hoặc **Internal** nếu tất cả tài khoản đều thuộc Google Workspace nội bộ).
-   - Điền tên ứng dụng (ví dụ `EngClass LMS`), email hỗ trợ.
+   - Điền tên ứng dụng (ví dụ `Pivora LMS`), email hỗ trợ.
    - Thêm duy nhất scope: `https://www.googleapis.com/auth/drive.file`.
    - **QUAN TRỌNG:** Khi app ở trạng thái **Testing**, Google chỉ cho `refresh_token` sống **7 ngày** (sau đó bị lỗi `invalid_grant`). Để dùng lâu dài ở production, hãy bấm **Publish app → In production**. Scope `drive.file` là non-sensitive nên quy trình xác minh nhẹ hơn rất nhiều so với `drive` toàn quyền.
 4. Vào **Credentials → Create Credentials → OAuth client ID**:
@@ -87,7 +87,7 @@ DRIVE_BACKUP_RETENTION="14"         # giữ 14 bản backup gần nhất
 
 ## 5. Hàng đợi xoá & Sao lưu tự động
 
-- **Thùng rác an toàn (`DriveTrash`):** Khi xoá worksheet, bài tập, bài giảng hoặc lớp, EngClass ghi các `driveFileId` vào bảng `DriveTrash` (không gọi Google trong transaction DB). Job `pruneDrive` chuyển các file đó vào **thùng rác Google Drive (`trashed=true`)**, không xoá vĩnh viễn (Google tự dọn thùng rác sau 30 ngày).
+- **Thùng rác an toàn (`DriveTrash`):** Khi xoá worksheet, bài tập, bài giảng hoặc lớp, Pivora ghi các `driveFileId` vào bảng `DriveTrash` (không gọi Google trong transaction DB). Job `pruneDrive` chuyển các file đó vào **thùng rác Google Drive (`trashed=true`)**, không xoá vĩnh viễn (Google tự dọn thùng rác sau 30 ngày).
 - **Chạy thủ công:**
   - Trong giao diện `/admin` → nút **Dọn file mồ côi**.
   - Qua CLI / cron: `pnpm drive:prune [graceHours]` (mặc định `24`).

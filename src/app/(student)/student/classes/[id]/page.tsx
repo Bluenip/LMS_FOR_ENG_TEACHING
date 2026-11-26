@@ -21,7 +21,7 @@ export default async function StudentClassDetailPage({
   }
 
   try {
-    const cls = await getClassDetail(id);
+    const cls = await getClassDetail(id, { studentId: session.user.id });
     const serialized: ClassDetailData = {
       id: cls.id,
       name: cls.name,

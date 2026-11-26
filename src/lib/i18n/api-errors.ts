@@ -16,6 +16,21 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
   "Không tìm thấy bài tập.": "Assignment not found.",
   "Bạn không có quyền quản lý bài tập này.": "You do not have permission to manage this assignment.",
   "Bạn không thuộc lớp được giao bài tập này.": "You are not enrolled in the class for this assignment.",
+  "Bạn không nằm trong danh sách học sinh được giao bài tập này.":
+    "You are not included in the target students for this assignment.",
+  "Chỉ chọn được nhóm học sinh cụ thể khi giao cho 1 lớp duy nhất.":
+    "Specific target students can only be selected when assigning to a single class.",
+  "Học sinh không thuộc lớp học của bài tập này hoặc tài khoản đang bị xoá.":
+    "Student is not active in this assignment's class.",
+  "Không tìm thấy ngoại lệ cho học sinh này.": "No override found for this student.",
+  "Không tìm thấy câu nhận xét mẫu.": "Comment preset not found.",
+  "Bạn không có quyền xoá câu nhận xét mẫu này.":
+    "You do not have permission to delete this comment preset.",
+  "Không tìm thấy câu hỏi trong bài tập này.": "Question not found in this assignment.",
+  "Nội dung nhận xét mẫu không được để trống": "Preset comment content cannot be empty.",
+  "Tên tiêu chí rubric không được để trống": "Rubric criterion title cannot be empty.",
+  "Số lượng câu nhận xét mẫu đã đạt tối đa (100).":
+    "Maximum number of comment presets reached (100).",
   "Bạn không có quyền truy cập bài làm này.": "You do not have permission to access this submission.",
   "Chỉ giáo viên mới được xem trang chấm bài chi tiết.": "Only teachers can view detailed grading.",
   "Chỉ giáo viên mới có quyền chấm điểm.": "Only teachers can grade submissions.",
@@ -436,6 +451,12 @@ const NOTIFICATION_PATTERNS: Array<[RegExp, (...args: string[]) => string]> = [
     (_m, sha) =>
       `Deployment of revision ${sha} failed. The previous version was retained or restored. Check cron.log on the server.`,
   ],
+  [/^Sắp hết hạn nộp: (.+)$/, (_m, title) => `Due soon: ${title}`],
+  [
+    /^Còn khoảng (\d+) giờ để nộp bài cho lớp (.+)\.$/,
+    (_m, hours, cls) => `About ${hours} hour(s) left to submit for ${cls}.`,
+  ],
+  [/^Ngoại lệ mới cho bài (.+)$/, (_m, title) => `Assignment exception granted: ${title}`],
 ];
 
 function localizeLine(text: string, locale: Locale): string {

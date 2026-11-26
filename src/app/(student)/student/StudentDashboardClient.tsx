@@ -17,6 +17,8 @@ import {
   Trophy,
 } from "lucide-react";
 import { formatDateTime, formatScore } from "@/lib/utils";
+import { convertScoreToScale } from "@/lib/score-scale";
+import type { ScoreScale } from "@prisma/client";
 import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +53,9 @@ interface StudentDashboardProps {
     proctorMode: string;
     requireCamera?: boolean;
     proctorSummary: string | null;
+    scoreScale?: ScoreScale;
+    weight?: number;
+    hasOverride?: boolean;
     attemptsUsed: number;
     latestSubmission: {
       id: string;
@@ -188,6 +193,11 @@ export function StudentDashboardClient({
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="default">{a.className}</Badge>
+                      {a.hasOverride && (
+                        <Badge variant="sky">
+                          {tr("Có điều chỉnh riêng", "Custom extension")}
+                        </Badge>
+                      )}
                       {needsRules && (
                         <Badge variant="danger">
                           <Lock className="h-3 w-3" />
@@ -259,10 +269,19 @@ export function StudentDashboardClient({
                     {a.className} {tr("• Nộp lúc", "• Submitted at")} {formatDateTime(a.latestSubmission?.submittedAt)}
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   {a.latestSubmission?.status === "GRADED" ? (
                     <Badge variant="mint" className="text-xs px-3 py-1 tabular-nums">
-                      {tr("Điểm:", "Score:")} {formatScore(a.latestSubmission.totalScore, a.latestSubmission.maxScore)}
+                      {tr("Điểm:", "Score:")}{" "}
+                      {formatScore(a.latestSubmission.totalScore, a.latestSubmission.maxScore)}
+                      {a.latestSubmission.totalScore !== null &&
+                        a.scoreScale &&
+                        a.scoreScale !== "SCALE_10" &&
+                        ` (${convertScoreToScale(
+                          a.latestSubmission.totalScore,
+                          a.latestSubmission.maxScore,
+                          a.scoreScale
+                        ).formatted})`}
                     </Badge>
                   ) : (
                     <Badge variant="orange">{tr("Chờ chấm tự luận", "Essay awaiting grading")}</Badge>

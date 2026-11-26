@@ -3,7 +3,12 @@ import { auth } from "@/lib/auth";
 import { getWorksheetForTeacher } from "@/server/worksheetService";
 import { WorksheetEditor } from "@/components/worksheet/WorksheetEditor";
 import type { EditorFieldDTO, WorksheetPassageDTO } from "@/components/worksheet/types";
-import type { FieldOption, FieldStyle, GradingOptions } from "@/lib/grading/types";
+import type {
+  FieldOption,
+  FieldStyle,
+  GradingOptions,
+  RubricCriterion,
+} from "@/lib/grading/types";
 
 export default async function WorksheetEditPage({
   params,
@@ -42,6 +47,7 @@ export default async function WorksheetEditPage({
       options: (f.options as FieldOption[] | null) ?? null,
       answerKey: (f.answerKey as Record<string, unknown>) ?? {},
       gradingOpts: (f.gradingOpts as GradingOptions | null) ?? null,
+      rubric: Array.isArray(f.rubric) ? (f.rubric as unknown as RubricCriterion[]) : null,
     }));
 
     return (

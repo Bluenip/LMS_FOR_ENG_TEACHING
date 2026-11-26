@@ -1,6 +1,6 @@
-# Pivora — Hệ thống LMS dạy tiếng Anh & Worksheet tương tác
+# Pivora — Nền tảng LMS Đa môn học & Khảo thí tương tác
 
-Nền tảng LMS dành cho giáo viên, học sinh, phụ huynh và quản trị viên, được tối ưu cho giảng dạy tiếng Anh: **Worksheet PDF tương tác** (Overlay trên PDF, Phiếu trả lời nhanh, hoặc kết hợp A + B), **tự động tạo bài điền từ từ file Word (`.docx`)**, **Chế độ tập trung 1 câu/màn hình cho bài học thuộc**, **File nghe giới hạn số lần nghe**, **Chép chính tả chấm theo % số từ đúng**, **Backup/Export & chia sẻ giữa các giáo viên**, **Bảng xếp hạng**, **Cổng Phụ huynh**, và **Chống gian lận 2 lớp (Trình duyệt + Camera AI)**.
+Nền tảng LMS dành cho giáo viên, học sinh, phụ huynh và quản trị viên, hỗ trợ giảng dạy **11 môn học** (Tiếng Anh, Toán, Vật lý, Hóa học, Sinh học, Ngữ văn, Lịch sử, Địa lý, GDCD, Tin học, Chung): **Worksheet PDF tương tác** (Overlay trên PDF, Phiếu trả lời nhanh, hoặc kết hợp A + B), **tự động tạo bài điền từ từ file Word (`.docx`)**, **Công thức toán LaTeX/KaTeX**, **Chế độ Đọc hiểu chia đôi màn hình**, **Chế độ tập trung 1 câu/màn hình**, **File nghe giới hạn số lần nghe**, **Chép chính tả chấm theo % số từ đúng**, **Chấm Rubric & Chấm theo câu / Ẩn danh**, **Gia hạn & giao bài theo nhóm học sinh**, **Lưu tạm ngoại tuyến (Offline Draft)**, **Cổng Phụ huynh**, và **Chống gian lận 2 lớp (Trình duyệt + Camera AI)**.
 
 Tên hiển thị sản phẩm đổi được qua biến môi trường `NEXT_PUBLIC_APP_NAME` (mặc định: `Pivora`). Hỗ trợ chuyển đổi nhanh giao diện **Sáng / Tối (Light / Dark)** và **Tiếng Việt / Tiếng Anh (VI / EN)**.
 
@@ -8,9 +8,12 @@ Tên hiển thị sản phẩm đổi được qua biến môi trường `NEXT_P
 
 ## Tính năng chính
 
-### 1. Worksheet Studio, Tự động tạo từ Word & Chia sẻ / Backup
+### 1. Worksheet Studio, Đa môn học, Tạo từ Word & Chia sẻ / Backup
+- **Hỗ trợ 11 môn học:** Tiếng Anh, Toán, Vật lý, Hóa học, Sinh học, Ngữ văn, Lịch sử, Địa lý, GDCD, Tin học, và Chung — tự động phân loại & gợi ý công cụ phù hợp cho từng môn.
 - **3 chế độ biên tập:** Chế độ A (vẽ ô nhập trực tiếp trên PDF với toạ độ chuẩn hoá `0..1`, kéo/resize bằng `react-rnd`, bám lưới, căn hàng nhiều ô), Chế độ B (Phiếu trả lời + nhập đáp án hàng loạt), hoặc kết hợp A + B.
-- **9 loại câu hỏi:** `TEXT` (điền từ), `NUMBER`, `MULTIPLE_CHOICE`, `MULTI_SELECT`, `TRUE_FALSE`, `DROPDOWN`, `CHECKBOX`, `ESSAY` (tự luận chấm tay), và **`DICTATION` (Chép chính tả)**.
+- **11 loại câu hỏi:** `TEXT` (điền từ), `NUMBER`, `MULTIPLE_CHOICE`, `MULTI_SELECT`, `TRUE_FALSE`, `TRUE_FALSE_GROUP` (nhóm Đúng/Sai nhiều ý), `DROPDOWN`, `CHECKBOX`, `ESSAY` (tự luận hỗ trợ thang Rubric), `DICTATION` (Chép chính tả), và `PHOTO_UPLOAD` (học sinh chụp/tải ảnh bài làm giấy + hỗ trợ chấm Rubric).
+- **Công thức Toán học & Ký hiệu khoa học (KaTeX):** Render trực tiếp LaTeX `$...$` và `$$...$$` trong đề bài, đoạn văn đọc hiểu, lựa chọn đáp án và giải thích chi tiết.
+- **Đoạn văn Đọc hiểu (Passages) & Chế độ Focus Mode:** Gắn đoạn đọc hiểu vào từng nhóm câu hỏi (hiển thị dạng chia đôi hoặc thẻ đọc hiểu) và bật **"Hiển thị từng câu một trên màn hình"** (hoặc preset **Bài học thuộc**) để gộp các ô trống `7a`, `7b` về đúng 1 câu hoàn chỉnh, nhấn `Enter` sang ô/câu kế tiếp.
 - **Tự động tạo bài điền từ từ file Word (`.docx`) / văn bản:**
   - Giáo viên soạn bài trong Word theo cú pháp gạch dưới kép `__đáp án__`, hỗ trợ nhiều đáp án đúng ngăn cách bằng dấu `/` hoặc `|`, ví dụ:
     ```text
@@ -19,11 +22,8 @@ Tên hiển thị sản phẩm đổi được qua biến môi trường `NEXT_P
     ```
   - Hệ thống tự động loại bỏ đánh số trùng (`Câu 1: 1.`), chuẩn hoá khoảng trắng, tách nhiều chỗ trống trong cùng 1 câu thành `2a`, `2b` và hiển thị xem trước trước khi lưu.
   - Có sẵn nút **Tải file Word mẫu (`.docx`)** ngay trong hộp thoại nhập.
-- **Chế độ tập trung 1 câu / màn hình (`Focus Mode`):**
-  - Khi giao bài, giáo viên bật **"Hiển thị từng câu một trên màn hình"** (hoặc chọn preset **Bài học thuộc**).
-  - Học sinh làm từng câu trên một thẻ lớn giữa màn hình, điền từ **trực tiếp ngay trong câu**, tự gộp các câu có nhiều chỗ trống (`7a`, `7b`, `10a`, `10b`, `10c`) về cùng một câu hoàn chỉnh, nhấn `Enter` để chuyển nhanh sang ô/câu tiếp theo.
 - **Backup, Export & Chia sẻ giáo viên:**
-  - **Xuất gói Backup đầy đủ (`.engclass.zip`):** Đóng gói toàn bộ phiếu (câu hỏi, đáp án, cấu hình chấm, file PDF và tất cả file nghe MP3/WAV) để sao lưu hoặc gửi cho đồng nghiệp.
+  - **Xuất gói Backup đầy đủ (`.engclass.zip`):** Đóng gói toàn bộ phiếu (câu hỏi, Rubric, đáp án, cấu hình chấm, đoạn văn, file PDF và tất cả file nghe MP3/WAV) để sao lưu hoặc gửi cho đồng nghiệp.
   - **Sao lưu toàn bộ thư viện (`Sao lưu tất cả .zip`):** Xuất tất cả worksheet của giáo viên trong một file `.zip` duy nhất.
   - **Xuất file Word (`.docx`):** Chọn xuất **bản có đáp án** (giữ nguyên định dạng `__đáp án__` + bảng đáp án cuối bài) hoặc **bản đề học sinh** (chỉ chỗ trống để in ấn).
   - **Nhập Backup 1 chạm:** Hỗ trợ nhập `.engclass.zip`, file backup toàn thư viện `.zip`, `.json`, `.docx` hoặc `.txt`.
@@ -60,22 +60,34 @@ Tên hiển thị sản phẩm đổi được qua biến môi trường `NEXT_P
 - **Lớp 2 — Giám sát bằng Camera AI (Webcam):**
   - Sử dụng [`@mediapipe/tasks-vision`](https://github.com/google-ai-edge/mediapipe) (`FaceLandmarker` + `ObjectDetector` EfficientDet-Lite0), chạy **100% cục bộ trên trình duyệt** (WASM + WebGL/GPU tự động fallback CPU) — **không stream video lên server**.
   - Bộ runtime WASM và 2 file model (~8 MB) được tự động copy/tải vào `public/mediapipe/` trong bước `postinstall` để tự host (chạy tốt cả trong mạng LAN).
-  - Các sự kiện phát hiện (kèm bộ lọc chống báo nhầm debounce + cooldown 30 giây):
-    - `CAMERA_NO_FACE`: không thấy mặt liên tục ≥ 5 giây.
-    - `CAMERA_MULTI_FACE`: có từ 2 khuôn mặt trở lên ≥ 2 giây.
-    - `CAMERA_LOOK_AWAY`: quay ngang > 35° hoặc cúi đầu > 25° liên tục ≥ 4 giây (luôn ở mức *nghi vấn*, không tự khoá để tránh báo nhầm khi viết nháp).
-    - `CAMERA_PHONE`: phát hiện điện thoại (`cell phone` ≥ 0,5 trong 2 khung hình liên tiếp).
+  - Các sự kiện phát hiện (kèm 3 giây hiệu chuẩn tư thế đầu giờ, bộ lọc debounce & cooldown 15 giây mặc định):
+    - `CAMERA_NO_FACE`: không thấy mặt liên tục ≥ 3 giây.
+    - `CAMERA_MULTI_FACE`: có từ 2 khuôn mặt trở lên ≥ 1,5 giây.
+    - `CAMERA_LOOK_AWAY`: quay ngang > 25° hoặc cúi đầu > 20° liên tục ≥ 2,5 giây (luôn ở mức *nghi vấn*, không tự khoá để tránh báo nhầm khi viết nháp).
+    - `CAMERA_PHONE`: phát hiện điện thoại (`cell phone` ≥ 0,35 trong 2 khung hình liên tiếp).
     - `CAMERA_OFF`: tắt/rút/chặn camera — luôn che đề thi và ghi nhận vi phạm.
   - Mặc định các sự kiện AI chỉ đánh dấu **nghi vấn** (`cameraEnforce = false`); giáo viên có thể bật `cameraEnforce` nếu muốn tính vào ngưỡng vi phạm.
   - **Quyền riêng tư (Nghị định 13/2023):** Bước kiểm tra camera + hộp đồng ý xử lý hình ảnh riêng trên trang nội quy (lưu `cameraConsentAt`); ảnh bằng chứng nhỏ `320×240` JPEG (≤ 120 KB) chỉ giáo viên lớp được xem (và phụ huynh nếu bật chia sẻ), tự động xoá định kỳ sau 30 ngày bằng `pnpm proctor:purge-snapshots`.
   - *Lưu ý:* Trình duyệt chỉ cho phép bật webcam trên **HTTPS** (hoặc `localhost`). Khi dùng chung với Safe Exam Browser (SEB), cần bật quyền camera trong cấu hình `.seb`.
 
-### 5. Lớp học, Chấm điểm, Bảng xếp hạng, Cổng Phụ huynh & Admin
-- Quản lý lớp học, mã tham gia 6 ký tự, duyệt học sinh, import danh sách từ Excel, bảng tin, bài giảng đa phương tiện (PDF/Video/YouTube/Audio/Link).
-- Đồng hồ server, tự nộp khi hết giờ, chấm tự động + chấm tay câu tự luận + ghi đè điểm, thống kê tỉ lệ đúng từng câu & đáp án sai phổ biến, xuất Excel bảng điểm (`exceljs`).
-- Bảng xếp hạng lớp & bài tập bằng SQL `RANK()` kèm ẩn danh tuỳ chọn, loại bài bị đánh dấu nghi vấn.
-- Cổng Phụ huynh liên kết qua mã 8 ký tự dùng một lần (không bao giờ lộ dữ liệu học sinh khác).
-- Quản trị Admin: thống kê hệ thống, quản lý tài khoản (đổi vai trò, khoá/mở), liên kết phụ huynh thủ công.
+### 5. Lớp học, Giao bài linh hoạt, Chấm nâng cao, Trải nghiệm làm bài & Admin
+- **Lớp học & Tham gia nhanh:** Quản lý lớp học, mã tham gia 6 ký tự, **mã QR & link mời vào lớp**, duyệt học sinh, import danh sách từ Excel, bảng tin, bài giảng đa phương tiện (PDF/Video/YouTube/Audio/Link).
+- **Giao bài linh hoạt & Nhắc hạn tự động:**
+  - Giao cho **cả lớp hoặc chọn đích danh từng học sinh** (phân hóa theo nhóm, kiểm tra bù).
+  - **Điều chỉnh / Gia hạn riêng từng học sinh (`Override`):** Cho phép mở rộng hạn nộp, cộng thêm thời gian làm bài hoặc cấp thêm lượt làm bài cho từng cá nhân mà không ảnh hưởng cả lớp.
+  - **Thang điểm quy đổi & Hệ số:** Cấu hình thang quy đổi (`Thang 10`, `Thang 100`, `IELTS 0–9.0`, `Điểm gốc`) và hệ số điểm (`×1`, `×2`, `×3`…) ngay khi giao bài; tự động gửi thông báo nhắc trước hạn 24h cho học sinh chưa nộp.
+- **Chấm điểm nâng cao:**
+  - Đồng hồ server, tự nộp khi hết giờ, chấm tự động + chấm tay câu tự luận (`ESSAY`) & ảnh chụp bài làm (`PHOTO_UPLOAD`).
+  - **Chấm theo tiêu chí (`Rubric`):** Chia câu tự luận thành nhiều tiêu chí có điểm tối đa riêng, tự cộng tổng và hiển thị chi tiết từng tiêu chí cho học sinh sau khi công bố.
+  - **Chấm theo câu (`Grade by Question`) & Chấm ẩn danh (`Blind Grading`):** Chấm lần lượt toàn bộ bài nộp cho cùng một câu hỏi trên một màn hình, bật chế độ ẩn tên học sinh để tránh thiên vị, kèm **Ngân hàng nhận xét nhanh** (`Comment Presets`).
+  - Thống kê tỉ lệ đúng từng câu & đáp án sai phổ biến, xuất Excel bảng điểm (`exceljs`).
+- **Trải nghiệm làm bài tin cậy:**
+  - **Lưu tạm ngoại tuyến (`Offline Queue`):** Tự động lưu bản nháp câu trả lời vào máy khi mất mạng và đồng bộ lại ngay khi có kết nối.
+  - **Gắn cờ xem lại (Flag):** Đánh dấu các câu chưa chắc chắn, bộ lọc "Đã gắn cờ / Chưa trả lời" và giữ trạng thái cờ qua lần tải lại trang.
+- **Bảng xếp hạng, Phụ huynh & Quản trị:**
+  - Bảng xếp hạng lớp & bài tập bằng SQL `RANK()` kèm ẩn danh tuỳ chọn, loại bài bị đánh dấu nghi vấn.
+  - Cổng Phụ huynh liên kết qua mã 8 ký tự dùng một lần (không bao giờ lộ dữ liệu học sinh khác).
+  - Quản trị Admin: thống kê hệ thống, quản lý tài khoản (đổi vai trò, khoá/mở), liên kết phụ huynh thủ công, **Nhật ký kiểm tra (`/admin/audit`)**, và **Theo dõi lỗi hệ thống (`/admin/errors`)**.
 
 ### 6. Lưu bài tập trên Google Drive (tuỳ chọn)
 - Admin kết nối **Drive dùng chung** ở `/admin`; mỗi giáo viên có thể kết nối **Drive riêng** ở `/teacher/settings`. Thứ tự ưu tiên khi lưu file: Drive riêng → Drive dùng chung → máy chủ (`local` / `s3`).
@@ -100,7 +112,9 @@ Tên hiển thị sản phẩm đổi được qua biến môi trường `NEXT_P
 - **Next.js 15 (App Router) + TypeScript (strict)**
 - **PostgreSQL + Prisma ORM**
 - **Auth.js (NextAuth v5)** — Credentials (`bcryptjs`) + tuỳ chọn Google OAuth
-- **Tailwind CSS + shadcn/ui** — Thiết kế theo EngClass Design System (Stitch) kèm Dark Mode
+- **Tailwind CSS + shadcn/ui** — Thiết kế theo Pivora Design System (Stitch) kèm Dark Mode
+- **katex** — Hiển thị công thức Toán học & Khoa học (`$...$`, `$$...$$`)
+- **qrcode** — Tạo mã QR chia sẻ & mời học sinh tham gia lớp nhanh
 - **pdfjs-dist** & **pdf-lib** — Render PDF bằng `<canvas>` (lazy-load, không dùng `<iframe>`/`<embed>`)
 - **react-rnd** — Vẽ, kéo và resize ô nhập liệu chuẩn hoá toạ độ `0..1`
 - **@mediapipe/tasks-vision** — Camera AI Proctoring chạy cục bộ trên trình duyệt
@@ -216,7 +230,7 @@ pnpm test:e2e                # Chạy Playwright E2E tests (cần Chromium: pnpm
 Dự án có sẵn `Dockerfile` và `compose.production.yml` (PostgreSQL 16 + app, chỉ mở cổng `127.0.0.1:${APP_PORT}`; Cloudflare Tunnel nối vào cổng này nên không cần mở port ra Internet).
 
 ```bash
-git clone https://github.com/Bluenip/LMS_FOR_ENG_TEACHING.git engclass && cd engclass
+git clone https://github.com/Bluenip/PIVORA.git pivora && cd pivora
 cp .env.production.example .env.production   # điền NEXT_PUBLIC_APP_URL, APP_URL, POSTGRES_PASSWORD, AUTH_SECRET…
 docker compose -f compose.production.yml --env-file .env.production up -d --build
 ```

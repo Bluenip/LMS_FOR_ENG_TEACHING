@@ -215,6 +215,10 @@ async function main() {
   await prisma.errorLog.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.notification.deleteMany();
+  await prisma.assignmentReminderSent.deleteMany();
+  await prisma.assignmentOverride.deleteMany();
+  await prisma.assignmentTarget.deleteMany();
+  await prisma.teacherCommentPreset.deleteMany();
   await prisma.audioPlay.deleteMany();
   await prisma.proctorEvent.deleteMany();
   await prisma.answer.deleteMany();
@@ -548,6 +552,11 @@ async function main() {
             h: 0.105,
             style: { fontSize: 13, align: "left" },
             answerKey: { rubric: "Viết 1-2 câu rõ ý, đúng ngữ pháp giải thích tầm quan trọng của teamwork." },
+            rubric: [
+              { id: "crit_content", title: "Ý tưởng & nội dung rõ ràng", maxPoints: 1.0 },
+              { id: "crit_grammar", title: "Đúng ngữ pháp & chính tả", maxPoints: 0.5 },
+              { id: "crit_vocab", title: "Từ vựng phù hợp ngữ cảnh", maxPoints: 0.5 },
+            ],
           },
           {
             placement: "OVERLAY",
@@ -849,6 +858,7 @@ async function main() {
             isCorrect: true,
             score: 1.5,
             teacherNote: "Ý hay, dùng từ tốt!",
+            rubricScores: { crit_content: 0.8, crit_grammar: 0.4, crit_vocab: 0.3 },
           },
           { fieldId: wsUnit7.fields[4]!.id, value: "75", isCorrect: true, score: 1 },
           { fieldId: wsUnit7.fields[5]!.id, value: "B", isCorrect: true, score: 1 },
@@ -1110,6 +1120,40 @@ async function main() {
         link: `/teacher/assignments/${asgUnit7.id}/grading`,
       },
     ],
+  });
+
+  // Phase 16 seed: TeacherCommentPreset + sample AssignmentOverride for student4
+  await prisma.teacherCommentPreset.createMany({
+    data: [
+      {
+        teacherId: teacher1.id,
+        category: "Khen ngợi",
+        content: "Bài làm cẩn thận, trình bày rõ ràng và đúng trọng tâm.",
+        order: 0,
+      },
+      {
+        teacherId: teacher1.id,
+        category: "Góp ý nội dung",
+        content: "Ý đúng nhưng em cần bổ sung thêm dẫn chứng hoặc giải thích chi tiết hơn.",
+        order: 1,
+      },
+      {
+        teacherId: teacher1.id,
+        category: "Ngữ pháp",
+        content: "Chú ý chia thì động từ và kiểm tra lại chính tả trước khi nộp bài.",
+        order: 2,
+      },
+    ],
+  });
+
+  await prisma.assignmentOverride.create({
+    data: {
+      assignmentId: asgUnit7.id,
+      studentId: students[3]!.id,
+      extraAttempts: 1,
+      timeLimitMin: 55,
+      note: "Học sinh gặp sự cố mạng giữa giờ (mẫu gia hạn)",
+    },
   });
 
   // Phase 13 seed: sample AuditLog & ErrorLog entries for /admin/audit and /admin/errors

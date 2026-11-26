@@ -20,6 +20,14 @@ import { formatDateTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { DriveStatusPayload } from "@/server/driveService";
 
 function formatBytes(bytes: number | null | undefined): string {
@@ -35,6 +43,7 @@ function TeacherSettingsContent() {
   const queryClient = useQueryClient();
   const driveResult = searchParams.get("drive");
 
+  const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [togglingBackup, setTogglingBackup] = useState(false);
   const [backingUpAll, setBackingUpAll] = useState(false);
@@ -53,16 +62,6 @@ function TeacherSettingsContent() {
   const shared = data?.shared;
 
   const handleDisconnect = async () => {
-    if (
-      !confirm(
-        tr(
-          "Ngắt kết nối Google Drive cá nhân? Các file đã tải lên vẫn nằm nguyên trong Drive của bạn.",
-          "Disconnect your personal Google Drive? Previously uploaded files will remain in your Drive."
-        )
-      )
-    ) {
-      return;
-    }
     setDisconnecting(true);
     try {
       await apiFetchJson("/api/drive/disconnect", {
@@ -71,6 +70,7 @@ function TeacherSettingsContent() {
         body: JSON.stringify({ scope: "personal" }),
       });
       toast.success(tr("Đã ngắt kết nối Google Drive cá nhân.", "Personal Google Drive disconnected."));
+      setDisconnectOpen(false);
       queryClient.invalidateQueries({ queryKey: ["drive-status"] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : tr("Thao tác thất bại", "Action failed"));
@@ -223,7 +223,7 @@ function TeacherSettingsContent() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={handleDisconnect}
+                  onClick={() => setDisconnectOpen(true)}
                   disabled={disconnecting}
                   className="text-[#BA1A1A] hover:bg-red-50"
                 >
@@ -315,6 +315,29 @@ function TeacherSettingsContent() {
           </div>
         )}
       </section>
+
+      <Dialog open={disconnectOpen} onOpenChange={setDisconnectOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{tr("Ngắt kết nối Google Drive cá nhân?", "Disconnect personal Google Drive?")}</DialogTitle>
+            <DialogDescription>
+              {tr(
+                "Các file đã tải lên vẫn nằm nguyên trong Google Drive của bạn. Các file mới sau này sẽ lưu ở Drive dùng chung hoặc ổ đĩa máy chủ.",
+                "Previously uploaded files remain intact in your Google Drive. Future uploads will use the shared Drive or server storage."
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDisconnectOpen(false)} disabled={disconnecting}>
+              {tr("Huỷ", "Cancel")}
+            </Button>
+            <Button variant="destructive" onClick={handleDisconnect} disabled={disconnecting}>
+              <Unlink className="h-4 w-4" />
+              {disconnecting ? tr("Đang ngắt…", "Disconnecting…") : tr("Ngắt kết nối", "Disconnect")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

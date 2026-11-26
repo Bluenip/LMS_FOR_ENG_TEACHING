@@ -7,6 +7,7 @@ import {
   ProctorEventType,
   ProctorMode,
   Role,
+  ScoreScale,
   ShowResultMode,
   SkillTag,
   ViolationAction,
@@ -183,6 +184,13 @@ export const fieldStyleSchema = z
   .optional()
   .nullable();
 
+export const rubricCriterionSchema = z.object({
+  id: z.string().trim().min(1).max(64),
+  title: z.string().trim().min(1, "Tên tiêu chí rubric không được để trống").max(200),
+  description: z.string().trim().max(500).optional(),
+  maxPoints: z.number().min(0).max(1000),
+});
+
 export const gradingOptsSchema = z
   .object({
     caseSensitive: z.boolean().optional(),
@@ -217,6 +225,7 @@ export const fieldItemSchema = z
     options: z.array(fieldOptionSchema).optional().nullable(),
     answerKey: z.record(z.unknown()),
     gradingOpts: gradingOptsSchema,
+    rubric: z.array(rubricCriterionSchema).max(20).optional().nullable(),
   })
   .superRefine((field, ctx) => {
     if (field.placement === "OVERLAY") {
@@ -280,11 +289,28 @@ export const createAssignmentSchema = z.object({
   audioBlockPause: z.boolean().default(false),
   audioBlockSeek: z.boolean().default(false),
   oneQuestionPerPage: z.boolean().default(false),
+  remindBeforeDue: z.boolean().default(true),
+  scoreScale: z.nativeEnum(ScoreScale).default("SCALE_10"),
+  weight: z.number().min(0.5).max(10).default(1),
+  targetStudentIds: z.array(z.string().trim().min(1).max(64)).max(500).optional().nullable(),
 });
 
 /** Editing an assignment after it was given: same settings, but worksheet and class are fixed. */
 export const updateAssignmentSchema = createAssignmentSchema.omit({ worksheetId: true, classIds: true });
 export type UpdateAssignmentInput = z.infer<typeof updateAssignmentSchema>;
+
+export const upsertAssignmentOverrideSchema = z.object({
+  studentId: z.string().trim().min(1),
+  extraAttempts: z.number().int().min(0).max(50).default(0),
+  dueAt: z.string().datetime().optional().nullable().or(z.literal("")),
+  timeLimitMin: z.number().int().min(1).max(600).optional().nullable(),
+  note: z.string().trim().max(500).optional().nullable(),
+});
+
+export const createCommentPresetSchema = z.object({
+  content: z.string().trim().min(1, "Nội dung nhận xét mẫu không được để trống").max(500),
+  category: z.string().trim().max(60).optional().nullable(),
+});
 
 // ===== Submission & Grading =====
 export const startSubmissionSchema = z.object({
@@ -343,6 +369,11 @@ export const submitSubmissionSchema = z.object({
     .optional(),
 });
 
+export const rubricScoresSchema = z
+  .record(z.string().min(1).max(64), z.number().min(0).max(1000))
+  .optional()
+  .nullable();
+
 export const manualGradeSchema = z.object({
   teacherComment: z.string().trim().max(3000).optional().nullable(),
   flagged: z.boolean().optional(),
@@ -352,8 +383,17 @@ export const manualGradeSchema = z.object({
       score: z.number().min(0).max(1000),
       isCorrect: z.boolean().optional().nullable(),
       teacherNote: z.string().trim().max(1000).optional().nullable(),
+      rubricScores: rubricScoresSchema,
     })
   ),
+});
+
+export const singleFieldGradeSchema = z.object({
+  fieldId: z.string().min(1),
+  score: z.number().min(0).max(1000),
+  isCorrect: z.boolean().optional().nullable(),
+  teacherNote: z.string().trim().max(1000).optional().nullable(),
+  rubricScores: rubricScoresSchema,
 });
 
 // ===== Proctoring =====

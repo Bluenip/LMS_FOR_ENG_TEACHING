@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   ChevronLeft,
@@ -10,7 +10,8 @@ import {
   Send,
   XCircle,
 } from "lucide-react";
-import type { AnswerValue, DictationGradeDetail } from "@/lib/grading/types";
+import type { AnswerValue, DictationGradeDetail, RubricScoreMap } from "@/lib/grading/types";
+import { loadFlaggedFieldIds, saveFlaggedFieldIds } from "@/lib/offline-answer-queue";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
@@ -110,6 +111,7 @@ interface FocusQuestionRunnerProps {
       score?: number | null;
       teacherNote?: string | null;
       gradeDetail?: DictationGradeDetail | null;
+      rubricScores?: RubricScoreMap | null;
     }
   >;
 }
@@ -139,6 +141,11 @@ export function FocusQuestionRunner({
   const [flaggedKeys, setFlaggedKeys] = useState<Set<string>>(new Set());
   const blankInputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
+  useEffect(() => {
+    if (!submissionId) return;
+    setFlaggedKeys(new Set(loadFlaggedFieldIds(submissionId)));
+  }, [submissionId]);
+
   const safeIdx = Math.min(currentIndex, Math.max(0, groups.length - 1));
   const currentGroup = groups[safeIdx];
 
@@ -150,6 +157,9 @@ export function FocusQuestionRunner({
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
+      if (submissionId) {
+        saveFlaggedFieldIds(submissionId, Array.from(next));
+      }
       return next;
     });
   };
@@ -677,6 +687,21 @@ export function FocusQuestionRunner({
                   </div>
                   {f.type === "DICTATION" && g?.gradeDetail && (
                     <DictationDiffView detail={g.gradeDetail} showExpected={revealKey} />
+                  )}
+                  {f.rubric && f.rubric.length > 0 && g?.rubricScores && (
+                    <div className="rounded-xl border border-indigo-100 bg-white p-3 space-y-1">
+                      <p className="text-[11px] font-bold text-[#3525CD]">
+                        {tr("Chi tiết điểm theo tiêu chí (Rubric)", "Rubric Breakdown")}
+                      </p>
+                      {f.rubric.map((crit) => (
+                        <div key={crit.id} className="flex items-center justify-between gap-2 text-xs">
+                          <span className="text-slate-600">{crit.title}</span>
+                          <span className="font-bold text-[#0B1C30] tabular-nums">
+                            {g.rubricScores?.[crit.id] ?? 0}/{crit.maxPoints}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   )}
                   {revealed && f.type === "DICTATION" && (
                     <p className="font-semibold text-emerald-700">

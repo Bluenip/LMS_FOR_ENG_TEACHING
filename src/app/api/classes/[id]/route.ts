@@ -14,8 +14,8 @@ export async function GET(
 ) {
   try {
     const { id } = await context.params;
-    const { isTeacher } = await requireMemberOfClass(id);
-    const cls = await getClassDetail(id);
+    const { user, isTeacher } = await requireMemberOfClass(id);
+    const cls = await getClassDetail(id, isTeacher ? undefined : { studentId: user.id });
 
     // Strip pending enrollments & student emails for student viewers
     const response = isTeacher

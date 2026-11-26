@@ -65,6 +65,7 @@ import { LimitedAudioPlayer } from "./LimitedAudioPlayer";
 import { MathText, hasMathSyntax } from "./MathText";
 import { PromptText } from "./PromptText";
 import { PassagesEditorPanel } from "./PassagesEditorPanel";
+import { RubricEditor } from "./RubricEditor";
 import { TrueFalseGroupEditor } from "./TrueFalseGroupEditor";
 import type {
   EditorFieldDTO,
@@ -460,6 +461,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
               options: f.options ?? null,
               answerKey: f.answerKey,
               gradingOpts: f.gradingOpts ?? null,
+              rubric: f.rubric ?? null,
             })),
           }),
         });
@@ -1522,20 +1524,33 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                     )}
 
                     {(field.type === "ESSAY" || field.type === "PHOTO_UPLOAD") && (
-                      <Input
-                        value={String(field.answerKey.rubric ?? "")}
-                        onChange={(e) =>
-                          updateField(field.id, {
-                            answerKey: { ...field.answerKey, rubric: e.target.value },
-                          })
-                        }
-                        placeholder={
-                          field.type === "PHOTO_UPLOAD"
-                            ? tr("Yêu cầu chụp vở / tiêu chí chấm…", "Notebook photo instructions / rubric…")
-                            : tr("Tiêu chí chấm tự luận…", "Essay rubric…")
-                        }
-                        className="h-8 text-xs"
-                      />
+                      <div className="space-y-2">
+                        <Input
+                          value={String(field.answerKey.rubric ?? "")}
+                          onChange={(e) =>
+                            updateField(field.id, {
+                              answerKey: { ...field.answerKey, rubric: e.target.value },
+                            })
+                          }
+                          placeholder={
+                            field.type === "PHOTO_UPLOAD"
+                              ? tr("Yêu cầu chụp vở / tiêu chí chấm…", "Notebook photo instructions / rubric…")
+                              : tr("Tiêu chí chấm tự luận…", "Essay rubric…")
+                          }
+                          className="h-8 text-xs"
+                        />
+                        <RubricEditor
+                          rubric={field.rubric}
+                          fieldPoints={field.points}
+                          compact
+                          onChange={(nextRubric, syncedPoints) =>
+                            updateField(field.id, {
+                              rubric: nextRubric.length > 0 ? nextRubric : null,
+                              ...(syncedPoints !== undefined ? { points: syncedPoints } : {}),
+                            })
+                          }
+                        />
+                      </div>
                     )}
 
                     {field.type === "DICTATION" && (
@@ -2796,16 +2811,28 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                   )}
 
                   {selectedField.type === "ESSAY" && (
-                    <div className="space-y-1">
-                      <Label className="text-[11px]">{vi.worksheets.editor.rubric}</Label>
-                      <Textarea
-                        rows={3}
-                        value={String(selectedField.answerKey.rubric ?? "")}
-                        onChange={(e) =>
-                          updateField(selectedField.id, { answerKey: { rubric: e.target.value } })
+                    <div className="space-y-2">
+                      <div className="space-y-1">
+                        <Label className="text-[11px]">{vi.worksheets.editor.rubric}</Label>
+                        <Textarea
+                          rows={3}
+                          value={String(selectedField.answerKey.rubric ?? "")}
+                          onChange={(e) =>
+                            updateField(selectedField.id, { answerKey: { rubric: e.target.value } })
+                          }
+                          placeholder={tr("Tiêu chí chấm tự luận…", "Essay grading criteria…")}
+                          className="text-xs"
+                        />
+                      </div>
+                      <RubricEditor
+                        rubric={selectedField.rubric}
+                        fieldPoints={selectedField.points}
+                        onChange={(nextRubric, syncedPoints) =>
+                          updateField(selectedField.id, {
+                            rubric: nextRubric.length > 0 ? nextRubric : null,
+                            ...(syncedPoints !== undefined ? { points: syncedPoints } : {}),
+                          })
                         }
-                        placeholder={tr("Tiêu chí chấm tự luận…", "Essay grading criteria…")}
-                        className="text-xs"
                       />
                     </div>
                   )}
@@ -2857,6 +2884,16 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                           className="text-xs"
                         />
                       </div>
+                      <RubricEditor
+                        rubric={selectedField.rubric}
+                        fieldPoints={selectedField.points}
+                        onChange={(nextRubric, syncedPoints) =>
+                          updateField(selectedField.id, {
+                            rubric: nextRubric.length > 0 ? nextRubric : null,
+                            ...(syncedPoints !== undefined ? { points: syncedPoints } : {}),
+                          })
+                        }
+                      />
                     </div>
                   )}
 

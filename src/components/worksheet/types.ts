@@ -7,6 +7,8 @@ import {
   type FieldOption,
   type FieldStyle,
   type GradingOptions,
+  type RubricCriterion,
+  type RubricScoreMap,
 } from "@/lib/grading/types";
 
 export interface WorksheetPageDTO {
@@ -55,6 +57,7 @@ export interface EditorFieldDTO {
   options?: FieldOption[] | null;
   answerKey: Record<string, unknown>;
   gradingOpts?: GradingOptions | null;
+  rubric?: RubricCriterion[] | null;
 }
 
 export interface StudentFieldDTO {
@@ -76,6 +79,8 @@ export interface StudentFieldDTO {
   h?: number | null;
   style?: FieldStyle | null;
   options?: FieldOption[] | null;
+  // Only populated after submission when assignment.showResult allows it
+  rubric?: RubricCriterion[] | null;
   // Only populated after submission when assignment.showResult & showAnswerKey allow it
   revealedAnswer?: Record<string, unknown>;
   explanation?: string | null;
@@ -88,6 +93,7 @@ export interface StudentAnswerState {
   score?: number | null;
   teacherNote?: string | null;
   gradeDetail?: DictationGradeDetail | null;
+  rubricScores?: RubricScoreMap | null;
 }
 
 export function isAnswerFilled(value: AnswerValue): boolean {

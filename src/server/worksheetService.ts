@@ -287,6 +287,7 @@ export interface SaveFieldPayload {
   options?: Array<{ id: string; text: string }> | null;
   answerKey: Record<string, unknown>;
   gradingOpts?: Record<string, unknown> | null;
+  rubric?: Array<{ id: string; title: string; description?: string; maxPoints: number }> | null;
 }
 
 /**
@@ -365,6 +366,7 @@ export async function saveWorksheetFields(worksheetId: string, fields: SaveField
         options: (f.options ?? undefined) as Prisma.InputJsonValue | undefined,
         answerKey: f.answerKey as Prisma.InputJsonValue,
         gradingOpts: (f.gradingOpts ?? undefined) as Prisma.InputJsonValue | undefined,
+        rubric: f.rubric ? (f.rubric as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
       };
 
       if (f.id && existingIds.has(f.id)) {
