@@ -10,11 +10,12 @@ import {
   Send,
   XCircle,
 } from "lucide-react";
-import type {
-  AnswerValue,
-  DictationGradeDetail,
-  PhotoAnnotationMap,
-  RubricScoreMap,
+import {
+  asOptionList,
+  type AnswerValue,
+  type DictationGradeDetail,
+  type PhotoAnnotationMap,
+  type RubricScoreMap,
 } from "@/lib/grading/types";
 import { loadFlaggedFieldIds, saveFlaggedFieldIds } from "@/lib/offline-answer-queue";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,10 @@ import {
 } from "./types";
 import { LimitedAudioPlayer } from "./LimitedAudioPlayer";
 import { DictationDiffView } from "./DictationDiffView";
+import {
+  InteractiveQuestionInput,
+  isInteractiveFieldType,
+} from "./interactive/InteractiveQuestionInput";
 import { PromptText } from "./PromptText";
 import { MathText } from "./MathText";
 import { PassageCard } from "./PassageCard";
@@ -416,7 +421,7 @@ export function FocusQuestionRunner({
 
             {singleField.type === "MULTIPLE_CHOICE" && (
               <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                {(singleField.options ?? []).map((opt) => {
+                {asOptionList(singleField.options).map((opt) => {
                   const selected = answers[singleField.id] === opt.id;
                   return (
                     <button
@@ -450,7 +455,7 @@ export function FocusQuestionRunner({
 
             {singleField.type === "MULTI_SELECT" && (
               <div className="space-y-2">
-                {(singleField.options ?? []).map((opt) => {
+                {asOptionList(singleField.options).map((opt) => {
                   const list = Array.isArray(answers[singleField.id])
                     ? (answers[singleField.id] as string[])
                     : [];
@@ -518,7 +523,7 @@ export function FocusQuestionRunner({
             {singleField.type === "TRUE_FALSE_GROUP" && (
               <TrueFalseGroupInput
                 fieldId={singleField.id}
-                options={singleField.options}
+                options={asOptionList(singleField.options)}
                 value={answers[singleField.id]}
                 onChange={(next) => onChange?.(singleField.id, next)}
                 disabled={disabled}
@@ -549,7 +554,7 @@ export function FocusQuestionRunner({
                 className="h-11 w-full rounded-xl border-2 border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#4F46E5]"
               >
                 <option value="">{tr("Chọn đáp án…", "Choose an answer…")}</option>
-                {(singleField.options ?? []).map((opt) => (
+                {asOptionList(singleField.options).map((opt) => (
                   <option key={opt.id} value={opt.id}>
                     {opt.text || opt.id}
                   </option>
@@ -674,6 +679,18 @@ export function FocusQuestionRunner({
                 />
               </div>
             )}
+
+            {isInteractiveFieldType(singleField.type) && (
+              <InteractiveQuestionInput
+                fieldId={singleField.id}
+                type={singleField.type}
+                submissionId={submissionId}
+                options={singleField.options}
+                value={answers[singleField.id]}
+                onChange={(next) => onChange?.(singleField.id, next)}
+                disabled={disabled}
+              />
+            )}
           </div>
         )}
 
@@ -697,13 +714,13 @@ export function FocusQuestionRunner({
                         ? `${g.score}/${f.points} ${tr("điểm", "pt")}`
                         : tr("Chờ chấm", "Pending")}
                     </span>
-                    {revealed && f.type !== "DICTATION" && (
+                    {revealed && f.type !== "DICTATION" && f.type !== "SPEAKING" && (
                       <span className="font-semibold text-emerald-700">
                         • {vi.assignments.do.correctAnswer}: {revealed}
                       </span>
                     )}
                   </div>
-                  {f.type === "DICTATION" && g?.gradeDetail && (
+                  {(f.type === "DICTATION" || f.type === "SPEAKING") && g?.gradeDetail && (
                     <DictationDiffView detail={g.gradeDetail} showExpected={revealKey} />
                   )}
                   {f.rubric && f.rubric.length > 0 && g?.rubricScores && (

@@ -12,7 +12,7 @@ import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { normalizeSubject } from "@/lib/subjects";
 import { getStorageProvider } from "@/lib/storage";
-import type { RubricCriterion } from "@/lib/grading/types";
+import type { FieldOptionsValue, RubricCriterion } from "@/lib/grading/types";
 import { detectImageMeta } from "@/lib/image-meta";
 import { buildPrintableWorksheetPdf } from "@/lib/pdf/export-printable-pdf";
 import {
@@ -501,6 +501,52 @@ export async function exportWorksheetAsDocx(
       if (includeAnswers && key.rubric) {
         paragraphs.push({ text: `Gợi ý chấm: ${String(key.rubric)}`, italic: true });
       }
+    } else if (f.type === "MATCH" && f.options && !Array.isArray(f.options)) {
+      paragraphs.push({
+        text: `Câu ${f.label} (Nối cột — ${f.points}đ): ${f.prompt?.trim() || ""}`,
+        bold: true,
+      });
+      const mo = f.options as { left?: Array<{ id: string; text: string }>; right?: Array<{ id: string; text: string }> };
+      if (Array.isArray(mo.left)) {
+        paragraphs.push({ text: `   Cột trái: ${mo.left.map((x) => `${x.id}) ${x.text}`).join("  |  ")}` });
+      }
+      if (Array.isArray(mo.right)) {
+        paragraphs.push({ text: `   Cột phải: ${mo.right.map((x) => `${x.id}) ${x.text}`).join("  |  ")}` });
+      }
+      if (Array.isArray(key.pairs)) {
+        answerLines.push(
+          `Câu ${f.label}: ${(key.pairs as Array<[string, string]>).map(([l, r]) => `${l}→${r}`).join(", ")}`
+        );
+      }
+    } else if (f.type === "ORDERING" && f.options && !Array.isArray(f.options)) {
+      paragraphs.push({
+        text: `Câu ${f.label} (Sắp xếp — ${f.points}đ): ${f.prompt?.trim() || ""}`,
+        bold: true,
+      });
+      const oo = f.options as { items?: Array<{ id: string; text: string }> };
+      if (Array.isArray(oo.items)) {
+        for (const it of oo.items) paragraphs.push({ text: `   [  ] ${it.id}. ${it.text}` });
+      }
+      if (Array.isArray(key.order)) {
+        answerLines.push(`Câu ${f.label}: ${(key.order as string[]).join(" → ")}`);
+      }
+    } else if (f.type === "HIGHLIGHT" && f.options && !Array.isArray(f.options)) {
+      paragraphs.push({
+        text: `Câu ${f.label} (Tô sáng từ — ${f.points}đ): ${f.prompt?.trim() || ""}`,
+        bold: true,
+      });
+      const ho = f.options as { tokens?: string[] };
+      if (Array.isArray(ho.tokens)) {
+        paragraphs.push({ text: `   ${ho.tokens.join(" ")}` });
+      }
+    } else if (f.type === "CODE" || f.type === "DRAW" || f.type === "VOICE_ANSWER" || f.type === "SPEAKING") {
+      paragraphs.push({
+        text: `Câu ${f.label} (${f.type} — ${f.points}đ): ${f.prompt?.trim() || ""}`,
+        bold: true,
+      });
+      if (f.type === "SPEAKING" && typeof key.transcript === "string") {
+        answerLines.push(`Câu ${f.label}: ${key.transcript}`);
+      }
     } else {
       paragraphs.push({ text: `Câu ${f.label}: ${f.prompt?.trim() || ""}` });
     }
@@ -887,7 +933,7 @@ export async function exportWorksheetAsPdf(
         prompt: f.prompt,
         explanation: f.explanation,
         points: f.points,
-        options: Array.isArray(f.options) ? (f.options as Array<{ id: string; text: string }>) : null,
+        options: (f.options as FieldOptionsValue | null) ?? null,
         answerKey: (f.answerKey as Record<string, unknown>) ?? {},
         rubric: Array.isArray(f.rubric) ? (f.rubric as unknown as RubricCriterion[]) : null,
         imageBytes: img?.buffer ?? null,

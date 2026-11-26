@@ -85,6 +85,14 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
     "Cannot replace background images because students have already submitted work on this worksheet.",
   "Câu hỏi này không phải dạng nộp ảnh bài làm.":
     "This question does not accept uploaded photo answers.",
+  "Câu hỏi này không hỗ trợ tải file bài làm.":
+    "This question does not support file uploads.",
+  "Chỉ hỗ trợ ảnh PNG từ khung vẽ.":
+    "Only PNG canvas drawings are supported.",
+  "Chỉ hỗ trợ file ghi âm (WebM, OGG, MP4/M4A hoặc WAV).":
+    "Only audio recordings (WebM, OGG, MP4/M4A, or WAV) are supported.",
+  "Chỉ hỗ trợ ảnh (JPEG, PNG, WebP) hoặc file PDF hợp lệ.":
+    "Only valid images (JPEG, PNG, WebP) or PDF files are supported.",
   "File được chú thích không thuộc bài làm của học sinh.":
     "Annotated file does not belong to the student's submission.",
 

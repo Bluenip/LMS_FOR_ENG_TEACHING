@@ -2,7 +2,16 @@ import ExcelJS from "exceljs";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import type { Locale } from "@/lib/i18n/config";
-import { isManualFieldType, isPhotoUploadAnswer, isTrueFalseGroupAnswer } from "@/lib/grading";
+import {
+  isCodeAnswer,
+  isDrawAnswer,
+  isManualFieldType,
+  isPhotoUploadAnswer,
+  isSpeakingAnswer,
+  isTrueFalseGroupAnswer,
+  isVoiceAnswer,
+  isWordsearchAnswer,
+} from "@/lib/grading";
 import { convertScoreToScale, scoreScaleLabel } from "@/lib/score-scale";
 import { compareQuestionLabels, formatDateTime } from "@/lib/utils";
 
@@ -37,6 +46,31 @@ function formatWrongAnswerKey(value: unknown, locale: Locale): string {
     return entries
       .map(([k, v]) => `${k}:${v ? (locale === "en" ? "T" : "Đ") : locale === "en" ? "F" : "S"}`)
       .join(" ");
+  }
+  if (isSpeakingAnswer(value)) {
+    return value.text.trim() || `${CODE_KEY_PREFIX}BLANK`;
+  }
+  if (isVoiceAnswer(value)) {
+    return locale === "en" ? "Voice recording" : "Ghi âm trả lời";
+  }
+  if (isDrawAnswer(value)) {
+    return locale === "en" ? "Drawing" : "Hình vẽ";
+  }
+  if (isCodeAnswer(value)) {
+    return value.code.trim() ? value.code.trim().slice(0, 60) : `${CODE_KEY_PREFIX}BLANK`;
+  }
+  if (isWordsearchAnswer(value)) {
+    return value.found.length > 0
+      ? value.found.map((w) => w.word).join(", ")
+      : `${CODE_KEY_PREFIX}BLANK`;
+  }
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) return `${CODE_KEY_PREFIX}BLANK`;
+    return entries
+      .map(([k, v]) => `${k}:${Array.isArray(v) ? v.join("+") : String(v ?? "")}`)
+      .join(" ")
+      .slice(0, 80);
   }
   const str = String(value).trim();
   return str.length > 0 ? str : `${CODE_KEY_PREFIX}BLANK`;

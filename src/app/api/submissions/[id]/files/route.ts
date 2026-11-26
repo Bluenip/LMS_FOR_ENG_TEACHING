@@ -10,11 +10,15 @@ import { enqueueDriveTrashForKeys } from "@/server/driveService";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB per image / PDF
 
-function detectFileSignature(
-  buffer: Buffer
-): { ext: ".jpg" | ".png" | ".webp" | ".pdf"; mime: string } | null {
+type DetectedUploadFile = {
+  ext: ".jpg" | ".png" | ".webp" | ".pdf" | ".webm" | ".ogg" | ".m4a" | ".wav";
+  mime: string;
+  category: "IMAGE_OR_PDF" | "PNG_ONLY" | "AUDIO";
+};
+
+function detectFileSignature(buffer: Buffer): DetectedUploadFile | null {
   if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
-    return { ext: ".jpg", mime: "image/jpeg" };
+    return { ext: ".jpg", mime: "image/jpeg", category: "IMAGE_OR_PDF" };
   }
   if (
     buffer.length >= 8 &&
@@ -27,17 +31,43 @@ function detectFileSignature(
     buffer[6] === 0x1a &&
     buffer[7] === 0x0a
   ) {
-    return { ext: ".png", mime: "image/png" };
+    return { ext: ".png", mime: "image/png", category: "PNG_ONLY" };
   }
   if (
     buffer.length >= 12 &&
     buffer.subarray(0, 4).toString("ascii") === "RIFF" &&
     buffer.subarray(8, 12).toString("ascii") === "WEBP"
   ) {
-    return { ext: ".webp", mime: "image/webp" };
+    return { ext: ".webp", mime: "image/webp", category: "IMAGE_OR_PDF" };
   }
   if (buffer.length >= 5 && buffer.subarray(0, 5).toString("ascii") === "%PDF-") {
-    return { ext: ".pdf", mime: "application/pdf" };
+    return { ext: ".pdf", mime: "application/pdf", category: "IMAGE_OR_PDF" };
+  }
+  // WebM / Matroska EBML header (1A 45 DF A3)
+  if (
+    buffer.length >= 4 &&
+    buffer[0] === 0x1a &&
+    buffer[1] === 0x45 &&
+    buffer[2] === 0xdf &&
+    buffer[3] === 0xa3
+  ) {
+    return { ext: ".webm", mime: "audio/webm", category: "AUDIO" };
+  }
+  // OGG container header ("OggS")
+  if (buffer.length >= 4 && buffer.subarray(0, 4).toString("ascii") === "OggS") {
+    return { ext: ".ogg", mime: "audio/ogg", category: "AUDIO" };
+  }
+  // MP4 / M4A container header ("ftyp" at offset 4)
+  if (buffer.length >= 12 && buffer.subarray(4, 8).toString("ascii") === "ftyp") {
+    return { ext: ".m4a", mime: "audio/mp4", category: "AUDIO" };
+  }
+  // WAV container header ("RIFF"..."WAVE")
+  if (
+    buffer.length >= 12 &&
+    buffer.subarray(0, 4).toString("ascii") === "RIFF" &&
+    buffer.subarray(8, 12).toString("ascii") === "WAVE"
+  ) {
+    return { ext: ".wav", mime: "audio/wav", category: "AUDIO" };
   }
   return null;
 }
@@ -117,8 +147,14 @@ export async function POST(
       throw new AppError("Vui lòng chọn ảnh hoặc file PDF để tải lên.", 400, "MISSING_FILE");
     }
     const targetField = submission.assignment.worksheet.fields.find((f) => f.id === fieldId);
-    if (!targetField || targetField.type !== "PHOTO_UPLOAD") {
-      throw new AppError("Câu hỏi không hỗ trợ tải ảnh bài làm.", 400, "INVALID_FIELD");
+    if (
+      !targetField ||
+      (targetField.type !== "PHOTO_UPLOAD" &&
+        targetField.type !== "DRAW" &&
+        targetField.type !== "VOICE_ANSWER" &&
+        targetField.type !== "SPEAKING")
+    ) {
+      throw new AppError("Câu hỏi này không hỗ trợ tải file bài làm.", 400, "INVALID_FIELD");
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -131,6 +167,34 @@ export async function POST(
 
     const detected = detectFileSignature(buffer);
     if (!detected) {
+      throw new AppError(
+        targetField.type === "DRAW"
+          ? "Chỉ hỗ trợ ảnh PNG từ khung vẽ."
+          : targetField.type === "VOICE_ANSWER" || targetField.type === "SPEAKING"
+            ? "Chỉ hỗ trợ file ghi âm (WebM, OGG, MP4/M4A hoặc WAV)."
+            : "Chỉ hỗ trợ ảnh (JPEG, PNG, WebP) hoặc file PDF hợp lệ.",
+        400,
+        "INVALID_FILE_TYPE"
+      );
+    }
+
+    if (targetField.type === "DRAW" && detected.category !== "PNG_ONLY") {
+      throw new AppError("Chỉ hỗ trợ ảnh PNG từ khung vẽ.", 400, "INVALID_FILE_TYPE");
+    }
+    if (
+      (targetField.type === "VOICE_ANSWER" || targetField.type === "SPEAKING") &&
+      detected.category !== "AUDIO"
+    ) {
+      throw new AppError(
+        "Chỉ hỗ trợ file ghi âm (WebM, OGG, MP4/M4A hoặc WAV).",
+        400,
+        "INVALID_FILE_TYPE"
+      );
+    }
+    if (
+      targetField.type === "PHOTO_UPLOAD" &&
+      detected.category === "AUDIO"
+    ) {
       throw new AppError(
         "Chỉ hỗ trợ ảnh (JPEG, PNG, WebP) hoặc file PDF hợp lệ.",
         400,

@@ -3,7 +3,7 @@ import path from "node:path";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { FieldType, WorksheetSubject } from "@prisma/client";
-import type { RubricCriterion } from "@/lib/grading/types";
+import type { FieldOptionsValue, RubricCriterion } from "@/lib/grading/types";
 import { detectImageMeta } from "@/lib/image-meta";
 
 export interface PrintableWorksheetField {
@@ -14,7 +14,7 @@ export interface PrintableWorksheetField {
   prompt: string | null;
   explanation: string | null;
   points: number;
-  options: Array<{ id: string; text: string }> | null;
+  options: FieldOptionsValue | null;
   answerKey: Record<string, unknown>;
   rubric: RubricCriterion[] | null;
   imageBytes?: Buffer | null;
@@ -114,9 +114,37 @@ function formatKeySummary(f: PrintableWorksheetField): string {
       return typeof k.transcript === "string" ? k.transcript : "";
     case "ESSAY":
     case "PHOTO_UPLOAD":
+    case "VOICE_ANSWER":
+    case "DRAW":
       return typeof k.rubric === "string" && k.rubric.trim()
         ? k.rubric.trim()
-        : "(Chấm tự luận)";
+        : typeof k.note === "string" && k.note.trim()
+          ? k.note.trim()
+          : "(Chấm thủ công)";
+    case "SPEAKING":
+      return typeof k.transcript === "string" ? k.transcript : "";
+    case "MATCH":
+      return Array.isArray(k.pairs)
+        ? k.pairs.map((p) => (Array.isArray(p) ? `${p[0]}→${p[1]}` : "")).filter(Boolean).join(", ")
+        : "";
+    case "DRAG_DROP":
+      return k.slots && typeof k.slots === "object"
+        ? Object.entries(k.slots as Record<string, unknown>)
+            .map(([slot, toks]) => `${slot}: ${Array.isArray(toks) ? toks.join("+") : ""}`)
+            .join(" | ")
+        : "";
+    case "HIGHLIGHT":
+      return Array.isArray(k.indices) ? `Vị trí từ: ${k.indices.join(", ")}` : "";
+    case "ORDERING":
+      return Array.isArray(k.order) ? k.order.join(" → ") : "";
+    case "WORDSEARCH":
+      return Array.isArray(k.words) ? k.words.join(", ") : "";
+    case "CODE":
+      return typeof k.expectedOutput === "string" && k.expectedOutput.trim()
+        ? `Output: ${k.expectedOutput.trim()}`
+        : typeof k.referenceCode === "string"
+          ? k.referenceCode.slice(0, 100)
+          : "(Chấm code)";
     default:
       return "";
   }
@@ -280,7 +308,33 @@ export async function buildPrintableWorksheetPdf(
         for (const opt of f.options) {
           drawWrapped(`${opt.id}) ${opt.text}    [  ] Đúng   [  ] Sai`, { indent: 14, size: 10 });
         }
-      } else if (f.type === "ESSAY" || f.type === "PHOTO_UPLOAD") {
+      } else if (f.type === "MATCH" && f.options && !Array.isArray(f.options)) {
+        const mo = f.options as { left?: Array<{ id: string; text: string }>; right?: Array<{ id: string; text: string }> };
+        if (Array.isArray(mo.left)) {
+          drawWrapped(`Cột trái: ${mo.left.map((x) => `${x.id}) ${x.text}`).join("   |   ")}`, { indent: 14, size: 10 });
+        }
+        if (Array.isArray(mo.right)) {
+          drawWrapped(`Cột phải: ${mo.right.map((x) => `${x.id}) ${x.text}`).join("   |   ")}`, { indent: 14, size: 10 });
+        }
+      } else if (f.type === "ORDERING" && f.options && !Array.isArray(f.options)) {
+        const oo = f.options as { items?: Array<{ id: string; text: string }> };
+        if (Array.isArray(oo.items)) {
+          for (const it of oo.items) {
+            drawWrapped(`[  ] ${it.id}. ${it.text}`, { indent: 14, size: 10 });
+          }
+        }
+      } else if (f.type === "HIGHLIGHT" && f.options && !Array.isArray(f.options)) {
+        const ho = f.options as { tokens?: string[] };
+        if (Array.isArray(ho.tokens)) {
+          drawWrapped(ho.tokens.join(" "), { indent: 14, size: 10 });
+        }
+      } else if (
+        f.type === "ESSAY" ||
+        f.type === "PHOTO_UPLOAD" ||
+        f.type === "VOICE_ANSWER" ||
+        f.type === "DRAW" ||
+        f.type === "CODE"
+      ) {
         y -= 4;
         drawWrapped("Bài làm: ....................................................................................", {
           indent: 14,

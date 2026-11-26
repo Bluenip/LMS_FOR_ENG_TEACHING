@@ -6,15 +6,21 @@ import { resolveEffectiveAssignment } from "@/lib/assignment-effective";
 import { convertScoreToScale } from "@/lib/score-scale";
 import {
   computeRubricTotal,
+  generateWordsearchGrid,
   gradeSubmission,
+  isDrawAnswer,
   isManualFieldType,
   isPhotoUploadAnswer,
+  isSpeakingAnswer,
+  isVoiceAnswer,
   sanitizeDictationDetail,
   type AnswerValue,
   type GradingOptions,
   type PhotoAnnotationMap,
   type RubricCriterion,
   type RubricScoreMap,
+  type WordsearchAnswerKey,
+  type WordsearchOptions,
 } from "@/lib/grading";
 import { STUDENT_FIELD_SELECT } from "./worksheetService";
 import { createNotificationsBulk } from "./notificationService";
@@ -22,16 +28,29 @@ import { invalidateLeaderboardCache } from "./leaderboardService";
 import { verifySebHeaderIfNeeded } from "./assignmentService";
 import { publishAssignmentLive } from "@/lib/proctor-bus";
 
+function isSafeSubmissionFileKey(submissionId: string, key: unknown): key is string {
+  const prefix = `submissions/${submissionId}/`;
+  return typeof key === "string" && !key.includes("..") && key.startsWith(prefix);
+}
+
 function sanitizeAnswerValueForSubmission(submissionId: string, value: AnswerValue): AnswerValue {
   if (isPhotoUploadAnswer(value)) {
-    const prefix = `submissions/${submissionId}/`;
-    const safeFiles = value.files.filter(
-      (f) => typeof f.key === "string" && !f.key.includes("..") && f.key.startsWith(prefix)
-    );
+    const safeFiles = value.files.filter((f) => isSafeSubmissionFileKey(submissionId, f.key));
     return {
       files: safeFiles,
       ...(typeof value.note === "string" ? { note: value.note } : {}),
     };
+  }
+  if (isVoiceAnswer(value)) {
+    return isSafeSubmissionFileKey(submissionId, value.fileKey) ? value : null;
+  }
+  if (isDrawAnswer(value)) {
+    return isSafeSubmissionFileKey(submissionId, value.fileKey) ? value : null;
+  }
+  if (isSpeakingAnswer(value) && value.audioKey !== undefined) {
+    return isSafeSubmissionFileKey(submissionId, value.audioKey)
+      ? value
+      : { text: value.text, tries: value.tries };
   }
   return value;
 }
@@ -575,6 +594,19 @@ export async function getStudentAssignmentPayload(
   const { overrides, ...assignmentRest } = assignment;
   void overrides;
 
+  // Server-generated deterministic Wordsearch grid for unlocked student sessions
+  // (never leak answerKey.words or wordHints when showWordList !== true).
+  const wordsearchKeys = new Map<string, WordsearchAnswerKey>();
+  if (contentUnlocked && orderedFields.some((f) => f.type === "WORDSEARCH")) {
+    const wsRows = await prisma.field.findMany({
+      where: { worksheetId: assignment.worksheet.id, type: "WORDSEARCH" },
+      select: { id: true, answerKey: true },
+    });
+    for (const r of wsRows) {
+      wordsearchKeys.set(r.id, (r.answerKey as unknown as WordsearchAnswerKey) ?? { words: [] });
+    }
+  }
+
   return {
     serverNow: now.toISOString(),
     assignment: {
@@ -595,7 +627,35 @@ export async function getStudentAssignmentPayload(
         audios: contentUnlocked ? assignment.worksheet.audios : [],
         fields: (contentUnlocked ? orderedFields : []).map((f) => {
           let options = f.options;
-          if (
+          if (f.type === "WORDSEARCH") {
+            const wsKey = wordsearchKeys.get(f.id);
+            const rawWords = Array.isArray(wsKey?.words) ? wsKey.words : [];
+            const wsOpts =
+              options && typeof options === "object" && !Array.isArray(options)
+                ? (options as Partial<WordsearchOptions>)
+                : {};
+            const rows = typeof wsOpts.rows === "number" ? wsOpts.rows : 10;
+            const cols = typeof wsOpts.cols === "number" ? wsOpts.cols : 10;
+            const seed = typeof wsOpts.seed === "number" ? wsOpts.seed : 42;
+            const { grid, placedWords } = generateWordsearchGrid(rawWords, rows, cols, seed);
+            const showWordList = wsOpts.showWordList === true;
+            options = {
+              rows: grid.length,
+              cols: grid[0]?.length ?? cols,
+              seed,
+              showWordList,
+              grid,
+              wordCount: placedWords.length,
+              ...(showWordList
+                ? {
+                    wordHints:
+                      Array.isArray(wsOpts.wordHints) && wsOpts.wordHints.length > 0
+                        ? wsOpts.wordHints
+                        : placedWords,
+                  }
+                : {}),
+            } as unknown as Prisma.JsonValue;
+          } else if (
             activeSubmission?.optionOrder &&
             typeof activeSubmission.optionOrder === "object" &&
             !Array.isArray(activeSubmission.optionOrder) &&
@@ -854,6 +914,7 @@ export async function finalizeSubmissionInternal(
       id: f.id,
       type: f.type,
       points: f.points,
+      options: f.options,
       answerKey: f.answerKey,
       gradingOpts: (f.gradingOpts as GradingOptions | null) ?? null,
     })),

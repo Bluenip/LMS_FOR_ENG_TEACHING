@@ -1076,6 +1076,169 @@ async function main() {
     ],
   });
 
+  // Phase 19 seed: 9 interactive field types sample worksheet & assignment
+  const wsInteractive = await prisma.worksheet.create({
+    data: {
+      ownerId: teacher1.id,
+      title: "Phiếu Tương Tác Tổng Hợp — Tiếng Anh & Tin học (Phase 19)",
+      subject: "GENERAL",
+      instructions:
+        "Thực hành 9 dạng câu hỏi tương tác: nối cột, kéo thả, luyện nói, ghi âm, tô sáng, sắp xếp, tìm chữ, vẽ hình và lập trình JS.",
+      pageCount: 0,
+      fields: {
+        create: [
+          {
+            placement: "ANSWER_SHEET",
+            type: "MATCH",
+            label: "1",
+            prompt: "Nối từ tiếng Anh với nghĩa tiếng Việt:",
+            order: 0,
+            points: 2,
+            options: {
+              left: [
+                { id: "L1", text: "Apple" },
+                { id: "L2", text: "Book" },
+              ],
+              right: [
+                { id: "R1", text: "Quả táo" },
+                { id: "R2", text: "Quyển sách" },
+              ],
+            },
+            answerKey: {
+              pairs: [
+                ["L1", "R1"],
+                ["L2", "R2"],
+              ],
+            },
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "DRAG_DROP",
+            label: "2",
+            prompt: "Kéo thả động từ to-be đúng vào mỗi chỗ trống:",
+            order: 1,
+            points: 2,
+            options: {
+              tokens: [
+                { id: "T1", text: "am" },
+                { id: "T2", text: "are" },
+              ],
+              slots: [
+                { id: "S1", label: "I ___ a student" },
+                { id: "S2", label: "They ___ friends" },
+              ],
+              singleUse: true,
+            },
+            answerKey: {
+              slots: { S1: ["T1"], S2: ["T2"] },
+            },
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "SPEAKING",
+            label: "3",
+            prompt: "Đọc to câu chào sau bằng tiếng Anh:",
+            order: 2,
+            points: 2,
+            options: { lang: "en-US", maxTries: 5 },
+            answerKey: { transcript: "Nice to meet you" },
+            gradingOpts: { ignorePunctuation: true, scoring: "WORD_ACCURACY" },
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "VOICE_ANSWER",
+            label: "4",
+            prompt: "Ghi âm đoạn giới thiệu bản thân ngắn (tuỳ chọn):",
+            order: 3,
+            points: 2,
+            options: { maxDurationSec: 60 },
+            answerKey: { note: "Phát âm rõ ràng, tự nhiên." },
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "HIGHLIGHT",
+            label: "5",
+            prompt: "Tô sáng trạng từ và động từ chính trong câu:",
+            order: 4,
+            points: 2,
+            options: { tokens: ["She", "quickly", "runs", "home."] },
+            answerKey: { indices: [1, 2] },
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "ORDERING",
+            label: "6",
+            prompt: "Sắp xếp các bước buổi sáng theo đúng thứ tự:",
+            order: 5,
+            points: 2,
+            options: {
+              items: [
+                { id: "B", text: "gets dressed" },
+                { id: "A", text: "wakes up" },
+                { id: "C", text: "goes to school" },
+              ],
+            },
+            answerKey: { order: ["A", "B", "C"] },
+            gradingOpts: { orderingScoring: "LCS" },
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "WORDSEARCH",
+            label: "7",
+            prompt: "Tìm các con vật ẩn trong bảng chữ cái (không gợi ý từ):",
+            order: 6,
+            points: 2,
+            options: { rows: 6, cols: 6, seed: 42, showWordList: false },
+            answerKey: { words: ["CAT", "DOG"] },
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "DRAW",
+            label: "8",
+            prompt: "Vẽ một hình tam giác vuông minh hoạ:",
+            order: 7,
+            points: 2,
+            options: { width: 560, height: 280 },
+            answerKey: { note: "Vẽ rõ 3 cạnh và góc vuông." },
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "CODE",
+            label: "9",
+            prompt: "Viết câu lệnh JavaScript in ra tổng 2 + 3:",
+            order: 8,
+            points: 2,
+            options: {
+              language: "javascript",
+              starterCode: "console.log('Sum =', 2 + 3);",
+              sampleInput: "",
+              sampleOutput: "Sum = 5",
+            },
+            answerKey: {
+              referenceCode: "console.log('Sum =', 2 + 3);",
+              expectedOutput: "Sum = 5",
+            },
+          },
+        ],
+      },
+    },
+  });
+
+  await prisma.assignment.create({
+    data: {
+      classId: class1.id,
+      worksheetId: wsInteractive.id,
+      title: "Bài tập Tương tác Đa dạng (Phase 19)",
+      openAt: new Date(Date.now() - 60 * 60 * 1000),
+      dueAt: nextWeek,
+      maxAttempts: 5,
+      showResult: "AFTER_SUBMIT",
+      showAnswerKey: true,
+      showLeaderboard: "AFTER_SUBMIT",
+      proctorMode: "OFF",
+    },
+  });
+
   // Worksheet 3: Dictation & Listening Demo (with sample WAV audio + DICTATION fields)
   const wsDictation = await prisma.worksheet.create({
     data: {

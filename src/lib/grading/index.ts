@@ -2,24 +2,43 @@ import type {
   AnswerValue,
   CheckboxAnswerKey,
   DictationAnswerKey,
+  DragDropAnswerKey,
   FieldForGrading,
   GradeResult,
   GradingOptions,
+  HighlightAnswerKey,
+  MatchAnswerKey,
   MultiSelectAnswerKey,
   NumberAnswerKey,
+  OrderingAnswerKey,
   RubricCriterion,
   RubricScoreMap,
   SingleChoiceAnswerKey,
+  SpeakingAnswerKey,
   SubmissionGradeSummary,
   TextAnswerKey,
   TrueFalseAnswerKey,
   TrueFalseGroupAnswerKey,
+  WordsearchAnswerKey,
+  WordsearchOptions,
 } from "./types";
 import { isManualFieldType, isPhotoUploadAnswer } from "./types";
 import { gradeDictationText } from "./dictation";
+import { gradeMatch } from "./match";
+import { gradeDragDrop } from "./drag-drop";
+import { gradeSpeaking } from "./speaking";
+import { gradeHighlight } from "./highlight";
+import { gradeOrdering } from "./ordering";
+import { gradeWordsearch } from "./wordsearch";
 
 export * from "./types";
 export * from "./dictation";
+export * from "./match";
+export * from "./drag-drop";
+export * from "./speaking";
+export * from "./highlight";
+export * from "./ordering";
+export * from "./wordsearch";
 
 const CURLY_APOSTROPHE_REGEX = /[\u2018\u2019\u201A\u201B\u2032\u0060]/g;
 const CURLY_DOUBLE_QUOTE_REGEX = /[\u201C\u201D\u201E\u201F\u2033]/g;
@@ -268,6 +287,30 @@ export function gradeField(field: FieldForGrading, value: AnswerValue): GradeRes
         detail: res.detail,
       };
     }
+
+    case "MATCH":
+      return gradeMatch(key as unknown as MatchAnswerKey, value, maxPoints, field.gradingOpts);
+
+    case "DRAG_DROP":
+      return gradeDragDrop(key as unknown as DragDropAnswerKey, value, maxPoints, field.gradingOpts);
+
+    case "SPEAKING":
+      return gradeSpeaking(key as unknown as SpeakingAnswerKey, value, maxPoints, field.gradingOpts);
+
+    case "HIGHLIGHT":
+      return gradeHighlight(key as unknown as HighlightAnswerKey, value, maxPoints, field.gradingOpts);
+
+    case "ORDERING":
+      return gradeOrdering(key as unknown as OrderingAnswerKey, value, maxPoints, field.gradingOpts);
+
+    case "WORDSEARCH":
+      return gradeWordsearch(
+        key as unknown as WordsearchAnswerKey,
+        (field.options as Partial<WordsearchOptions> | null) ?? null,
+        value,
+        maxPoints,
+        field.gradingOpts
+      );
 
     default:
       return { isCorrect: false, score: 0 };

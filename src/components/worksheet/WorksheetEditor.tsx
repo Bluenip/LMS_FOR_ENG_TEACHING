@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   CheckSquare,
   ChevronDownSquare,
+  Code,
   Copy,
   Download,
   Eye,
@@ -23,13 +24,18 @@ import {
   FileText,
   FileUp,
   Grid,
+  Grid3X3,
   Hash,
   Headphones,
+  Highlighter,
   ImagePlus,
+  Link2,
   ListChecks,
   ListOrdered,
   Mic,
   MousePointer2,
+  Move,
+  PenTool,
   Plus,
   Redo2,
   Save,
@@ -42,12 +48,21 @@ import {
   Type,
   Undo2,
   Upload,
+  Volume2,
   ZoomIn,
   ZoomOut,
   Columns2,
 } from "lucide-react";
 import type { FieldType, SkillTag, WorksheetSubject } from "@prisma/client";
-import { gradeSubmission, parseBulkAnswerString, type AnswerValue } from "@/lib/grading";
+import {
+  asOptionList,
+  gradeSubmission,
+  isManualFieldType,
+  parseBulkAnswerString,
+  type AnswerValue,
+} from "@/lib/grading";
+import { InteractiveFieldEditor } from "./interactive/InteractiveFieldEditor";
+import { isInteractiveFieldType } from "./interactive/InteractiveQuestionInput";
 import {
   createHistory,
   pushHistory,
@@ -131,6 +146,15 @@ const TOOL_COLORS: Record<FieldType, { border: string; bg: string; badge: string
   ESSAY: { border: "border-rose-500", bg: "bg-rose-50/75", badge: "bg-rose-600" },
   DICTATION: { border: "border-purple-500", bg: "bg-purple-50/75", badge: "bg-purple-600" },
   PHOTO_UPLOAD: { border: "border-lime-500", bg: "bg-lime-50/75", badge: "bg-lime-600" },
+  MATCH: { border: "border-blue-500", bg: "bg-blue-50/75", badge: "bg-blue-600" },
+  DRAG_DROP: { border: "border-fuchsia-500", bg: "bg-fuchsia-50/75", badge: "bg-fuchsia-600" },
+  SPEAKING: { border: "border-pink-500", bg: "bg-pink-50/75", badge: "bg-pink-600" },
+  VOICE_ANSWER: { border: "border-amber-600", bg: "bg-amber-50/75", badge: "bg-amber-700" },
+  HIGHLIGHT: { border: "border-yellow-500", bg: "bg-yellow-50/75", badge: "bg-yellow-600" },
+  ORDERING: { border: "border-emerald-600", bg: "bg-emerald-50/75", badge: "bg-emerald-700" },
+  WORDSEARCH: { border: "border-cyan-600", bg: "bg-cyan-50/75", badge: "bg-cyan-700" },
+  DRAW: { border: "border-violet-600", bg: "bg-violet-50/75", badge: "bg-violet-700" },
+  CODE: { border: "border-slate-700", bg: "bg-slate-100/80", badge: "bg-slate-800" },
 };
 
 const SKILL_VALUES: SkillTag[] = ["GRAMMAR", "VOCABULARY", "READING", "LISTENING", "WRITING", "SPEAKING"];
@@ -295,6 +319,134 @@ function createDefaultFieldPayload(
           ignorePunctuation: true,
           scoring: "WORD_ACCURACY",
         },
+        style: baseStyle,
+      };
+    case "MATCH":
+      return {
+        type,
+        label,
+        order,
+        points: 2,
+        options: {
+          left: [
+            { id: "L1", text: "1" },
+            { id: "L2", text: "2" },
+          ],
+          right: [
+            { id: "R1", text: "A" },
+            { id: "R2", text: "B" },
+          ],
+        },
+        answerKey: {
+          pairs: [
+            ["L1", "R1"],
+            ["L2", "R2"],
+          ],
+        },
+        gradingOpts: null,
+        style: baseStyle,
+      };
+    case "DRAG_DROP":
+      return {
+        type,
+        label,
+        order,
+        points: 2,
+        options: {
+          tokens: [
+            { id: "T1", text: "Token 1" },
+            { id: "T2", text: "Token 2" },
+          ],
+          slots: [
+            { id: "S1", label: "Slot 1" },
+            { id: "S2", label: "Slot 2" },
+          ],
+          singleUse: true,
+        },
+        answerKey: { slots: { S1: ["T1"], S2: ["T2"] } },
+        gradingOpts: null,
+        style: baseStyle,
+      };
+    case "SPEAKING":
+      return {
+        type,
+        label,
+        order,
+        points: 2,
+        options: { lang: "en-US", maxTries: 3 },
+        answerKey: { transcript: "Hello world" },
+        gradingOpts: { ignorePunctuation: true, scoring: "WORD_ACCURACY" },
+        style: baseStyle,
+      };
+    case "VOICE_ANSWER":
+      return {
+        type,
+        label,
+        order,
+        points: 2,
+        options: { maxDurationSec: 120 },
+        answerKey: { note: "" },
+        gradingOpts: null,
+        style: baseStyle,
+      };
+    case "HIGHLIGHT":
+      return {
+        type,
+        label,
+        order,
+        points: 2,
+        options: { tokens: ["Highlight", "the", "verb", "here."] },
+        answerKey: { indices: [0] },
+        gradingOpts: null,
+        style: baseStyle,
+      };
+    case "ORDERING":
+      return {
+        type,
+        label,
+        order,
+        points: 2,
+        options: {
+          items: [
+            { id: "1", text: "Step 1" },
+            { id: "2", text: "Step 2" },
+          ],
+        },
+        answerKey: { order: ["1", "2"] },
+        gradingOpts: { orderingScoring: "LCS" },
+        style: baseStyle,
+      };
+    case "WORDSEARCH":
+      return {
+        type,
+        label,
+        order,
+        points: 2,
+        options: { rows: 8, cols: 8, seed: 42, showWordList: true },
+        answerKey: { words: ["CAT", "DOG"] },
+        gradingOpts: null,
+        style: baseStyle,
+      };
+    case "DRAW":
+      return {
+        type,
+        label,
+        order,
+        points: 2,
+        options: { width: 560, height: 300 },
+        answerKey: { note: "" },
+        gradingOpts: null,
+        style: baseStyle,
+      };
+    case "CODE":
+      return {
+        type,
+        label,
+        order,
+        points: 2,
+        options: { language: "javascript", starterCode: "console.log('Hello');" },
+        answerKey: { referenceCode: "console.log('Hello');", expectedOutput: "Hello" },
+        gradingOpts: null,
         style: baseStyle,
       };
   }
@@ -1269,6 +1421,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                     id: f.id,
                     type: f.type,
                     points: f.points,
+                    options: f.options,
                     answerKey: f.answerKey,
                     gradingOpts: f.gradingOpts,
                   })),
@@ -1436,6 +1589,15 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
     ESSAY: { label: vi.worksheets.tools.ESSAY, icon: <FileText className="h-3.5 w-3.5" /> },
     DICTATION: { label: vi.worksheets.tools.DICTATION, icon: <Mic className="h-3.5 w-3.5" /> },
     PHOTO_UPLOAD: { label: vi.worksheets.tools.PHOTO_UPLOAD, icon: <Camera className="h-3.5 w-3.5" /> },
+    MATCH: { label: vi.worksheets.tools.MATCH, icon: <Link2 className="h-3.5 w-3.5" /> },
+    DRAG_DROP: { label: vi.worksheets.tools.DRAG_DROP, icon: <Move className="h-3.5 w-3.5" /> },
+    SPEAKING: { label: vi.worksheets.tools.SPEAKING, icon: <Volume2 className="h-3.5 w-3.5" /> },
+    VOICE_ANSWER: { label: vi.worksheets.tools.VOICE_ANSWER, icon: <Mic className="h-3.5 w-3.5" /> },
+    HIGHLIGHT: { label: vi.worksheets.tools.HIGHLIGHT, icon: <Highlighter className="h-3.5 w-3.5" /> },
+    ORDERING: { label: vi.worksheets.tools.ORDERING, icon: <ListOrdered className="h-3.5 w-3.5" /> },
+    WORDSEARCH: { label: vi.worksheets.tools.WORDSEARCH, icon: <Grid3X3 className="h-3.5 w-3.5" /> },
+    DRAW: { label: vi.worksheets.tools.DRAW, icon: <PenTool className="h-3.5 w-3.5" /> },
+    CODE: { label: vi.worksheets.tools.CODE, icon: <Code className="h-3.5 w-3.5" /> },
   };
 
   const visibleToolTypes = showAllTools
@@ -1534,7 +1696,10 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
         {/* Quick Add + Bulk Answer Key Controls */}
         <div className={cn("grid grid-cols-1 gap-4", hasPdf ? "xl:grid-cols-2" : "lg:grid-cols-2")}>
           {/* Quick Add N questions */}
-          <div className="rounded-xl border border-slate-200 bg-[#F8F9FF] p-3.5 space-y-2.5">
+          <div
+            data-testid="quick-add-sheet-section"
+            className="rounded-xl border border-slate-200 bg-[#F8F9FF] p-3.5 space-y-2.5"
+          >
             <p className="text-xs font-bold text-[#0B1C30]">
               {vi.worksheets.editor.quickAddTitle}
             </p>
@@ -1545,6 +1710,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                   type="number"
                   min={1}
                   max={100}
+                  data-testid="quick-add-count-input"
                   value={quickCount}
                   onChange={(e) => setQuickCount(Number(e.target.value) || 1)}
                   className="mt-1 h-9 text-xs"
@@ -1575,7 +1741,13 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                   className="mt-1 h-9 text-xs"
                 />
               </div>
-              <Button type="button" size="sm" onClick={handleQuickAdd} className="h-9">
+              <Button
+                type="button"
+                size="sm"
+                data-testid="quick-add-submit-btn"
+                onClick={handleQuickAdd}
+                className="h-9"
+              >
                 <Plus className="h-4 w-4" />
                 {vi.worksheets.editor.quickAddButton}
               </Button>
@@ -1724,7 +1896,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                     )}
 
                     <Label className="mt-2 block text-[10px] font-bold uppercase text-slate-400">
-                      {field.type === "ESSAY" || field.type === "PHOTO_UPLOAD"
+                      {isManualFieldType(field.type)
                         ? tr("Hướng dẫn chấm", "Rubric")
                         : tr("Đáp án", "Answer")}
                     </Label>
@@ -1734,7 +1906,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                   <div className="mt-1" onClick={(e) => e.stopPropagation()}>
                     {field.type === "MULTIPLE_CHOICE" && (
                       <div className="flex gap-1.5">
-                        {(field.options ?? []).map((opt) => (
+                        {asOptionList(field.options).map((opt) => (
                           <button
                             key={opt.id}
                             type="button"
@@ -1818,7 +1990,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                     {field.type === "TRUE_FALSE_GROUP" && (
                       <TrueFalseGroupEditor
                         fieldId={field.id}
-                        options={field.options}
+                        options={asOptionList(field.options)}
                         answerKey={field.answerKey}
                         gradingOpts={field.gradingOpts}
                         compact
@@ -1867,6 +2039,19 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                         }
                         placeholder={tr("Nhập transcript chuẩn…", "Enter expected transcript…")}
                         className="text-xs"
+                      />
+                    )}
+
+                    {isInteractiveFieldType(field.type) && (
+                      <InteractiveFieldEditor
+                        fieldId={field.id}
+                        type={field.type}
+                        points={field.points}
+                        options={field.options}
+                        answerKey={field.answerKey}
+                        gradingOpts={field.gradingOpts}
+                        rubric={field.rubric}
+                        onChange={(patch) => updateField(field.id, patch)}
                       />
                     )}
                   </div>
@@ -3112,7 +3297,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                     selectedField.type === "DROPDOWN" ||
                     selectedField.type === "MULTI_SELECT") && (
                     <div className="space-y-2">
-                      {(selectedField.options ?? []).map((opt, idx) => {
+                      {asOptionList(selectedField.options).map((opt, idx) => {
                         const isMulti = selectedField.type === "MULTI_SELECT";
                         const correctArr = Array.isArray(selectedField.answerKey.correct)
                           ? (selectedField.answerKey.correct as string[])
@@ -3142,7 +3327,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                             <Input
                               value={opt.text}
                               onChange={(e) => {
-                                const opts = [...(selectedField.options ?? [])];
+                                const opts = [...asOptionList(selectedField.options)];
                                 opts[idx] = { ...opt, text: e.target.value };
                                 updateField(selectedField.id, { options: opts });
                               }}
@@ -3151,7 +3336,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                             <button
                               type="button"
                               onClick={() => {
-                                const opts = (selectedField.options ?? []).filter(
+                                const opts = asOptionList(selectedField.options).filter(
                                   (_, i) => i !== idx
                                 );
                                 updateField(selectedField.id, { options: opts });
@@ -3169,7 +3354,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                         size="sm"
                         className="w-full h-8 text-xs"
                         onClick={() => {
-                          const opts = selectedField.options ?? [];
+                          const opts = asOptionList(selectedField.options);
                           const nextChar = String.fromCharCode(65 + opts.length);
                           const id =
                             selectedField.type === "DROPDOWN" ? `opt${opts.length + 1}` : nextChar;
@@ -3264,7 +3449,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                   {selectedField.type === "TRUE_FALSE_GROUP" && (
                     <TrueFalseGroupEditor
                       fieldId={selectedField.id}
-                      options={selectedField.options}
+                      options={asOptionList(selectedField.options)}
                       answerKey={selectedField.answerKey}
                       gradingOpts={selectedField.gradingOpts}
                       onChange={(patch) => updateField(selectedField.id, patch)}
@@ -3389,6 +3574,19 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                         />
                       </label>
                     </div>
+                  )}
+
+                  {isInteractiveFieldType(selectedField.type) && (
+                    <InteractiveFieldEditor
+                      fieldId={selectedField.id}
+                      type={selectedField.type}
+                      points={selectedField.points}
+                      options={selectedField.options}
+                      answerKey={selectedField.answerKey}
+                      gradingOpts={selectedField.gradingOpts}
+                      rubric={selectedField.rubric}
+                      onChange={(patch) => updateField(selectedField.id, patch)}
+                    />
                   )}
                 </div>
 

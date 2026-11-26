@@ -183,9 +183,20 @@ const ALL_TOOLS: FieldType[] = [
   "ESSAY",
   "PHOTO_UPLOAD",
   "DICTATION",
+  "MATCH",
+  "DRAG_DROP",
+  "SPEAKING",
+  "VOICE_ANSWER",
+  "HIGHLIGHT",
+  "ORDERING",
+  "WORDSEARCH",
+  "DRAW",
+  "CODE",
 ];
 
-const NON_LANGUAGE_TOOLS: FieldType[] = ALL_TOOLS.filter((t) => t !== "DICTATION");
+const NON_LANGUAGE_TOOLS: FieldType[] = ALL_TOOLS.filter(
+  (t) => t !== "DICTATION" && t !== "SPEAKING"
+);
 
 export const SUBJECT_PROFILES: Record<SubjectProfileKey, SubjectProfileConfig> = {
   LANGUAGE: {
@@ -205,7 +216,7 @@ export const SUBJECT_PROFILES: Record<SubjectProfileKey, SubjectProfileConfig> =
       "DICTATION",
       "ESSAY",
     ],
-    allAvailableTools: ALL_TOOLS,
+    allAvailableTools: ALL_TOOLS.filter((t) => t !== "CODE" && t !== "DRAW"),
   },
   STEM: {
     key: "STEM",
@@ -222,9 +233,10 @@ export const SUBJECT_PROFILES: Record<SubjectProfileKey, SubjectProfileConfig> =
       "NUMBER",
       "TEXT",
       "PHOTO_UPLOAD",
+      "DRAW",
       "ESSAY",
     ],
-    allAvailableTools: NON_LANGUAGE_TOOLS,
+    allAvailableTools: NON_LANGUAGE_TOOLS.filter((t) => t !== "CODE"),
   },
   LITERATURE: {
     key: "LITERATURE",
@@ -237,12 +249,14 @@ export const SUBJECT_PROFILES: Record<SubjectProfileKey, SubjectProfileConfig> =
     defaultQuickType: "ESSAY",
     primaryTools: [
       "ESSAY",
+      "HIGHLIGHT",
+      "ORDERING",
       "PHOTO_UPLOAD",
       "TEXT",
       "MULTIPLE_CHOICE",
       "TRUE_FALSE",
     ],
-    allAvailableTools: NON_LANGUAGE_TOOLS,
+    allAvailableTools: NON_LANGUAGE_TOOLS.filter((t) => t !== "CODE"),
   },
   SOCIAL: {
     key: "SOCIAL",
@@ -257,11 +271,13 @@ export const SUBJECT_PROFILES: Record<SubjectProfileKey, SubjectProfileConfig> =
       "MULTIPLE_CHOICE",
       "TRUE_FALSE_GROUP",
       "TRUE_FALSE",
+      "MATCH",
+      "ORDERING",
       "TEXT",
       "ESSAY",
       "PHOTO_UPLOAD",
     ],
-    allAvailableTools: NON_LANGUAGE_TOOLS,
+    allAvailableTools: NON_LANGUAGE_TOOLS.filter((t) => t !== "CODE"),
   },
   INFORMATICS: {
     key: "INFORMATICS",
@@ -275,6 +291,9 @@ export const SUBJECT_PROFILES: Record<SubjectProfileKey, SubjectProfileConfig> =
     primaryTools: [
       "MULTIPLE_CHOICE",
       "TRUE_FALSE_GROUP",
+      "CODE",
+      "ORDERING",
+      "MATCH",
       "TEXT",
       "NUMBER",
       "ESSAY",

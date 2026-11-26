@@ -200,6 +200,7 @@ export const gradingOptsSchema = z
     partialCredit: z.boolean().optional(),
     scoring: z.enum(["WORD_ACCURACY", "ALL_OR_NOTHING"]).optional(),
     tfScoring: z.enum(["THPT_2025", "ALL_OR_NOTHING", "EQUAL"]).optional(),
+    orderingScoring: z.enum(["LCS", "EXACT_POS"]).optional(),
   })
   .optional()
   .nullable();
@@ -224,7 +225,10 @@ export const fieldItemSchema = z
     w: z.number().min(0.005).max(1).optional().nullable(),
     h: z.number().min(0.005).max(1).optional().nullable(),
     style: fieldStyleSchema,
-    options: z.array(fieldOptionSchema).optional().nullable(),
+    options: z
+      .union([z.array(fieldOptionSchema), z.record(z.unknown())])
+      .optional()
+      .nullable(),
     answerKey: z.record(z.unknown()),
     gradingOpts: gradingOptsSchema,
     rubric: z.array(rubricCriterionSchema).max(20).optional().nullable(),
@@ -359,13 +363,70 @@ const photoUploadAnswerSchema = z
 
 const trueFalseGroupAnswerSchema = z.record(z.string().min(1).max(32), z.boolean().nullable());
 
+const matchAnswerSchema = z.record(z.string().min(1).max(64), z.string().max(64));
+
+const dragDropAnswerSchema = z.record(
+  z.string().min(1).max(64),
+  z.array(z.string().min(1).max(64)).max(50)
+);
+
+const speakingAnswerSchema = z
+  .object({
+    text: z.string().max(10000),
+    tries: z.number().int().min(0).max(500),
+    audioKey: z.string().trim().min(1).max(300).optional(),
+  })
+  .strict();
+
+const voiceAnswerSchema = z
+  .object({
+    fileKey: z.string().trim().min(1).max(300),
+    mimeType: z.string().trim().min(1).max(100),
+    durationSec: z.number().min(0).max(3600).optional(),
+  })
+  .strict();
+
+const wordsearchAnswerSchema = z
+  .object({
+    found: z
+      .array(
+        z.object({
+          word: z.string().trim().min(1).max(64),
+          cells: z.array(z.tuple([z.number().int().min(0).max(30), z.number().int().min(0).max(30)])).max(40),
+        })
+      )
+      .max(100),
+  })
+  .strict();
+
+const drawAnswerSchema = z
+  .object({
+    fileKey: z.string().trim().min(1).max(300),
+  })
+  .strict();
+
+const codeAnswerSchema = z
+  .object({
+    code: z.string().max(50000),
+    lastOutput: z.string().max(20000).optional(),
+  })
+  .strict();
+
 export const answerValueSchema = z.union([
   z.string(),
   z.array(z.string()),
+  z.array(z.number().int().min(0).max(10000)),
   z.boolean(),
   z.number(),
   photoUploadAnswerSchema,
+  speakingAnswerSchema,
+  voiceAnswerSchema,
+  wordsearchAnswerSchema,
+  drawAnswerSchema,
+  codeAnswerSchema,
   trueFalseGroupAnswerSchema,
+  matchAnswerSchema,
+  dragDropAnswerSchema,
   z.null(),
 ]);
 

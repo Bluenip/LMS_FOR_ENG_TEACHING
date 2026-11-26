@@ -1,10 +1,17 @@
 import type { FieldPlacement, FieldType, SkillTag } from "@prisma/client";
 import {
+  asOptionList,
+  isCodeAnswer,
+  isDrawAnswer,
   isPhotoUploadAnswer,
+  isSpeakingAnswer,
   isTrueFalseGroupAnswer,
+  isVoiceAnswer,
+  isWordsearchAnswer,
   type AnswerValue,
   type DictationGradeDetail,
   type FieldOption,
+  type FieldOptionsValue,
   type FieldStyle,
   type GradingOptions,
   type PhotoAnnotationMap,
@@ -57,7 +64,7 @@ export interface EditorFieldDTO {
   w?: number | null;
   h?: number | null;
   style?: FieldStyle | null;
-  options?: FieldOption[] | null;
+  options?: FieldOptionsValue | null;
   answerKey: Record<string, unknown>;
   gradingOpts?: GradingOptions | null;
   rubric?: RubricCriterion[] | null;
@@ -82,7 +89,7 @@ export interface StudentFieldDTO {
   w?: number | null;
   h?: number | null;
   style?: FieldStyle | null;
-  options?: FieldOption[] | null;
+  options?: FieldOptionsValue | null;
   // Only populated after submission when assignment.showResult allows it
   rubric?: RubricCriterion[] | null;
   // Only populated after submission when assignment.showResult & showAnswerKey allow it
@@ -110,8 +117,28 @@ export function isAnswerFilled(value: AnswerValue): boolean {
   if (isPhotoUploadAnswer(value)) {
     return value.files.length > 0 || Boolean(value.note?.trim());
   }
+  if (isVoiceAnswer(value)) {
+    return Boolean(value.fileKey);
+  }
+  if (isDrawAnswer(value)) {
+    return Boolean(value.fileKey);
+  }
+  if (isSpeakingAnswer(value)) {
+    return value.text.trim().length > 0 || Boolean(value.audioKey);
+  }
+  if (isCodeAnswer(value)) {
+    return value.code.trim().length > 0;
+  }
+  if (isWordsearchAnswer(value)) {
+    return value.found.length > 0;
+  }
   if (isTrueFalseGroupAnswer(value)) {
     return Object.values(value).some((v) => typeof v === "boolean");
+  }
+  if (typeof value === "object") {
+    return Object.values(value).some((v) =>
+      Array.isArray(v) ? v.length > 0 : typeof v === "string" && v.trim().length > 0
+    );
   }
   return false;
 }
@@ -119,10 +146,11 @@ export function isAnswerFilled(value: AnswerValue): boolean {
 export function formatRevealedAnswer(
   type: FieldType,
   revealedAnswer?: Record<string, unknown>,
-  options?: FieldOption[] | null,
+  options?: FieldOptionsValue | FieldOption[] | null,
   tr: (viText: string, enText: string) => string = (v) => v
 ): string {
   if (!revealedAnswer) return "";
+  const listOpts = asOptionList(options);
   switch (type) {
     case "TEXT": {
       const acc = revealedAnswer.accepted;
@@ -136,7 +164,7 @@ export function formatRevealedAnswer(
     case "MULTIPLE_CHOICE":
     case "DROPDOWN": {
       const id = String(revealedAnswer.correct ?? "");
-      const found = options?.find((o) => o.id === id);
+      const found = listOpts.find((o) => o.id === id);
       return found ? (found.text && found.text !== found.id ? `${found.id}. ${found.text}` : found.id) : id;
     }
     case "MULTI_SELECT": {
@@ -151,8 +179,8 @@ export function formatRevealedAnswer(
           ? (revealedAnswer.correct as Record<string, boolean>)
           : {};
       const ids =
-        options && options.length > 0
-          ? options.map((o) => o.id)
+        listOpts.length > 0
+          ? listOpts.map((o) => o.id)
           : Object.keys(correctMap).sort();
       return ids
         .filter((id) => typeof correctMap[id] === "boolean")
@@ -166,9 +194,51 @@ export function formatRevealedAnswer(
     case "ESSAY":
       return String(revealedAnswer.rubric ?? tr("Chấm tự luận", "Essay (manual grading)"));
     case "PHOTO_UPLOAD":
-      return String(revealedAnswer.rubric ?? "");
+    case "VOICE_ANSWER":
+    case "DRAW":
+      return String(revealedAnswer.rubric ?? revealedAnswer.note ?? "");
     case "DICTATION":
+    case "SPEAKING":
       return String(revealedAnswer.transcript ?? "");
+    case "MATCH": {
+      const pairs = Array.isArray(revealedAnswer.pairs)
+        ? (revealedAnswer.pairs as Array<[string, string]>)
+        : [];
+      return pairs.map(([l, r]) => `${l}→${r}`).join(" · ");
+    }
+    case "DRAG_DROP": {
+      const slots =
+        revealedAnswer.slots && typeof revealedAnswer.slots === "object"
+          ? (revealedAnswer.slots as Record<string, string[]>)
+          : {};
+      return Object.entries(slots)
+        .map(([slot, toks]) => `${slot}: ${Array.isArray(toks) ? toks.join(", ") : ""}`)
+        .join(" | ");
+    }
+    case "HIGHLIGHT": {
+      const indices = Array.isArray(revealedAnswer.indices) ? revealedAnswer.indices : [];
+      const ho =
+        options && !Array.isArray(options) && "tokens" in options && Array.isArray(options.tokens)
+          ? options.tokens
+          : [];
+      if (ho.length > 0) {
+        return indices
+          .map((i) => (typeof i === "number" ? ho[i] : ""))
+          .filter(Boolean)
+          .join(", ");
+      }
+      return indices.join(", ");
+    }
+    case "ORDERING": {
+      const order = Array.isArray(revealedAnswer.order) ? revealedAnswer.order : [];
+      return order.join(" → ");
+    }
+    case "WORDSEARCH": {
+      const words = Array.isArray(revealedAnswer.words) ? revealedAnswer.words : [];
+      return words.join(", ");
+    }
+    case "CODE":
+      return String(revealedAnswer.expectedOutput ?? revealedAnswer.referenceCode ?? "");
     default:
       return "";
   }

@@ -2,7 +2,9 @@
 
 import { CheckCircle2, XCircle } from "lucide-react";
 import {
+  asOptionList,
   isPhotoUploadAnswer,
+  isStringArray,
   isTrueFalseGroupAnswer,
   type AnswerValue,
 } from "@/lib/grading/types";
@@ -145,7 +147,10 @@ export function OverlayFieldInput({
           className="h-full w-full cursor-pointer rounded bg-transparent px-1 outline-none"
         >
           <option value="">{tr("Chọn đáp án…", "Choose an answer…")}</option>
-          {(field.options ?? []).map((opt) => (
+          {(field.options
+          ? asOptionList(field.options)
+          : []
+        ).map((opt) => (
             <option key={opt.id} value={opt.id}>
               {opt.text || opt.id}
             </option>
@@ -204,15 +209,15 @@ export function OverlayFieldInput({
 
       {field.type === "TRUE_FALSE_GROUP" && (
         <div className="flex h-full w-full flex-wrap items-center justify-around gap-0.5 overflow-auto p-0.5">
-          {(field.options && field.options.length > 0
-            ? field.options
+          {((asOptionList(field.options).length > 0
+            ? asOptionList(field.options)
             : [
                 { id: "a", text: "a" },
                 { id: "b", text: "b" },
                 { id: "c", text: "c" },
                 { id: "d", text: "d" },
               ]
-          ).map((stmt) => {
+          )).map((stmt) => {
             const cur = isTrueFalseGroupAnswer(value) ? value : {};
             const picked = cur[stmt.id];
             return (
@@ -251,9 +256,23 @@ export function OverlayFieldInput({
         </div>
       )}
 
+      {(field.type === "MATCH" ||
+        field.type === "DRAG_DROP" ||
+        field.type === "SPEAKING" ||
+        field.type === "VOICE_ANSWER" ||
+        field.type === "HIGHLIGHT" ||
+        field.type === "ORDERING" ||
+        field.type === "WORDSEARCH" ||
+        field.type === "DRAW" ||
+        field.type === "CODE") && (
+        <div className="flex h-full w-full items-center justify-center px-1 text-center text-[0.75em] font-semibold text-[#3525CD]">
+          {tr("Làm ở Phiếu →", "Complete in Sheet →")}
+        </div>
+      )}
+
       {field.type === "MULTIPLE_CHOICE" && (
         <div className="flex h-full w-full flex-wrap items-center justify-around gap-1 overflow-auto p-0.5">
-          {(field.options ?? []).map((opt) => {
+          {asOptionList(field.options).map((opt) => {
             const active = value === opt.id;
             return (
               <button
@@ -277,18 +296,18 @@ export function OverlayFieldInput({
 
       {field.type === "MULTI_SELECT" && (
         <div className="flex h-full w-full flex-wrap items-center gap-1 overflow-auto p-1">
-          {(field.options ?? []).map((opt) => {
-            const selected = Array.isArray(value) && value.includes(opt.id);
+          {asOptionList(field.options).map((opt) => {
+            const list = isStringArray(value) ? value : [];
+            const selected = list.includes(opt.id);
             return (
               <button
                 key={opt.id}
                 type="button"
                 disabled={disabled}
                 onClick={() => {
-                  const prev = Array.isArray(value) ? value : [];
                   const next = selected
-                    ? prev.filter((id) => id !== opt.id)
-                    : [...prev, opt.id];
+                    ? list.filter((id) => id !== opt.id)
+                    : [...list, opt.id];
                   onChange?.(next);
                 }}
                 className={cn(

@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { Prisma, type WorksheetSubject } from "@prisma/client";
+import { Prisma, type FieldType, type WorksheetSubject } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { getStorageProvider } from "@/lib/storage";
@@ -469,18 +469,7 @@ export async function uploadWorksheetBackgroundImages(
 export interface SaveFieldPayload {
   id?: string;
   placement: "OVERLAY" | "ANSWER_SHEET";
-  type:
-    | "TEXT"
-    | "NUMBER"
-    | "MULTIPLE_CHOICE"
-    | "MULTI_SELECT"
-    | "TRUE_FALSE"
-    | "TRUE_FALSE_GROUP"
-    | "DROPDOWN"
-    | "CHECKBOX"
-    | "ESSAY"
-    | "DICTATION"
-    | "PHOTO_UPLOAD";
+  type: FieldType;
   label: string;
   prompt?: string | null;
   explanation?: string | null;
@@ -496,7 +485,7 @@ export interface SaveFieldPayload {
   w?: number | null;
   h?: number | null;
   style?: Record<string, unknown> | null;
-  options?: Array<{ id: string; text: string }> | null;
+  options?: unknown;
   answerKey: Record<string, unknown>;
   gradingOpts?: Record<string, unknown> | null;
   rubric?: Array<{ id: string; title: string; description?: string; maxPoints: number }> | null;

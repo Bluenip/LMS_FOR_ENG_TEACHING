@@ -43,6 +43,15 @@ enum FieldType {
   ESSAY
   DICTATION
   PHOTO_UPLOAD
+  MATCH
+  DRAG_DROP
+  SPEAKING
+  VOICE_ANSWER
+  HIGHLIGHT
+  ORDERING
+  WORDSEARCH
+  DRAW
+  CODE
 }
 
 enum WorksheetSubject {

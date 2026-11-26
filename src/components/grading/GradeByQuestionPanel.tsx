@@ -25,6 +25,8 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { PromptText } from "@/components/worksheet/PromptText";
 import { PhotoAnnotatorModal } from "@/components/worksheet/PhotoAnnotatorModal";
+import { InteractiveAnswerReview } from "@/components/worksheet/interactive/InteractiveAnswerReview";
+import { isInteractiveFieldType } from "@/components/worksheet/interactive/InteractiveQuestionInput";
 import { CommentPresetBar } from "./CommentPresetBar";
 
 interface QuestionMeta {
@@ -376,6 +378,11 @@ export function GradeByQuestionPanel({
                         <p className="text-xs text-[#464555]">{item.answer.value.note}</p>
                       )}
                     </div>
+                  ) : isInteractiveFieldType(field.type) ? (
+                    <InteractiveAnswerReview
+                      type={field.type}
+                      value={item.answer?.value}
+                    />
                   ) : (
                     <p className="whitespace-pre-wrap text-xs sm:text-sm">
                       {item.answer?.value !== undefined &&

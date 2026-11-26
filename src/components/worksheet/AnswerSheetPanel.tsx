@@ -2,11 +2,13 @@
 
 import { Fragment, useEffect, useState } from "react";
 import { CheckCircle2, ChevronUp, ClipboardList, ClipboardX, Flag, XCircle } from "lucide-react";
-import type {
-  AnswerValue,
-  DictationGradeDetail,
-  PhotoAnnotationMap,
-  RubricScoreMap,
+import {
+  asOptionList,
+  isStringArray,
+  type AnswerValue,
+  type DictationGradeDetail,
+  type PhotoAnnotationMap,
+  type RubricScoreMap,
 } from "@/lib/grading/types";
 import { loadFlaggedFieldIds, saveFlaggedFieldIds } from "@/lib/offline-answer-queue";
 import { cn, compareQuestionLabels } from "@/lib/utils";
@@ -26,6 +28,10 @@ import { MathText } from "./MathText";
 import { PassageCard } from "./PassageCard";
 import { TrueFalseGroupInput } from "./TrueFalseGroupInput";
 import { PhotoUploadInput } from "./PhotoUploadInput";
+import {
+  InteractiveQuestionInput,
+  isInteractiveFieldType,
+} from "./interactive/InteractiveQuestionInput";
 
 interface AnswerSheetPanelProps {
   allFields: StudentFieldDTO[];
@@ -333,7 +339,7 @@ export function AnswerSheetPanel({
                 <div className="mt-2.5">
                   {field.type === "MULTIPLE_CHOICE" && (
                     <div className="grid grid-cols-2 gap-1.5">
-                      {(field.options ?? []).map((opt) => {
+                      {asOptionList(field.options).map((opt) => {
                         const selected = val === opt.id;
                         return (
                           <button
@@ -371,8 +377,8 @@ export function AnswerSheetPanel({
 
                   {field.type === "MULTI_SELECT" && (
                     <div className="space-y-1.5">
-                      {(field.options ?? []).map((opt) => {
-                        const list = Array.isArray(val) ? val : [];
+                      {asOptionList(field.options).map((opt) => {
+                        const list = isStringArray(val) ? val : [];
                         const selected = list.includes(opt.id);
                         return (
                           <button
@@ -442,7 +448,7 @@ export function AnswerSheetPanel({
                   {field.type === "TRUE_FALSE_GROUP" && (
                     <TrueFalseGroupInput
                       fieldId={field.id}
-                      options={field.options}
+                      options={asOptionList(field.options)}
                       value={val}
                       onChange={(next) => onChange?.(field.id, next)}
                       disabled={disabled}
@@ -474,7 +480,7 @@ export function AnswerSheetPanel({
                       className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs outline-none focus:border-[#4F46E5]"
                     >
                       <option value="">{tr("Chọn đáp án…", "Choose an answer…")}</option>
-                      {(field.options ?? []).map((opt) => (
+                      {asOptionList(field.options).map((opt) => (
                         <option key={opt.id} value={opt.id}>
                           {opt.text || opt.id}
                         </option>
@@ -581,6 +587,18 @@ export function AnswerSheetPanel({
                       />
                     </div>
                   )}
+
+                  {isInteractiveFieldType(field.type) && (
+                    <InteractiveQuestionInput
+                      fieldId={field.id}
+                      type={field.type}
+                      submissionId={audioPreviewMode ? null : submissionId}
+                      options={field.options}
+                      value={val}
+                      onChange={(next) => onChange?.(field.id, next)}
+                      disabled={disabled}
+                    />
+                  )}
                 </div>
 
                 {/* Result & revealed answer */}
@@ -606,15 +624,18 @@ export function AnswerSheetPanel({
                         ))}
                       </div>
                     )}
-                    {field.type === "DICTATION" && grade?.gradeDetail && (
+                    {(field.type === "DICTATION" || field.type === "SPEAKING") && grade?.gradeDetail && (
                       <DictationDiffView detail={grade.gradeDetail} showExpected={revealKey} />
                     )}
-                    {revealedText && !(field.type === "DICTATION" && grade?.gradeDetail) && (
+                    {revealedText &&
+                      !((field.type === "DICTATION" || field.type === "SPEAKING") && grade?.gradeDetail) && (
                       <p className="font-semibold text-emerald-700">
                         {vi.assignments.do.correctAnswer}: {revealedText}
                       </p>
                     )}
-                    {revealedText && field.type === "DICTATION" && grade?.gradeDetail && (
+                    {revealedText &&
+                      (field.type === "DICTATION" || field.type === "SPEAKING") &&
+                      grade?.gradeDetail && (
                       <p className="font-semibold text-emerald-700">
                         {tr("Transcript chuẩn:", "Expected transcript:")} {revealedText}
                       </p>

@@ -47,17 +47,20 @@ import { DictationDiffView } from "@/components/worksheet/DictationDiffView";
 import { PromptText } from "@/components/worksheet/PromptText";
 import { PhotoAnnotatorModal } from "@/components/worksheet/PhotoAnnotatorModal";
 import { PhotoLightboxModal } from "@/components/worksheet/PhotoLightboxModal";
+import { InteractiveAnswerReview } from "@/components/worksheet/interactive/InteractiveAnswerReview";
+import { isInteractiveFieldType } from "@/components/worksheet/interactive/InteractiveQuestionInput";
 import { CommentPresetBar } from "@/components/grading/CommentPresetBar";
 import { OverrideDialog, type StudentOverrideInfo } from "@/components/grading/OverrideDialog";
 import { GradeByQuestionPanel } from "@/components/grading/GradeByQuestionPanel";
 import {
+  asOptionList,
   computeRubricTotal,
   isManualFieldType,
   isPhotoUploadAnswer,
   isTrueFalseGroupAnswer,
   type AnswerValue,
   type DictationGradeDetail,
-  type FieldOption,
+  type FieldOptionsValue,
   type FieldStyle,
   type PhotoAnnotationMap,
   type RubricCriterion,
@@ -173,7 +176,7 @@ interface ReviewSubmissionDetail {
         w: number | null;
         h: number | null;
         style: FieldStyle | null;
-        options: FieldOption[] | null;
+        options: FieldOptionsValue | null;
         answerKey: Record<string, unknown>;
         rubric?: RubricCriterion[] | null;
       }>;
@@ -652,9 +655,10 @@ function SubmissionReviewModal({
                               !Array.isArray(f.answerKey.correct)
                                 ? (f.answerKey.correct as Record<string, boolean>)
                                 : {};
+                            const listOpts = asOptionList(f.options);
                             const ids =
-                              f.options && f.options.length > 0
-                                ? f.options.map((o) => o.id)
+                              listOpts.length > 0
+                                ? listOpts.map((o) => o.id)
                                 : Object.keys({ ...correctMap, ...studentMap }).sort();
                             if (ids.length === 0) {
                               return <p className="mt-0.5 font-medium">{tr("(Bỏ trống)", "(Blank)")}</p>;
@@ -690,6 +694,14 @@ function SubmissionReviewModal({
                               </div>
                             );
                           })()
+                        ) : isInteractiveFieldType(f.type) ? (
+                          <InteractiveAnswerReview
+                            type={f.type}
+                            value={ans?.value}
+                            options={f.options}
+                            answerKey={f.answerKey}
+                            gradeDetail={ans?.gradeDetail}
+                          />
                         ) : (
                           <p className="mt-0.5 whitespace-pre-wrap font-medium">
                             {ans?.value !== undefined && ans?.value !== null && ans?.value !== ""

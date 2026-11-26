@@ -53,6 +53,7 @@ export async function regradeWorksheetSubmissions(worksheetId: string): Promise<
           id: f.id,
           type: f.type,
           points: f.points,
+          options: f.options,
           answerKey: f.answerKey,
           gradingOpts: (f.gradingOpts as GradingOptions | null) ?? null,
         },
