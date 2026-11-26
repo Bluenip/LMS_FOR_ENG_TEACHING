@@ -1,6 +1,7 @@
 import type { SkillTag } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { normalizeToScale10, round2 } from "@/lib/gradebook-calc";
 import { generateParentInviteCode } from "@/lib/utils";
 import { canRevealResult } from "./submissionService";
 import { getClassSemesterLeaderboard } from "./leaderboardService";
@@ -208,6 +209,7 @@ export async function getChildOverviewForParent(studentId: string, selectedClass
         classPct: null as number | null,
       })),
       recentAssignments: [],
+      offlineGrades: [],
       teacherFeedback: [],
       proctorAlerts: [],
     };
@@ -565,6 +567,47 @@ export async function getChildOverviewForParent(studentId: string, selectedClass
     };
   });
 
+  // Load offline paper test grades strictly scoped to childId (only anonymous classAvg10)
+  const offlineColumns = await prisma.offlineGradeColumn.findMany({
+    where: { classId: { in: classIds } },
+    orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+    include: {
+      class: { select: { id: true, name: true } },
+      entries: {
+        where: { score: { not: null } },
+        select: { studentId: true, score: true, note: true },
+      },
+    },
+  });
+
+  const offlineGrades = offlineColumns.map((col) => {
+    const childEntry = col.entries.find((e) => e.studentId === studentId);
+    const scale10Values = col.entries
+      .map((e) => (e.score !== null ? normalizeToScale10(e.score, col.maxScore) : null))
+      .filter((v): v is number => v !== null);
+    const classAvg10 =
+      scale10Values.length > 0
+        ? round2(scale10Values.reduce((s, v) => s + v, 0) / scale10Values.length)
+        : null;
+
+    return {
+      columnId: col.id,
+      classId: col.class.id,
+      className: col.class.name,
+      title: col.title,
+      date: col.date.toISOString(),
+      score: childEntry?.score ?? null,
+      maxScore: col.maxScore,
+      score10:
+        childEntry?.score !== null && childEntry?.score !== undefined
+          ? normalizeToScale10(childEntry.score, col.maxScore)
+          : null,
+      weight: col.weight,
+      note: childEntry?.note ?? col.note ?? null,
+      classAvg10,
+    };
+  });
+
   return {
     student: { id: student.id, name: student.name },
     classes: classes.map((c) => ({
@@ -589,6 +632,7 @@ export async function getChildOverviewForParent(studentId: string, selectedClass
     classPerformance,
     skills,
     recentAssignments: recentAssignments.reverse(),
+    offlineGrades,
     teacherFeedback: teacherFeedback.reverse(),
     proctorAlerts,
   };

@@ -1,14 +1,19 @@
+import crypto from "node:crypto";
 import type {
   CameraSensitivity,
   LeaderboardMode,
+  Prisma,
   ProctorMode,
   ScoreScale,
   ShowResultMode,
   ViolationAction,
+  WorksheetSubject,
 } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { resolveEffectiveAssignment } from "@/lib/assignment-effective";
+import { detectImageMeta } from "@/lib/image-meta";
+import { getStorageProvider } from "@/lib/storage";
 import { createNotificationsBulk } from "./notificationService";
 import { canRevealResult } from "./submissionService";
 import { formatDateTime } from "@/lib/utils";
@@ -566,4 +571,272 @@ export function verifySebHeaderIfNeeded(
       "SEB_HASH_MISMATCH"
     );
   }
+}
+
+export interface QuickAttachmentMeta {
+  key: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
+const MAX_QUICK_ATTACHMENT_BYTES = 15 * 1024 * 1024;
+
+export async function uploadQuickAssignmentAttachment(
+  classId: string,
+  file: { buffer: Buffer; originalName: string; mimeType: string }
+): Promise<QuickAttachmentMeta> {
+  if (file.buffer.byteLength <= 0 || file.buffer.byteLength > MAX_QUICK_ATTACHMENT_BYTES) {
+    throw new AppError(
+      "Kích thước file không hợp lệ hoặc vượt quá giới hạn.",
+      400,
+      "INVALID_FILE_SIZE"
+    );
+  }
+  const img = detectImageMeta(file.buffer);
+  let detected: { ext: string; mime: string } | null = img
+    ? { ext: img.ext, mime: img.mime }
+    : null;
+  if (
+    !detected &&
+    file.buffer.byteLength >= 5 &&
+    file.buffer.subarray(0, 5).toString("ascii") === "%PDF-"
+  ) {
+    detected = { ext: ".pdf", mime: "application/pdf" };
+  }
+  if (!detected) {
+    throw new AppError(
+      "Chỉ hỗ trợ ảnh (JPEG, PNG, WebP) hoặc file PDF hợp lệ.",
+      400,
+      "INVALID_FILE_TYPE"
+    );
+  }
+
+  const key = `assignments/quick/${classId}/${crypto.randomUUID()}${detected.ext}`;
+  const storage = getStorageProvider();
+  await storage.put(key, file.buffer, detected.mime, {
+    fileName: file.originalName,
+  });
+
+  return {
+    key,
+    name: file.originalName.trim().slice(0, 180) || `file${detected.ext}`,
+    mimeType: detected.mime,
+    sizeBytes: file.buffer.byteLength,
+  };
+}
+
+export interface CreateQuickTextbookAssignmentInput {
+  title: string;
+  classIds: string[];
+  promptText: string;
+  openAt?: string | null;
+  dueAt?: string | null;
+  maxScore?: number;
+  weight?: number;
+  maxAttempts?: number | null;
+  allowLate?: boolean;
+  scoreScale?: ScoreScale;
+  subject?: WorksheetSubject;
+  attachmentKeys?: QuickAttachmentMeta[];
+}
+
+/**
+ * Quickly assigns a textbook exercise: auto-creates a `[SGK]` worksheet with 1 PHOTO_UPLOAD
+ * question carrying `promptText`, attaches optional PDF/image references, and creates an
+ * Assignment for every selected class.
+ */
+export async function createQuickTextbookAssignment(
+  teacherId: string,
+  isAdmin: boolean,
+  input: CreateQuickTextbookAssignmentInput
+) {
+  const uniqueClassIds = Array.from(new Set(input.classIds));
+  const classes = await prisma.class.findMany({
+    where: {
+      id: { in: uniqueClassIds },
+      deletedAt: null,
+      ...(isAdmin
+        ? {}
+        : {
+            OR: [
+              { teacherId },
+              {
+                classTeachers: {
+                  some: { userId: teacherId, role: { in: ["OWNER", "CO_TEACHER"] } },
+                },
+              },
+            ],
+          }),
+    },
+    include: {
+      enrollments: {
+        where: { status: "ACTIVE", student: { deletedAt: null } },
+        include: {
+          student: {
+            select: {
+              id: true,
+              name: true,
+              parentLinksAsChild: {
+                where: { verifiedAt: { not: null } },
+                select: { parentId: true },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (classes.length !== uniqueClassIds.length) {
+    throw new AppError(
+      "Một hoặc nhiều lớp học không hợp lệ hoặc không thuộc quyền quản lý của bạn.",
+      403,
+      "FORBIDDEN"
+    );
+  }
+
+  const verifiedClassIds = new Set(classes.map((c) => c.id));
+  const attachments = input.attachmentKeys ?? [];
+  for (const att of attachments) {
+    const match = /^assignments\/quick\/([A-Za-z0-9_-]+)\/[A-Za-z0-9_.-]+$/.exec(att.key);
+    if (!match || att.key.includes("..")) {
+      throw new AppError(
+        "Đính kèm bài tập không hợp lệ hoặc thuộc lớp khác.",
+        400,
+        "INVALID_ATTACHMENT"
+      );
+    }
+    const keyClassId = match[1]!;
+    if (!verifiedClassIds.has(keyClassId)) {
+      if (!isAdmin) {
+        const ownsUploadClass = await prisma.class.findFirst({
+          where: {
+            id: keyClassId,
+            deletedAt: null,
+            OR: [
+              { teacherId },
+              { classTeachers: { some: { userId: teacherId, role: { in: ["OWNER", "CO_TEACHER"] } } } },
+            ],
+          },
+          select: { id: true },
+        });
+        if (!ownsUploadClass) {
+          throw new AppError(
+            "Đính kèm bài tập không hợp lệ hoặc thuộc lớp khác.",
+            403,
+            "FORBIDDEN"
+          );
+        }
+      }
+    }
+  }
+
+  const openAt = input.openAt ? new Date(input.openAt) : null;
+  const dueAt = input.dueAt ? new Date(input.dueAt) : null;
+  if (openAt && dueAt && dueAt <= openAt) {
+    throw new AppError("Hạn nộp phải sau thời điểm mở bài.", 400, "VALIDATION_ERROR");
+  }
+
+  const maxScore = input.maxScore ?? 10;
+  const worksheetTitle = `[SGK] ${input.title}`.slice(0, 200);
+
+  const worksheet = await prisma.worksheet.create({
+    data: {
+      ownerId: teacherId,
+      title: worksheetTitle,
+      subject: input.subject ?? "GENERAL",
+      instructions: input.promptText,
+      pageCount: 0,
+      fields: {
+        create: [
+          {
+            label: "1",
+            type: "PHOTO_UPLOAD",
+            placement: "ANSWER_SHEET",
+            pageIndex: 0,
+            order: 0,
+            prompt: input.promptText,
+            points: maxScore,
+            answerKey: {} as Prisma.InputJsonValue,
+          },
+        ],
+      },
+    },
+    include: { fields: true },
+  });
+
+  const createdAssignments = [];
+  const dueLabel = dueAt ? ` • Hạn nộp: ${formatDateTime(dueAt)}` : "";
+
+  for (const cls of classes) {
+    const assignment = await prisma.assignment.create({
+      data: {
+        classId: cls.id,
+        worksheetId: worksheet.id,
+        title: input.title,
+        isQuickTextbook: true,
+        promptText: input.promptText,
+        attachmentKeys: attachments as unknown as Prisma.InputJsonValue,
+        openAt,
+        dueAt,
+        timeLimitMin: null,
+        maxAttempts: input.maxAttempts !== undefined ? input.maxAttempts : 2,
+        shuffle: false,
+        shuffleOptions: false,
+        showResult: "AFTER_SUBMIT",
+        showAnswerKey: false,
+        allowLate: input.allowLate ?? true,
+        showLeaderboard: "OFF",
+        leaderboardAnon: false,
+        leaderboardScoreRule: "BEST",
+        proctorMode: "OFF",
+        violationAction: "WARN",
+        maxViolations: 3,
+        requireFullscreen: false,
+        blockCopyPaste: false,
+        shareProctorWithParent: false,
+        requireCamera: false,
+        cameraEnforce: false,
+        cameraSnapshots: false,
+        audioBlockPause: false,
+        audioBlockSeek: false,
+        oneQuestionPerPage: false,
+        remindBeforeDue: true,
+        scoreScale: input.scoreScale ?? "SCALE_10",
+        weight: input.weight ?? 1,
+      },
+    });
+    createdAssignments.push(assignment);
+
+    const notifications: Array<{
+      userId: string;
+      type: "ASSIGNMENT_CREATED" | "PARENT_ALERT";
+      title: string;
+      body: string;
+      link: string;
+    }> = [];
+
+    for (const enr of cls.enrollments) {
+      notifications.push({
+        userId: enr.studentId,
+        type: "ASSIGNMENT_CREATED",
+        title: `Bài tập mới: ${assignment.title}`,
+        body: `Lớp ${cls.name}${dueLabel}`,
+        link: `/student/assignments/${assignment.id}/do`,
+      });
+      for (const pl of enr.student.parentLinksAsChild) {
+        notifications.push({
+          userId: pl.parentId,
+          type: "PARENT_ALERT",
+          title: `${enr.student.name} có bài tập mới`,
+          body: `${assignment.title} (${cls.name})${dueLabel}`,
+          link: `/parent?childId=${enr.studentId}`,
+        });
+      }
+    }
+    await createNotificationsBulk(notifications);
+  }
+
+  return { worksheet, assignments: createdAssignments };
 }

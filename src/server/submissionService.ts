@@ -411,6 +411,9 @@ export async function getStudentAssignmentPayload(
       workbookId: true,
       workbookOrder: true,
       unlockAfterAssignmentId: true,
+      isQuickTextbook: true,
+      promptText: true,
+      attachmentKeys: true,
       overrides: {
         where: { studentId },
         take: 1,
@@ -665,6 +668,9 @@ export async function getStudentAssignmentPayload(
   // Do not expose any exam content (questions, options, PDF, audio) until the student has actually
   // started an attempt; before that only metadata (title, question count, time limit) is returned.
   const contentUnlocked = submissions.length > 0;
+  const exposeQuickTextbookContent = Boolean(
+    assignment.isQuickTextbook && (contentUnlocked || assignment.proctorMode === "OFF")
+  );
   const { overrides, ...assignmentRest } = assignment;
   void overrides;
 
@@ -685,6 +691,12 @@ export async function getStudentAssignmentPayload(
     serverNow: now.toISOString(),
     assignment: {
       ...assignmentRest,
+      isQuickTextbook: assignment.isQuickTextbook,
+      promptText: exposeQuickTextbookContent ? assignment.promptText : null,
+      attachmentKeys:
+        exposeQuickTextbookContent && Array.isArray(assignment.attachmentKeys)
+          ? assignment.attachmentKeys
+          : [],
       openAt: assignment.openAt?.toISOString() ?? null,
       dueAt: effective.dueAt?.toISOString() ?? null,
       timeLimitMin: effective.timeLimitMin,

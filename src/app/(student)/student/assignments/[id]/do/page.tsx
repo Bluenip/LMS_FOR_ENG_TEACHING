@@ -7,10 +7,13 @@ import { toast } from "sonner";
 import {
   AlertTriangle,
   ArrowLeft,
+  BookOpenCheck,
   Camera,
   CameraOff,
   CheckCircle2,
   Clock,
+  ExternalLink,
+  FileText,
   Headphones,
   Lock,
   Maximize2,
@@ -111,6 +114,14 @@ interface StudentAssignmentPayload {
     scoreScale?: ScoreScale;
     weight?: number;
     hasOverride?: boolean;
+    isQuickTextbook?: boolean;
+    promptText?: string | null;
+    attachmentKeys?: Array<{
+      key: string;
+      name: string;
+      mimeType: string;
+      sizeBytes: number;
+    }>;
     class: { id: string; name: string };
     worksheet: {
       id: string;
@@ -936,12 +947,65 @@ export default function StudentDoAssignmentPage() {
 
   // If no submission exists yet (non-proctored), show Start card
   if (!submission) {
+    const startAttachments = assignment.attachmentKeys ?? [];
     return (
       <div className="stitch-card mx-auto max-w-xl p-8 text-center space-y-5">
-        <Badge variant="default">{assignment.class.name}</Badge>
-        <h1 className="text-2xl font-bold text-[#0B1C30]">{assignment.title}</h1>
-        {assignment.worksheet.instructions && (
-          <p className="text-sm text-[#464555]">{assignment.worksheet.instructions}</p>
+        <div className="flex items-center justify-center gap-2">
+          <Badge variant="default">{assignment.class.name}</Badge>
+          {assignment.isQuickTextbook && (
+            <Badge variant="mint">
+              <BookOpenCheck className="mr-1 h-3 w-3" />
+              SGK
+            </Badge>
+          )}
+        </div>
+        <h1 className="text-2xl font-bold text-[#0B1C30] dark:text-slate-100">{assignment.title}</h1>
+        {!assignment.isQuickTextbook && assignment.worksheet.instructions && (
+          <p className="whitespace-pre-line text-sm text-[#464555] dark:text-slate-300">
+            {assignment.worksheet.instructions}
+          </p>
+        )}
+        {assignment.isQuickTextbook && (
+          <div
+            data-testid="quick-textbook-card"
+            className="space-y-2.5 rounded-xl border border-indigo-100 dark:border-indigo-800 bg-[#F8F9FF] dark:bg-slate-800/60 p-3.5 text-left"
+          >
+            {(assignment.promptText || assignment.worksheet.instructions) && (
+              <p className="whitespace-pre-line text-sm font-medium text-[#0B1C30] dark:text-slate-100">
+                {assignment.promptText || assignment.worksheet.instructions}
+              </p>
+            )}
+            {startAttachments.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-[#3525CD] dark:text-indigo-300">
+                  {tr("Tài liệu / Ảnh trang sách đính kèm", "Attached textbook pages / files")}
+                </p>
+                {startAttachments.map((att) =>
+                  att.mimeType.startsWith("image/") ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={att.key}
+                      src={`/api/files/${att.key}`}
+                      alt={att.name}
+                      className="max-h-56 w-full rounded-lg border border-slate-200 dark:border-slate-700 object-contain bg-white"
+                    />
+                  ) : (
+                    <a
+                      key={att.key}
+                      href={`/api/files/${att.key}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-semibold text-[#3525CD] hover:underline"
+                    >
+                      <FileText className="h-4 w-4" />
+                      {att.name}
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  )
+                )}
+              </div>
+            )}
+          </div>
         )}
         <div className="flex flex-wrap justify-center gap-3 text-xs font-semibold text-[#464555]">
           <span className="rounded-full bg-[#F8F9FF] px-3 py-1.5 border border-slate-200">
@@ -1344,9 +1408,65 @@ export default function StudentDoAssignmentPage() {
           <>
             <div className="min-w-0 flex-1 space-y-5 overflow-x-auto">
               {assignment.worksheet.instructions && (
-                <div className="rounded-2xl border border-indigo-100 bg-white px-4 py-3 text-xs text-[#464555]">
-                  <strong className="text-[#3525CD]">{tr("Hướng dẫn:", "Instructions:")} </strong>
+                <div className="rounded-2xl border border-indigo-100 bg-white dark:bg-slate-900 dark:border-slate-700 px-4 py-3 text-xs text-[#464555] dark:text-slate-300">
+                  <strong className="text-[#3525CD] dark:text-indigo-300">{tr("Hướng dẫn:", "Instructions:")} </strong>
                   {assignment.worksheet.instructions}
+                </div>
+              )}
+
+              {assignment.isQuickTextbook && (
+                <div
+                  data-testid="quick-textbook-card"
+                  className="stitch-card p-4 space-y-3 border-indigo-200 dark:border-indigo-800"
+                >
+                  <div className="flex items-center gap-2 text-sm font-bold text-[#3525CD] dark:text-indigo-300">
+                    <BookOpenCheck className="h-4 w-4" />
+                    {tr("Yêu cầu bài tập SGK", "Textbook Assignment Instructions")}
+                  </div>
+                  {assignment.promptText && (
+                    <p className="whitespace-pre-line text-sm text-[#0B1C30] dark:text-slate-100">
+                      {assignment.promptText}
+                    </p>
+                  )}
+                  {(assignment.attachmentKeys?.length ?? 0) > 0 && (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      {assignment.attachmentKeys!.map((att) =>
+                        att.mimeType.startsWith("image/") ? (
+                          <a
+                            key={att.key}
+                            href={`/api/files/${att.key}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={`/api/files/${att.key}`}
+                              alt={att.name}
+                              className="max-h-64 w-full object-contain"
+                            />
+                            <div className="px-3 py-1.5 text-[11px] font-medium text-slate-500 truncate border-t border-slate-100">
+                              {att.name}
+                            </div>
+                          </a>
+                        ) : (
+                          <a
+                            key={att.key}
+                            href={`/api/files/${att.key}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex min-h-10 items-center justify-between gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-[#F8F9FF] dark:bg-slate-800 px-3.5 py-2.5 text-xs font-semibold text-[#3525CD] dark:text-indigo-300 hover:underline"
+                          >
+                            <span className="inline-flex items-center gap-2 truncate">
+                              <FileText className="h-4 w-4 shrink-0" />
+                              <span className="truncate">{att.name}</span>
+                            </span>
+                            <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                          </a>
+                        )
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

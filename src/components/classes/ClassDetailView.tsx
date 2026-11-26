@@ -14,6 +14,7 @@ import {
   BarChart2,
   BookMarked,
   BookOpen,
+  BookOpenCheck,
   Check,
   CheckCircle2,
   ClipboardCheck,
@@ -36,7 +37,9 @@ import {
   Send,
   Settings,
   ShieldAlert,
+  Table2,
   Trash2,
+  TrendingUp,
   Trophy,
   Upload,
   UserCheck,
@@ -64,8 +67,11 @@ import { PdfCanvasPage, usePdfDocument } from "@/components/worksheet/PdfCanvasP
 import type { ClassRole, LessonItemType, ProctorMode, ViolationAction } from "@prisma/client";
 import { CreateAccountForm } from "@/components/accounts/CreateAccountForm";
 import { AddLessonsFromLibraryDialog } from "@/components/lessons/AddLessonsFromLibraryDialog";
+import { QuickTextbookModal } from "@/components/assignments/QuickTextbookModal";
 import { ClassSubmissionsTab } from "@/components/classes/ClassSubmissionsTab";
 import { ClassAnalyticsTab } from "@/components/classes/ClassAnalyticsTab";
+import { ClassGradebookTab } from "@/components/classes/ClassGradebookTab";
+import { StudentProgressDrawer } from "@/components/classes/StudentProgressDrawer";
 import {
   ClassTeachersSection,
   type ClassTeacherItem,
@@ -137,6 +143,7 @@ export interface ClassDetailData {
     workbookId?: string | null;
     workbookOrder?: number | null;
     unlockAfterAssignmentId?: string | null;
+    isQuickTextbook?: boolean;
     workbook?: { id: string; title: string } | null;
     isLockedByPrerequisite?: boolean;
     worksheet: { id: string; title: string; _count: { fields: number } };
@@ -200,6 +207,7 @@ const CLASS_TABS = [
   "assignments",
   "lessons",
   "students",
+  "gradebook",
   "submissions",
   "analytics",
   "settings",
@@ -294,6 +302,12 @@ export function ClassDetailView({
     code: string;
   } | null>(null);
   const [resetTarget, setResetTarget] = useState<ResetPasswordTarget | null>(null);
+  const [quickModalOpen, setQuickModalOpen] = useState(false);
+  const [progressStudent, setProgressStudent] = useState<{ id: string; name: string } | null>(null);
+  const [gradebookRange, setGradebookRange] = useState<{ from: string; to: string }>({
+    from: "",
+    to: "",
+  });
 
   const refreshClass = async () => {
     const res = await fetch(`/api/classes/${cls.id}`);
@@ -769,6 +783,10 @@ export function ClassDetailView({
           </TabsTrigger>
           {isTeacher && (
             <>
+              <TabsTrigger value="gradebook" className="gap-1.5" data-testid="class-tab-gradebook">
+                <Table2 className="h-4 w-4" />
+                {tr("Sổ điểm", "Gradebook")}
+              </TabsTrigger>
               <TabsTrigger value="submissions" className="gap-1.5" data-testid="class-tab-submissions">
                 <ClipboardCheck className="h-4 w-4" />
                 {tr("Bài nộp", "Submissions")}
@@ -952,6 +970,39 @@ export function ClassDetailView({
 
         {/* TAB 2: ASSIGNMENTS */}
         <TabsContent value="assignments" className="space-y-3">
+          {isTeacher && canEditClass && (
+            <div className="stitch-card flex flex-wrap items-center justify-between gap-3 p-4">
+              <div>
+                <p className="text-sm font-bold text-[#0B1C30] dark:text-slate-100">
+                  {tr("Giao bài tập cho lớp", "Assign work to this class")}
+                </p>
+                <p className="text-xs text-[#464555] dark:text-slate-400">
+                  {tr(
+                    "Giao nhanh bài tập SGK bằng ảnh chụp trang sách hoặc tạo bài từ kho phiếu.",
+                    "Assign textbook homework in seconds or configure a full worksheet assignment."
+                  )}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="min-h-10"
+                  data-testid="open-quick-textbook-btn"
+                  onClick={() => setQuickModalOpen(true)}
+                >
+                  <BookOpenCheck className="h-4 w-4 text-[#4F46E5]" />
+                  {tr("Giao bài nhanh theo SGK", "Quick textbook assign")}
+                </Button>
+                <Button variant="accent" className="min-h-10" asChild>
+                  <Link href={`/teacher/assignments/new?classId=${cls.id}`}>
+                    <Plus className="h-4 w-4" />
+                    {tr("Giao bài đầy đủ", "Full assignment")}
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          )}
           {cls.assignments.length === 0 ? (
             <div className="stitch-card p-10 text-center text-sm text-slate-400">
               {tr("Chưa có bài tập nào được giao trong lớp này.", "No assignments in this class yet.")}
@@ -975,6 +1026,12 @@ export function ClassDetailView({
                   <div className="space-y-1.5">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-base font-bold text-[#0B1C30] dark:text-slate-100">{asg.title}</h3>
+                      {asg.isQuickTextbook && (
+                        <Badge variant="mint">
+                          <BookOpenCheck className="mr-1 h-3 w-3" />
+                          SGK
+                        </Badge>
+                      )}
                       {asg.workbook && (
                         isTeacher ? (
                           <Link href={`/teacher/classes/${cls.id}/workbooks/${asg.workbook.id}`}>
@@ -1399,7 +1456,19 @@ export function ClassDetailView({
                         </span>
                       )}
                       <div>
-                        <p className="text-sm font-semibold text-[#0B1C30]">{e.student.name}</p>
+                        {isTeacher ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setProgressStudent({ id: e.student.id, name: e.student.name })
+                            }
+                            className="text-left text-sm font-semibold text-[#3525CD] dark:text-indigo-300 hover:underline"
+                          >
+                            {e.student.name}
+                          </button>
+                        ) : (
+                          <p className="text-sm font-semibold text-[#0B1C30]">{e.student.name}</p>
+                        )}
                         {e.student.email && (
                           <p className="text-xs text-slate-400">{e.student.email}</p>
                         )}
@@ -1407,6 +1476,16 @@ export function ClassDetailView({
                     </div>
                     {isTeacher && (
                       <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            setProgressStudent({ id: e.student.id, name: e.student.name })
+                          }
+                        >
+                          <TrendingUp className="h-3.5 w-3.5 text-[#4F46E5]" />
+                          {tr("Tiến bộ", "Progress")}
+                        </Button>
                         <Button
                           size="sm"
                           variant="outline"
@@ -1486,9 +1565,19 @@ export function ClassDetailView({
           </div>
         </TabsContent>
 
-        {/* TAB 5 & 6: SUBMISSIONS & ANALYTICS (TEACHER ONLY) */}
+        {/* TAB 5, 6 & 7: GRADEBOOK, SUBMISSIONS & ANALYTICS (TEACHER ONLY) */}
         {isTeacher && (
           <>
+            <TabsContent value="gradebook">
+              <ClassGradebookTab
+                classId={cls.id}
+                canManageColumns={canEditClass}
+                from={gradebookRange.from}
+                to={gradebookRange.to}
+                onRangeChange={setGradebookRange}
+                onOpenStudentProgress={setProgressStudent}
+              />
+            </TabsContent>
             <TabsContent value="submissions">
               <ClassSubmissionsTab
                 classId={cls.id}
@@ -1937,6 +2026,26 @@ export function ClassDetailView({
           title={viewingPdf.title}
           onClose={() => setViewingPdf(null)}
         />
+      )}
+
+      {/* Phase 21: Quick Textbook Assignment Modal & Student Progress Profile */}
+      {isTeacher && (
+        <>
+          <QuickTextbookModal
+            open={quickModalOpen}
+            onOpenChange={setQuickModalOpen}
+            classes={[{ id: cls.id, name: cls.name }]}
+            defaultClassId={cls.id}
+            onCreated={() => void refreshClass()}
+          />
+          <StudentProgressDrawer
+            classId={cls.id}
+            student={progressStudent}
+            from={gradebookRange.from}
+            to={gradebookRange.to}
+            onClose={() => setProgressStudent(null)}
+          />
+        </>
       )}
     </div>
   );

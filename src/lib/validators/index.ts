@@ -626,3 +626,49 @@ export const votePostPollSchema = z.object({
 export const togglePostReactionSchema = z.object({
   emoji: z.enum(["👍", "❤️", "🎉", "💡", "👏", "😮"]),
 });
+
+// ===== Phase 21: Quick Textbook Assignments & Offline Gradebook =====
+export const quickAttachmentSchema = z.object({
+  key: z.string().trim().min(1).max(300),
+  name: z.string().trim().min(1).max(200),
+  mimeType: z.string().trim().min(1).max(120),
+  sizeBytes: z.number().int().min(1).max(20 * 1024 * 1024),
+});
+
+export const quickTextbookAssignmentSchema = z.object({
+  title: z.string().trim().min(2, "Tên bài giao tối thiểu 2 ký tự").max(200),
+  classIds: z.array(z.string().trim().min(1)).min(1, "Vui lòng chọn ít nhất 1 lớp"),
+  promptText: z.string().trim().min(1, "Vui lòng nhập yêu cầu bài tập SGK").max(5000),
+  openAt: z.string().datetime().optional().nullable().or(z.literal("")),
+  dueAt: z.string().datetime().optional().nullable().or(z.literal("")),
+  maxScore: z.number().min(0.5).max(1000).optional().default(10),
+  weight: z.number().min(0.1).max(100).optional().default(1),
+  maxAttempts: z.number().int().min(1).max(50).nullable().optional().default(2),
+  allowLate: z.boolean().optional().default(true),
+  scoreScale: z.nativeEnum(ScoreScale).optional().default("SCALE_10"),
+  subject: z.nativeEnum(WorksheetSubject).optional().default("GENERAL"),
+  attachmentKeys: z.array(quickAttachmentSchema).max(10).optional().default([]),
+});
+
+export const createOfflineGradeColumnSchema = z.object({
+  title: z.string().trim().min(1, "Tên cột điểm không được để trống").max(120),
+  date: z.string().trim().max(64).optional().nullable(),
+  maxScore: z.number().min(0.5).max(1000).optional().default(10),
+  weight: z.number().min(0.1).max(100).optional().default(1),
+  note: z.string().trim().max(500).optional().nullable(),
+});
+
+export const updateOfflineGradeColumnSchema = createOfflineGradeColumnSchema.partial();
+
+export const saveOfflineGradeEntriesSchema = z.object({
+  entries: z
+    .array(
+      z.object({
+        studentId: z.string().trim().min(1),
+        score: z.number().min(0).max(1000).nullable(),
+        note: z.string().trim().max(300).optional().nullable(),
+      })
+    )
+    .min(1)
+    .max(500),
+});

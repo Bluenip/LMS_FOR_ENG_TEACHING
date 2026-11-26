@@ -39,7 +39,7 @@ export interface PrintableWorksheetInput {
 
 let cachedFonts: { regular: Buffer; bold: Buffer } | null = null;
 
-function loadNotoFonts(): { regular: Buffer; bold: Buffer } {
+export function loadNotoFonts(): { regular: Buffer; bold: Buffer } {
   if (cachedFonts) return cachedFonts;
   const fontsDir = path.join(process.cwd(), "public", "fonts");
   const regular = fs.readFileSync(path.join(fontsDir, "NotoSans-Regular.ttf"));
@@ -48,7 +48,7 @@ function loadNotoFonts(): { regular: Buffer; bold: Buffer } {
   return cachedFonts;
 }
 
-function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
+export function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
   const paragraphs = text.replace(/\r\n/g, "\n").split("\n");
   const lines: string[] = [];
 

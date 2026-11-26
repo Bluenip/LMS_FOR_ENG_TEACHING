@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import {
   AlertTriangle,
   Bell,
+  BookOpenCheck,
   ChevronDown,
   ClipboardX,
   Info,
@@ -41,6 +42,7 @@ import { WorksheetPicker } from "@/components/assignments/WorksheetPicker";
 import { BackLink } from "@/components/navigation/BackLink";
 import { previousInAppUrl } from "@/lib/navigation-history";
 import { ClassPicker } from "@/components/assignments/ClassPicker";
+import { QuickTextbookModal } from "@/components/assignments/QuickTextbookModal";
 
 interface WorksheetOption {
   id: string;
@@ -182,6 +184,7 @@ function NewAssignmentForm() {
   /** ?edit=<assignmentId>: change an assignment that was already given */
   const editId = searchParams.get("edit") ?? "";
   const isEdit = Boolean(editId);
+  const [quickModalOpen, setQuickModalOpen] = useState(false);
 
   const { data: wsData } = useQuery<{
     worksheets: WorksheetOption[];
@@ -531,17 +534,46 @@ function NewAssignmentForm() {
       {/* Header */}
       <div className="space-y-3">
         <BackLink fallbackHref="/teacher/assignments" label={tr("Quay lại", "Back")} />
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#0B1C30] sm:text-3xl">
-            {isEdit ? tr("Sửa bài đã giao", "Edit assignment") : tr("Giao bài mới", "New assignment")}
-          </h1>
-          <p className="mt-1 text-sm text-[#464555]">
-            {tr(
-              "Chọn phiếu, lớp và thời gian. Các tuỳ chọn nâng cao có thể để mặc định.",
-              "Pick the worksheet, classes and timing. Advanced options can stay at their defaults."
-            )}
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-[#0B1C30] sm:text-3xl">
+              {isEdit ? tr("Sửa bài đã giao", "Edit assignment") : tr("Giao bài mới", "New assignment")}
+            </h1>
+            <p className="mt-1 text-sm text-[#464555]">
+              {tr(
+                "Chọn phiếu, lớp và thời gian. Các tuỳ chọn nâng cao có thể để mặc định.",
+                "Pick the worksheet, classes and timing. Advanced options can stay at their defaults."
+              )}
+            </p>
+          </div>
+          {!isEdit && classes.length > 0 && (
+            <Button
+              type="button"
+              variant="secondary"
+              className="min-h-10"
+              data-testid="open-quick-textbook-btn"
+              onClick={() => setQuickModalOpen(true)}
+            >
+              <BookOpenCheck className="h-4 w-4 text-[#4F46E5]" />
+              {tr("Giao bài nhanh theo SGK", "Quick textbook assign")}
+            </Button>
+          )}
         </div>
+        {!isEdit && (
+          <QuickTextbookModal
+            open={quickModalOpen}
+            onOpenChange={setQuickModalOpen}
+            classes={classes.map((c) => ({ id: c.id, name: c.name }))}
+            defaultClassId={selectedClassIds[0] ?? (preClassId || undefined)}
+            onCreated={(created) => {
+              const firstCid = created[0]?.classId ?? selectedClassIds[0];
+              router.push(
+                firstCid ? `/teacher/classes/${firstCid}?tab=assignments` : "/teacher/assignments"
+              );
+              router.refresh();
+            }}
+          />
+        )}
         {isEdit && editing && (
           <p className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs font-medium text-amber-800">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />

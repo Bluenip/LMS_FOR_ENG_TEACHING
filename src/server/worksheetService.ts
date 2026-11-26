@@ -772,6 +772,78 @@ export async function authorizeFileDownload(
     return false;
   }
 
+  // Quick textbook assignment attachments (assignments/quick/{classId}/{file})
+  const quickMatch = /^assignments\/quick\/([A-Za-z0-9_-]+)\/[A-Za-z0-9_.-]+$/.exec(fileKey);
+  if (quickMatch) {
+    const classId = quickMatch[1]!;
+    const cls = await prisma.class.findUnique({
+      where: { id: classId },
+      select: {
+        deletedAt: true,
+        teacherId: true,
+        classTeachers: { where: { userId }, select: { id: true } },
+      },
+    });
+    if (!cls || cls.deletedAt) return false;
+    if (role === "TEACHER") {
+      if (cls.teacherId === userId || cls.classTeachers.length > 0) return true;
+      // Also allow teachers/co-teachers of any class sharing an assignment with this attachmentKey
+      const otherTaught = await prisma.assignment.findFirst({
+        where: {
+          isQuickTextbook: true,
+          class: {
+            deletedAt: null,
+            OR: [{ teacherId: userId }, { classTeachers: { some: { userId } } }],
+          },
+          attachmentKeys: { array_contains: [{ key: fileKey }] },
+        },
+        select: { id: true },
+      });
+      return Boolean(otherTaught);
+    }
+
+    const candidates = await prisma.assignment.findMany({
+      where: {
+        isQuickTextbook: true,
+        class: {
+          deletedAt: null,
+          ...(role === "STUDENT"
+            ? {
+                enrollments: { some: { studentId: userId, status: "ACTIVE" } },
+              }
+            : {
+                enrollments: {
+                  some: {
+                    status: "ACTIVE",
+                    student: {
+                      parentLinksAsChild: {
+                        some: { parentId: userId, verifiedAt: { not: null } },
+                      },
+                    },
+                  },
+                },
+              }),
+        },
+        ...(role === "STUDENT"
+          ? { OR: [{ targets: { none: {} } }, { targets: { some: { studentId: userId } } }] }
+          : {}),
+      },
+      select: { attachmentKeys: true },
+    });
+
+    return candidates.some(
+      (a) =>
+        Array.isArray(a.attachmentKeys) &&
+        a.attachmentKeys.some(
+          (item) =>
+            item !== null &&
+            typeof item === "object" &&
+            "key" in item &&
+            (item as { key?: unknown }).key === fileKey
+        )
+    );
+  }
+
   // Class feed post attachments (classes/{classId}/posts/{file})
   const postMatch = /^classes\/([A-Za-z0-9_-]+)\/posts\/[A-Za-z0-9_.-]+$/.exec(fileKey);
   if (postMatch) {

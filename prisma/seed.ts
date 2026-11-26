@@ -283,6 +283,8 @@ async function main() {
   await prisma.submission.deleteMany();
   await prisma.assignment.updateMany({ data: { unlockAfterAssignmentId: null } });
   await prisma.assignment.deleteMany();
+  await prisma.offlineGradeEntry.deleteMany();
+  await prisma.offlineGradeColumn.deleteMany();
   await prisma.workbookItem.deleteMany();
   await prisma.workbook.deleteMany();
   await prisma.field.deleteMany();
@@ -1755,6 +1757,99 @@ async function main() {
       timeLimitMin: 55,
       note: "Học sinh gặp sự cố mạng giữa giờ (mẫu gia hạn)",
     },
+  });
+
+  // Phase 21 seed: Quick Textbook assignment + 2 Offline paper grade columns in class1
+  const quickPng = generateSolidPngBuffer(48, 48, [79, 70, 229]);
+  const quickAttKey = `assignments/quick/${class1.id}/seed-sgk-p42.png`;
+  await storage.put(quickAttKey, quickPng, "image/png");
+
+  const wsQuickSgk = await prisma.worksheet.create({
+    data: {
+      ownerId: teacher1.id,
+      title: "[SGK] Bài tập SGK Trang 42: Viết đoạn văn ngắn",
+      subject: "ENGLISH",
+      instructions: "Làm bài tập 2 & 3 trang 42 SGK Tiếng Anh 12 vào vở rồi chụp ảnh rõ nét nộp lên đây.",
+      pageCount: 0,
+      fields: {
+        create: [
+          {
+            label: "1",
+            type: "PHOTO_UPLOAD",
+            placement: "ANSWER_SHEET",
+            pageIndex: 0,
+            order: 0,
+            prompt: "Làm bài tập 2 & 3 trang 42 SGK Tiếng Anh 12 vào vở rồi chụp ảnh rõ nét nộp lên đây.",
+            points: 10,
+            answerKey: {},
+          },
+        ],
+      },
+    },
+  });
+
+  await prisma.assignment.create({
+    data: {
+      classId: class1.id,
+      worksheetId: wsQuickSgk.id,
+      title: "Bài tập SGK Trang 42: Viết đoạn văn ngắn",
+      isQuickTextbook: true,
+      promptText: "Làm bài tập 2 & 3 trang 42 SGK Tiếng Anh 12 vào vở rồi chụp ảnh rõ nét nộp lên đây.",
+      attachmentKeys: [
+        {
+          key: quickAttKey,
+          name: "sgk-trang-42.png",
+          mimeType: "image/png",
+          sizeBytes: quickPng.length,
+        },
+      ],
+      dueAt: nextWeek,
+      maxAttempts: 2,
+      allowLate: true,
+      showResult: "AFTER_SUBMIT",
+      showAnswerKey: false,
+      showLeaderboard: "OFF",
+      proctorMode: "OFF",
+    },
+  });
+
+  const offCol1 = await prisma.offlineGradeColumn.create({
+    data: {
+      classId: class1.id,
+      createdById: teacher1.id,
+      title: "Kiểm tra 15 phút (Giấy) - Ngữ pháp",
+      date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+      maxScore: 10,
+      weight: 1,
+      note: "Chấm trực tiếp trên giấy tại lớp",
+    },
+  });
+  const offCol2 = await prisma.offlineGradeColumn.create({
+    data: {
+      classId: class1.id,
+      createdById: teacher1.id,
+      title: "Kiểm tra 1 tiết (Giấy) - Giữa kỳ",
+      date: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+      maxScore: 10,
+      weight: 2,
+      note: "Bài kiểm tra viết tập trung 45 phút",
+    },
+  });
+  const col1Scores = [8.5, 9.0, 7.5, 8.0, 7.0, 9.5];
+  const col2Scores = [8.0, 9.5, 7.0, 8.5, 7.5, 9.0];
+  await prisma.offlineGradeEntry.createMany({
+    data: [
+      ...students.slice(0, 6).map((s, idx) => ({
+        columnId: offCol1.id,
+        studentId: s.id,
+        score: col1Scores[idx]!,
+      })),
+      ...students.slice(0, 6).map((s, idx) => ({
+        columnId: offCol2.id,
+        studentId: s.id,
+        score: col2Scores[idx]!,
+      })),
+    ],
   });
 
   // Phase 13 seed: sample AuditLog & ErrorLog entries for /admin/audit and /admin/errors

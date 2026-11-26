@@ -241,11 +241,13 @@ model User {
   assignmentTargets      AssignmentTarget[]       @relation("AssignmentTargetStudent")
   assignmentReminders    AssignmentReminderSent[] @relation("AssignmentReminderStudent")
   teacherCommentPresets  TeacherCommentPreset[]   @relation("TeacherCommentPresets")
-  workbooksOwned         Workbook[]               @relation("WorkbookOwner")
-  classTeacherRoles      ClassTeacher[]           @relation("ClassTeacherAssignments")
-  lessonItemProgress     LessonItemProgress[]     @relation("StudentLessonProgress")
-  pollVotes              PostPollVote[]           @relation("UserPollVotes")
-  postReactions          PostReaction[]           @relation("UserPostReactions")
+  workbooksOwned             Workbook[]               @relation("WorkbookOwner")
+  classTeacherRoles          ClassTeacher[]           @relation("ClassTeacherAssignments")
+  lessonItemProgress         LessonItemProgress[]     @relation("StudentLessonProgress")
+  pollVotes                  PostPollVote[]           @relation("UserPollVotes")
+  postReactions              PostReaction[]           @relation("UserPostReactions")
+  offlineGradeColumnsCreated OfflineGradeColumn[]     @relation("OfflineGradeColumnsCreated")
+  offlineGradeEntries        OfflineGradeEntry[]      @relation("StudentOfflineGrades")
 
   @@index([deletedAt])
 }
@@ -296,10 +298,11 @@ model Class {
   posts        Post[]
   lessons      Lesson[]
   classLessons ClassLesson[]
-  assignments   Assignment[]
-  classTeachers ClassTeacher[]
-  driveFiles    DriveFile[]
-  driveUploads  DriveUpload[]
+  assignments         Assignment[]
+  classTeachers       ClassTeacher[]
+  driveFiles          DriveFile[]
+  driveUploads        DriveUpload[]
+  offlineGradeColumns OfflineGradeColumn[]
 
   @@index([teacherId])
 }
@@ -547,6 +550,11 @@ model Assignment {
   workbookId              String?
   workbookOrder           Int?
   unlockAfterAssignmentId String?
+
+  // Phase 21: Quick textbook assignment
+  isQuickTextbook Boolean @default(false)
+  promptText      String?
+  attachmentKeys  Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1033,4 +1041,39 @@ model PostReaction {
 
   @@unique([postId, userId, emoji])
   @@index([postId])
+}
+
+/// Phase 21: In-class / paper grade columns & student entries.
+model OfflineGradeColumn {
+  id          String   @id @default(cuid())
+  classId     String
+  title       String
+  date        DateTime @default(now())
+  maxScore    Float    @default(10)
+  weight      Float    @default(1)
+  note        String?
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  class     Class               @relation(fields: [classId], references: [id], onDelete: Cascade)
+  createdBy User                @relation("OfflineGradeColumnsCreated", fields: [createdById], references: [id], onDelete: Cascade)
+  entries   OfflineGradeEntry[]
+
+  @@index([classId, date])
+}
+
+model OfflineGradeEntry {
+  id        String   @id @default(cuid())
+  columnId  String
+  studentId String
+  score     Float?
+  note      String?
+  updatedAt DateTime @updatedAt
+
+  column  OfflineGradeColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  student User               @relation("StudentOfflineGrades", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([columnId, studentId])
+  @@index([studentId])
 }

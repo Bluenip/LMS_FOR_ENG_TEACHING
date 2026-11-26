@@ -11,6 +11,7 @@ import {
   BarChart2,
   BookOpen,
   CheckCircle2,
+  ClipboardCheck,
   Clock,
   KeyRound,
   MessageSquareQuote,
@@ -89,6 +90,19 @@ interface ParentOverviewDTO {
     classAvg10: number | null;
     rank: number | null;
     totalParticipants: number;
+  }>;
+  offlineGrades?: Array<{
+    columnId: string;
+    classId: string;
+    className: string;
+    title: string;
+    date: string;
+    score: number | null;
+    maxScore: number;
+    score10: number | null;
+    weight: number;
+    note: string | null;
+    classAvg10: number | null;
   }>;
   teacherFeedback: Array<{
     assignmentTitle: string;
@@ -677,6 +691,68 @@ function ParentPortalContent() {
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* Phase 21: In-class / Paper Test Scores (Offline Grades) */}
+          <div
+            data-testid="parent-offline-grades-section"
+            className="stitch-card overflow-hidden"
+          >
+            <div className="border-b border-slate-100 dark:border-slate-800 px-6 py-4 flex items-center gap-2">
+              <ClipboardCheck className="h-5 w-5 text-[#EA580C]" />
+              <div>
+                <h3 className="text-base font-bold text-[#0B1C30] dark:text-slate-100">
+                  {tr("Điểm kiểm tra trên lớp (giấy)", "In-class paper test scores")}
+                </h3>
+                <p className="text-xs text-[#464555] dark:text-slate-400">
+                  {tr(
+                    "Điểm kiểm tra trực tiếp trên lớp do giáo viên cập nhật vào sổ điểm.",
+                    "In-class and paper assessment scores recorded by the teacher."
+                  )}
+                </p>
+              </div>
+            </div>
+            {(overview.offlineGrades ?? []).length === 0 ? (
+              <div className="px-6 py-8 text-center text-xs text-slate-400">
+                {tr("Chưa có cột điểm kiểm tra trên lớp nào.", "No in-class paper test scores recorded yet.")}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-[#F8F9FF] dark:bg-slate-800/70 text-xs font-bold uppercase text-[#464555] dark:text-slate-300">
+                    <tr>
+                      <th className="px-6 py-3">{tr("Bài kiểm tra", "Assessment")}</th>
+                      <th className="px-6 py-3">{tr("Ngày", "Date")}</th>
+                      <th className="px-6 py-3 text-right">{tr("Điểm của con", "Child's score")}</th>
+                      <th className="px-6 py-3 text-right">{tr("TB Lớp (/10)", "Class avg")}</th>
+                      <th className="px-6 py-3 text-center">{tr("Hệ số", "Weight")}</th>
+                      <th className="px-6 py-3">{tr("Ghi chú", "Note")}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {(overview.offlineGrades ?? []).map((g) => (
+                      <tr key={g.columnId} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                        <td className="px-6 py-3.5">
+                          <p className="font-semibold text-[#0B1C30] dark:text-slate-100">{g.title}</p>
+                          <p className="text-xs text-slate-400">{g.className}</p>
+                        </td>
+                        <td className="px-6 py-3.5 text-xs text-[#464555] dark:text-slate-300 tabular-nums whitespace-nowrap">
+                          {formatDateTime(g.date)}
+                        </td>
+                        <td className="px-6 py-3.5 text-right font-bold text-[#3525CD] dark:text-indigo-300 tabular-nums">
+                          {g.score !== null ? `${g.score} / ${g.maxScore}` : "—"}
+                        </td>
+                        <td className="px-6 py-3.5 text-right text-slate-600 dark:text-slate-300 tabular-nums">
+                          {g.classAvg10 !== null ? `${g.classAvg10} / 10` : "—"}
+                        </td>
+                        <td className="px-6 py-3.5 text-center tabular-nums">x{g.weight}</td>
+                        <td className="px-6 py-3.5 text-xs text-slate-500">{g.note ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           {/* Teacher Feedback + Shared Proctor Alerts */}

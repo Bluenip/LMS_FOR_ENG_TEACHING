@@ -160,6 +160,17 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
   "Tên lớp mới tối thiểu 2 ký tự": "New class name must be at least 2 characters",
   "Câu hỏi bình chọn không được để trống": "Poll question cannot be empty",
   "Cần ít nhất 2 lựa chọn": "At least 2 options are required",
+  "Tên cột điểm không được để trống": "Column title cannot be empty",
+  "Vui lòng nhập yêu cầu bài tập SGK": "Please enter the textbook assignment instructions",
+  "Không tìm thấy cột điểm giấy.": "Paper grade column not found.",
+  "Ngày kiểm tra không hợp lệ.": "Invalid test date.",
+  "Học sinh không thuộc lớp học này hoặc tài khoản đang bị xoá.":
+    "Student is not active in this class.",
+  "Đính kèm bài tập không hợp lệ hoặc thuộc lớp khác.":
+    "Invalid assignment attachment or belongs to another class.",
+  "Vui lòng tải file Excel (.xlsx) lên để nhập điểm.":
+    "Please upload an Excel (.xlsx) file to import grades.",
+  "Không có điểm hợp lệ nào để lưu.": "No valid grade entries to save.",
 
   // Parent & admin
   "Chỉ học sinh xem được danh sách mã liên kết của mình.":
@@ -423,6 +434,10 @@ const PATTERN_EN_RULES: Array<[RegExp, (...args: string[]) => string]> = [
     /^Không thể đổi loại câu (.+) vì đã có học sinh trả lời\.$/,
     (_m, labels) =>
       `Cannot change the type of question(s) ${labels} because students have already answered them.`,
+  ],
+  [
+    /^Điểm phải nằm trong khoảng 0 đến ([0-9.]+)\.$/,
+    (_m, max) => `Score must be between 0 and ${max}.`,
   ],
 ];
 
