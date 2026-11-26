@@ -147,7 +147,9 @@ export async function trashWorksheet(actor: Actor, worksheetId: string, source: 
   assertOwner(actor, ws.ownerId, "Bạn không có quyền chỉnh sửa phiếu bài tập này.");
 
   if (source === "USER") {
-    const submissions = await prisma.submission.count({ where: { assignment: { worksheetId } } });
+    const submissions = await prisma.submission.count({
+      where: { assignment: { worksheetId, class: { deletedAt: null } } },
+    });
     if (submissions > 0) {
       throw new AppError(
         `Worksheet đã có ${submissions} bài làm của học sinh. Hãy xoá các bài tập đã giao trước nếu thật sự muốn xoá worksheet.`,
@@ -155,8 +157,10 @@ export async function trashWorksheet(actor: Actor, worksheetId: string, source: 
         "WORKSHEET_HAS_SUBMISSIONS"
       );
     }
-    // assignments nobody has started are removed with the worksheet (as before the trash existed)
-    await prisma.assignment.deleteMany({ where: { worksheetId, submissions: { none: {} } } });
+    // assignments nobody has started in active classes are removed with the worksheet (as before the trash existed)
+    await prisma.assignment.deleteMany({
+      where: { worksheetId, class: { deletedAt: null }, submissions: { none: {} } },
+    });
   }
 
   await prisma.worksheet.update({
@@ -348,6 +352,14 @@ export async function restoreFromTrash(actor: Actor, kind: TrashKind, id: string
   let missingFiles = 0;
   if (kind === "CLASS") {
     await prisma.class.update({ where: { id }, data: { deletedAt: null } });
+    const trashedWorksheets = await prisma.worksheet.findMany({
+      where: { deletedAt: { not: null }, assignments: { some: { classId: id } } },
+      select: { id: true },
+    });
+    for (const ws of trashedWorksheets) {
+      await prisma.worksheet.update({ where: { id: ws.id }, data: { deletedAt: null, deletedSource: null } });
+      missingFiles += await restoreFilesFromDriveTrash(await driveFilesFor(ws.id, await worksheetFileKeys(ws.id)));
+    }
   } else if (kind === "WORKSHEET") {
     await prisma.worksheet.update({ where: { id }, data: { deletedAt: null, deletedSource: null } });
     missingFiles = await restoreFilesFromDriveTrash(await driveFilesFor(id, await worksheetFileKeys(id)));

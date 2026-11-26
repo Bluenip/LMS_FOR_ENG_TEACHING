@@ -120,7 +120,7 @@ export async function listParentChildren(parentId: string) {
           email: true,
           avatarUrl: true,
           enrollments: {
-            where: { status: "ACTIVE" },
+            where: { status: "ACTIVE", class: { deletedAt: null } },
             include: {
               class: {
                 select: {

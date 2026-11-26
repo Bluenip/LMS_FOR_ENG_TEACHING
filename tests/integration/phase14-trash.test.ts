@@ -110,7 +110,7 @@ afterAll(async () => {
   await prisma.driveConnection.deleteMany({ where: { id: connId } });
   await prisma.worksheet.deleteMany({ where: { title: { startsWith: prefix } } });
   await prisma.lesson.deleteMany({ where: { title: { startsWith: prefix } } });
-  await prisma.class.deleteMany({ where: { id: classId } });
+  await prisma.class.deleteMany({ where: { name: { startsWith: prefix } } });
   await prisma.user.deleteMany({ where: { email: { in: emails } } });
 });
 
@@ -246,5 +246,62 @@ describe("Phase 14: class trash", () => {
     expect(await prisma.assignment.count({ where: { classId: cls.id } })).toBe(0);
     // the lesson stays in the teacher's library
     expect(await prisma.lesson.findUnique({ where: { id: lesson.id } })).not.toBeNull();
+  });
+
+  it("ignores trashed-class submissions when counting assignments or deleting worksheets, and restores both when the class is restored", async () => {
+    const cls = await createClass(teacher.id, { name: `${prefix} Submitted class` });
+    const studentEmail = `${prefix}-sub-stu@test.vn`;
+    emails.push(studentEmail);
+    const student = (
+      await createAccount(
+        { id: adminId, role: "ADMIN" },
+        { name: "Sub Stu", email: studentEmail, role: "STUDENT", password: "Password12345" }
+      )
+    ).user;
+    await prisma.enrollment.create({ data: { classId: cls.id, studentId: student.id, status: "ACTIVE" } });
+
+    const { ws, driveFileId } = await worksheetOnDrive(`${prefix} Submitted WS`);
+    const asg = await prisma.assignment.create({
+      data: { classId: cls.id, worksheetId: ws.id, title: `${prefix} submitted asg` },
+    });
+    await prisma.submission.create({
+      data: {
+        assignmentId: asg.id,
+        studentId: student.id,
+        attemptNo: 1,
+        status: "SUBMITTED",
+        maxScore: 10,
+        attemptVersion: 1,
+      },
+    });
+
+    // 1. Active class with submission: shows 1 assignment and blocks trashing worksheet
+    const activeRow = (await listTeacherWorksheets(teacher.id)).find((w) => w.id === ws.id);
+    expect(activeRow?._count.assignments).toBe(1);
+    await expect(trashWorksheet(teacher, ws.id)).rejects.toMatchObject({
+      statusCode: 409,
+      code: "WORKSHEET_HAS_SUBMISSIONS",
+    });
+
+    // 2. Trash the class: assignment count drops to 0 and worksheet can be trashed without wiping the trashed class's assignment
+    await trashClass(teacher, cls.id);
+    const afterClassTrashRow = (await listTeacherWorksheets(teacher.id)).find((w) => w.id === ws.id);
+    expect(afterClassTrashRow?._count.assignments).toBe(0);
+
+    await trashWorksheet(teacher, ws.id);
+    expect(drive.trashed.has(driveFileId)).toBe(true);
+    expect(await prisma.assignment.findUnique({ where: { id: asg.id } })).not.toBeNull();
+
+    // 3. Restoring the class also restores its trashed worksheet and Drive file
+    await restoreFromTrash(teacher, "CLASS", cls.id);
+    const restoredWs = await prisma.worksheet.findUniqueOrThrow({ where: { id: ws.id } });
+    expect(restoredWs.deletedAt).toBeNull();
+    expect(drive.trashed.has(driveFileId)).toBe(false);
+
+    // 4. Trashing both class and worksheet, then deleting the worksheet forever succeeds cleanly
+    await trashClass(teacher, cls.id);
+    await trashWorksheet(teacher, ws.id);
+    await deleteForever(teacher, "WORKSHEET", ws.id);
+    expect(await prisma.worksheet.findUnique({ where: { id: ws.id } })).toBeNull();
   });
 });

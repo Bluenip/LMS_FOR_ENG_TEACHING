@@ -18,10 +18,10 @@ export async function getAdminSystemStats() {
     prisma.user.count({ where: { role: "TEACHER", deletedAt: null } }),
     prisma.user.count({ where: { role: "STUDENT", deletedAt: null } }),
     prisma.user.count({ where: { role: "PARENT", deletedAt: null } }),
-    prisma.class.count(),
-    prisma.worksheet.count(),
-    prisma.assignment.count(),
-    prisma.submission.count(),
+    prisma.class.count({ where: { deletedAt: null } }),
+    prisma.worksheet.count({ where: { deletedAt: null } }),
+    prisma.assignment.count({ where: { class: { deletedAt: null } } }),
+    prisma.submission.count({ where: { assignment: { class: { deletedAt: null } } } }),
   ]);
 
   return {

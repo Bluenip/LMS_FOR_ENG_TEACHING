@@ -80,6 +80,7 @@ interface EditableAssignment {
   audioBlockSeek: boolean;
   oneQuestionPerPage: boolean;
   class: { id: string; name: string };
+  worksheet?: { id: string; title: string; _count: { fields: number; audios?: number } };
   _count: { submissions: number };
 }
 
@@ -385,7 +386,8 @@ function NewAssignmentForm() {
   const selectedWs = worksheets.find((w) => w.id === worksheetId);
   const selectedClasses = classes.filter((c) => selectedClassIds.includes(c.id));
   const totalSelectedStudents = selectedClasses.reduce((sum, c) => sum + c._count.enrollments, 0);
-  const hasAudio = (selectedWs?._count.audios ?? 0) > 0;
+  const audioCount = selectedWs?._count.audios ?? editing?.worksheet?._count.audios ?? 0;
+  const hasAudio = audioCount > 0;
   const audioRestricted = limitAudioPlays || audioBlockPause || audioBlockSeek;
   const proctoringOn = proctorMode !== "OFF" || requireCamera;
   const fmt = (v: string) =>
@@ -581,6 +583,69 @@ function NewAssignmentForm() {
                 </Field>
               </div>
             </FormRow>
+
+            {(hasAudio || audioRestricted) && (
+              <FormRow
+                title={tr("File nghe", "Audio")}
+                hint={
+                  hasAudio
+                    ? tr(
+                        `Phiếu có ${audioCount} file nghe. Mặc định nghe thoải mái.`,
+                        `${audioCount} audio track(s). Unlimited playback by default.`
+                      )
+                    : tr("Phiếu này chưa có file nghe.", "This worksheet has no audio.")
+                }
+              >
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5">
+                    <label className="flex min-h-7 cursor-pointer items-center gap-2 text-xs font-semibold text-[#0B1C30]">
+                      <input
+                        type="checkbox"
+                        checked={limitAudioPlays}
+                        onChange={(e) => setLimitAudioPlays(e.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-[#4F46E5]"
+                        data-testid="audio-limit-checkbox"
+                      />
+                      {tr("Giới hạn số lần nghe", "Limit plays")}
+                    </label>
+                    {limitAudioPlays && (
+                      <div className="mt-1.5 flex items-center gap-2 pl-6">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={20}
+                          value={audioMaxPlays}
+                          onChange={(e) => setAudioMaxPlays(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+                          className="h-8 w-16 text-xs"
+                          data-testid="audio-max-plays-input"
+                        />
+                        <span className="text-[11px] text-[#464555]">{tr("lần / file", "per track")}</span>
+                      </div>
+                    )}
+                  </div>
+                  <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-[#0B1C30]">
+                    <input
+                      type="checkbox"
+                      checked={audioBlockPause}
+                      onChange={(e) => setAudioBlockPause(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-[#4F46E5]"
+                      data-testid="audio-block-pause-checkbox"
+                    />
+                    {tr("Không cho dừng", "No pause")}
+                  </label>
+                  <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-[#0B1C30]">
+                    <input
+                      type="checkbox"
+                      checked={audioBlockSeek}
+                      onChange={(e) => setAudioBlockSeek(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-[#4F46E5]"
+                      data-testid="audio-block-seek-checkbox"
+                    />
+                    {tr("Không cho tua", "No seeking")}
+                  </label>
+                </div>
+              </FormRow>
+            )}
           </section>
 
           {/* ===== Results & leaderboard ===== */}
@@ -655,7 +720,7 @@ function NewAssignmentForm() {
           <details
             id="step-proctor"
             className="stitch-card group/adv scroll-mt-24"
-            open={proctoringOn || audioRestricted || blockCopyPaste || undefined}
+            open={proctoringOn || blockCopyPaste || undefined}
           >
             <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 sm:px-6">
               <span className="flex items-center gap-3">
@@ -664,14 +729,14 @@ function NewAssignmentForm() {
                 </span>
                 <span>
                   <span className="block text-sm font-bold text-[#0B1C30]">
-                    {tr("Chống gian lận & tuỳ chọn nâng cao", "Anti-cheating & advanced")}
+                    {tr("Chống gian lận & giám sát", "Anti-cheating & proctoring")}
                   </span>
                   <span className="block text-xs text-[#464555]">
                     {proctoringOn
                       ? [proctorMode !== "OFF" ? vi.proctor.modes[proctorMode] : null, requireCamera ? tr("Camera AI", "AI camera") : null]
                           .filter(Boolean)
                           .join(" · ")
-                      : tr("Đang tắt · file nghe, chặn copy, camera AI", "Off · audio, copy blocking, AI camera")}
+                      : tr("Đang tắt · khoá màn hình, chặn copy, camera AI", "Off · screen lockdown, copy blocking, AI camera")}
                   </span>
                 </span>
               </span>
@@ -843,66 +908,6 @@ function NewAssignmentForm() {
                   testId="block-copy-paste-switch"
                 />
               </FormRow>
-
-              <FormRow
-                title={tr("File nghe", "Audio")}
-                hint={
-                  selectedWs
-                    ? hasAudio
-                      ? tr(`Phiếu có ${selectedWs._count.audios} file nghe.`, `${selectedWs._count.audios} audio track(s).`)
-                      : tr("Phiếu này chưa có file nghe.", "This worksheet has no audio.")
-                    : tr("Mặc định nghe thoải mái.", "Unlimited by default.")
-                }
-              >
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5">
-                    <label className="flex min-h-7 cursor-pointer items-center gap-2 text-xs font-semibold text-[#0B1C30]">
-                      <input
-                        type="checkbox"
-                        checked={limitAudioPlays}
-                        onChange={(e) => setLimitAudioPlays(e.target.checked)}
-                        className="h-4 w-4 rounded border-slate-300 text-[#4F46E5]"
-                        data-testid="audio-limit-checkbox"
-                      />
-                      {tr("Giới hạn số lần nghe", "Limit plays")}
-                    </label>
-                    {limitAudioPlays && (
-                      <div className="mt-1.5 flex items-center gap-2 pl-6">
-                        <Input
-                          type="number"
-                          min={1}
-                          max={20}
-                          value={audioMaxPlays}
-                          onChange={(e) => setAudioMaxPlays(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
-                          className="h-8 w-16 text-xs"
-                          data-testid="audio-max-plays-input"
-                        />
-                        <span className="text-[11px] text-[#464555]">{tr("lần / file", "per track")}</span>
-                      </div>
-                    )}
-                  </div>
-                  <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-[#0B1C30]">
-                    <input
-                      type="checkbox"
-                      checked={audioBlockPause}
-                      onChange={(e) => setAudioBlockPause(e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-300 text-[#4F46E5]"
-                      data-testid="audio-block-pause-checkbox"
-                    />
-                    {tr("Không cho dừng", "No pause")}
-                  </label>
-                  <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-[#0B1C30]">
-                    <input
-                      type="checkbox"
-                      checked={audioBlockSeek}
-                      onChange={(e) => setAudioBlockSeek(e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-300 text-[#4F46E5]"
-                      data-testid="audio-block-seek-checkbox"
-                    />
-                    {tr("Không cho tua", "No seeking")}
-                  </label>
-                </div>
-              </FormRow>
             </div>
           </details>
         </div>
@@ -953,6 +958,19 @@ function NewAssignmentForm() {
                   tr("Tắt", "Off")
                 )}
               </SummaryRow>
+              {(hasAudio || audioRestricted) && (
+                <SummaryRow label={tr("File nghe", "Audio")}>
+                  {audioRestricted
+                    ? [
+                        limitAudioPlays ? tr(`${audioMaxPlays} lượt`, `${audioMaxPlays} plays`) : null,
+                        audioBlockPause ? tr("không dừng", "no pause") : null,
+                        audioBlockSeek ? tr("không tua", "no seek") : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : tr("Nghe thoải mái", "Unlimited")}
+                </SummaryRow>
+              )}
             </dl>
             <div className="space-y-2 border-t border-slate-100 p-4">
               <Button

@@ -9,7 +9,9 @@ import { enqueueDriveTrashForKeys, getStorageLocationsForKeys } from "./driveSer
 import { logAudit } from "@/server/auditService";
 
 async function countWorksheetSubmissions(worksheetId: string): Promise<number> {
-  return prisma.submission.count({ where: { assignment: { worksheetId } } });
+  return prisma.submission.count({
+    where: { assignment: { worksheetId, class: { deletedAt: null } } },
+  });
 }
 
 /**
@@ -43,7 +45,7 @@ export async function listTeacherWorksheets(ownerId: string) {
       _count: {
         select: {
           fields: true,
-          assignments: true,
+          assignments: { where: { class: { deletedAt: null } } },
           audios: true,
           driveFiles: { where: { trashedAt: null, kind: { in: ["WORKSHEET_PDF", "WORKSHEET_AUDIO"] } } },
         },
@@ -66,7 +68,7 @@ export async function listSharedWorksheets(excludeOwnerId: string, opts?: { all?
       _count: {
         select: {
           fields: true,
-          assignments: true,
+          assignments: { where: { class: { deletedAt: null } } },
           audios: true,
           driveFiles: { where: { trashedAt: null, kind: { in: ["WORKSHEET_PDF", "WORKSHEET_AUDIO"] } } },
         },
