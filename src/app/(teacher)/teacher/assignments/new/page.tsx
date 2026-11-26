@@ -65,6 +65,7 @@ interface EditableAssignment {
   timeLimitMin: number | null;
   maxAttempts: number | null;
   shuffle: boolean;
+  shuffleOptions?: boolean;
   showResult: ShowResultMode;
   showAnswerKey: boolean;
   allowLate: boolean;
@@ -211,6 +212,7 @@ function NewAssignmentForm() {
   const [unlimitedAttempts, setUnlimitedAttempts] = useState(false);
   const [maxAttempts, setMaxAttempts] = useState(1);
   const [shuffle, setShuffle] = useState(false);
+  const [shuffleOptions, setShuffleOptions] = useState(false);
   const [allowLate, setAllowLate] = useState(false);
   const [oneQuestionPerPage, setOneQuestionPerPage] = useState(false);
   const [remindBeforeDue, setRemindBeforeDue] = useState(true);
@@ -308,6 +310,7 @@ function NewAssignmentForm() {
     setUnlimitedAttempts(editing.maxAttempts === null);
     setMaxAttempts(editing.maxAttempts ?? 1);
     setShuffle(editing.shuffle);
+    setShuffleOptions(Boolean(editing.shuffleOptions));
     setAllowLate(editing.allowLate);
     setOneQuestionPerPage(editing.oneQuestionPerPage);
     setRemindBeforeDue(editing.remindBeforeDue ?? true);
@@ -429,6 +432,7 @@ function NewAssignmentForm() {
           timeLimitMin: timeLimitMin ? Number(timeLimitMin) : null,
           maxAttempts: unlimitedAttempts ? null : maxAttempts,
           shuffle,
+          shuffleOptions,
           showResult,
           showAnswerKey,
           allowLate,
@@ -871,6 +875,12 @@ function NewAssignmentForm() {
                 <ToggleRow label={vi.assignments.showAnswerKey} checked={showAnswerKey} onChange={setShowAnswerKey} />
                 <ToggleRow label={vi.assignments.allowLate} checked={allowLate} onChange={setAllowLate} />
                 <ToggleRow label={vi.assignments.shuffle} checked={shuffle} onChange={setShuffle} />
+                <ToggleRow
+                  label={tr("Trộn thứ tự đáp án A/B/C/D", "Shuffle A/B/C/D options")}
+                  checked={shuffleOptions}
+                  onChange={setShuffleOptions}
+                  testId="shuffle-options-switch"
+                />
                 <ToggleRow
                   label={tr("Mỗi màn một câu (tập trung)", "One question per screen")}
                   checked={oneQuestionPerPage}

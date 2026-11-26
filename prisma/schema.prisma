@@ -404,11 +404,12 @@ model Worksheet {
 }
 
 model WorksheetPage {
-  id          String @id @default(cuid())
+  id          String  @id @default(cuid())
   worksheetId String
   pageIndex   Int
   widthPt     Float
   heightPt    Float
+  imageKey    String?
 
   worksheet Worksheet @relation(fields: [worksheetId], references: [id], onDelete: Cascade)
 
@@ -425,6 +426,7 @@ model Field {
   explanation String?
   skillTag    SkillTag?
   passageId   String?
+  imageKey    String?
   order       Int
   points      Float          @default(1)
 
@@ -461,6 +463,7 @@ model Assignment {
   timeLimitMin  Int?
   maxAttempts   Int?           @default(1) // null = unlimited
   shuffle       Boolean        @default(false)
+  shuffleOptions Boolean       @default(false)
   showResult    ShowResultMode @default(AFTER_SUBMIT)
   showAnswerKey Boolean        @default(false)
   allowLate     Boolean        @default(false)
@@ -525,6 +528,7 @@ model Submission {
   totalScore     Float?
   maxScore       Float
   questionOrder  Json?
+  optionOrder    Json?
   teacherComment String?
 
   // Proctoring tracking
@@ -575,6 +579,7 @@ model Answer {
   isOverridden Boolean  @default(false)
   gradeDetail  Json?
   rubricScores Json?
+  annotations  Json?
   teacherNote  String?
   updatedAt    DateTime @updatedAt
 

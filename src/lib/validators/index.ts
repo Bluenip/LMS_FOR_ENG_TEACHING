@@ -214,6 +214,7 @@ export const fieldItemSchema = z
     skillTag: z.nativeEnum(SkillTag).optional().nullable(),
     passageId: z.string().trim().min(1).max(64).optional().nullable(),
     audioId: z.string().trim().min(1).max(64).optional().nullable(),
+    imageKey: z.string().trim().max(300).optional().nullable(),
     order: z.number().int().min(0),
     points: z.number().min(0).max(1000).default(1),
     pageIndex: z.number().int().min(0).optional().nullable(),
@@ -269,6 +270,7 @@ export const createAssignmentSchema = z.object({
   timeLimitMin: z.number().int().min(1).max(600).optional().nullable(),
   maxAttempts: z.number().int().min(1).max(50).nullable().default(1),
   shuffle: z.boolean().default(false),
+  shuffleOptions: z.boolean().default(false),
   showResult: z.nativeEnum(ShowResultMode).default("AFTER_SUBMIT"),
   showAnswerKey: z.boolean().default(false),
   allowLate: z.boolean().default(false),
@@ -310,6 +312,24 @@ export const upsertAssignmentOverrideSchema = z.object({
 export const createCommentPresetSchema = z.object({
   content: z.string().trim().min(1, "Nội dung nhận xét mẫu không được để trống").max(500),
   category: z.string().trim().max(60).optional().nullable(),
+});
+
+export const photoAnnotationItemSchema = z.object({
+  id: z.string().trim().min(1).max(64),
+  type: z.enum(["pen", "rect", "circle", "check", "cross", "text"]),
+  color: z.string().trim().min(3).max(32),
+  strokeWidth: z.number().min(0.5).max(32),
+  points: z.array(z.tuple([z.number().min(0).max(1), z.number().min(0).max(1)])).max(2000).optional(),
+  x: z.number().min(0).max(1).optional(),
+  y: z.number().min(0).max(1).optional(),
+  w: z.number().min(0).max(1).optional(),
+  h: z.number().min(0).max(1).optional(),
+  text: z.string().trim().max(500).optional(),
+});
+
+export const savePhotoAnnotationsSchema = z.object({
+  fieldId: z.string().trim().min(1),
+  annotations: z.record(z.string().trim().min(1).max(300), z.array(photoAnnotationItemSchema).max(500)),
 });
 
 // ===== Submission & Grading =====

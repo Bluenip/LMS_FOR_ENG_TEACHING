@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { getStorageProvider } from "@/lib/storage";
 import { parsePdfMetadata, validatePdfBuffer } from "@/lib/pdf/server-pdf";
+import { detectImageMeta, normalizeImagePagePt } from "@/lib/image-meta";
 import { regradeWorksheetSubmissions } from "./regradeService";
 import { enqueueDriveTrashForKeys, getStorageLocationsForKeys } from "./driveService";
 import { logAudit } from "@/server/auditService";
@@ -28,6 +29,7 @@ export const STUDENT_FIELD_SELECT = {
   skillTag: true,
   passageId: true,
   audioId: true,
+  imageKey: true,
   order: true,
   points: true,
   pageIndex: true,
@@ -183,6 +185,8 @@ export async function getWorksheetForTeacher(worksheetId: string) {
   }
   const keys = [
     ...(worksheet.pdfFileKey ? [worksheet.pdfFileKey] : []),
+    ...worksheet.pages.flatMap((p) => (p.imageKey ? [p.imageKey] : [])),
+    ...worksheet.fields.flatMap((f) => (f.imageKey ? [f.imageKey] : [])),
     ...worksheet.audios.map((a) => a.fileKey),
   ];
   const storageLocations = await getStorageLocationsForKeys(keys);
@@ -255,6 +259,213 @@ export async function uploadWorksheetPdf(
   return updated;
 }
 
+const MAX_FIELD_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_PAGE_IMAGE_BYTES = 10 * 1024 * 1024;
+
+export async function uploadFieldIllustrationImage(
+  worksheetId: string,
+  fieldId: string | null | undefined,
+  buffer: Buffer,
+  mimeType?: string
+) {
+  if (buffer.byteLength === 0 || buffer.byteLength > MAX_FIELD_IMAGE_BYTES) {
+    throw new AppError("Ảnh vượt quá dung lượng tối đa cho phép.", 400, "FILE_TOO_LARGE");
+  }
+  if (mimeType && !mimeType.startsWith("image/") && mimeType !== "application/octet-stream") {
+    throw new AppError("Vui lòng chọn file ảnh hợp lệ (PNG, JPG hoặc WebP).", 400, "INVALID_IMAGE");
+  }
+  const meta = detectImageMeta(buffer);
+  if (!meta) {
+    throw new AppError("Vui lòng chọn file ảnh hợp lệ (PNG, JPG hoặc WebP).", 400, "INVALID_IMAGE");
+  }
+
+  const ws = await prisma.worksheet.findUnique({
+    where: { id: worksheetId },
+    select: { id: true, ownerId: true, title: true },
+  });
+  if (!ws) {
+    throw new AppError("Không tìm thấy phiếu bài tập.", 404, "NOT_FOUND");
+  }
+
+  const existingField = fieldId
+    ? await prisma.field.findFirst({
+        where: { id: fieldId, worksheetId },
+        select: { id: true, imageKey: true },
+      })
+    : null;
+
+  const imageKey = `worksheets/${worksheetId}/images/${crypto.randomUUID()}${meta.ext}`;
+  const storage = getStorageProvider();
+  await storage.put(imageKey, buffer, meta.mime, {
+    ownerId: ws.ownerId,
+    kind: "WORKSHEET_PDF",
+    worksheetId,
+    worksheetTitle: ws.title,
+    fileName: `cau-hoi${meta.ext}`,
+  });
+
+  if (existingField) {
+    await prisma.field.update({
+      where: { id: existingField.id },
+      data: { imageKey },
+    });
+    if (existingField.imageKey && existingField.imageKey !== imageKey) {
+      await storage.delete(existingField.imageKey).catch(() => undefined);
+    }
+  }
+
+  return { imageKey };
+}
+
+export async function deleteFieldIllustrationImage(
+  worksheetId: string,
+  fieldId?: string | null,
+  imageKeyParam?: string | null
+) {
+  let targetKey =
+    imageKeyParam &&
+    !imageKeyParam.includes("..") &&
+    imageKeyParam.startsWith(`worksheets/${worksheetId}/images/`)
+      ? imageKeyParam
+      : null;
+
+  if (fieldId) {
+    const existingField = await prisma.field.findFirst({
+      where: { id: fieldId, worksheetId },
+      select: { id: true, imageKey: true },
+    });
+    if (existingField) {
+      targetKey = targetKey ?? existingField.imageKey;
+      if (existingField.imageKey) {
+        await prisma.field.update({
+          where: { id: existingField.id },
+          data: { imageKey: null },
+        });
+      }
+    }
+  }
+
+  if (targetKey) {
+    await getStorageProvider().delete(targetKey).catch(() => undefined);
+  }
+  return { ok: true };
+}
+
+export async function uploadWorksheetBackgroundImages(
+  worksheetId: string,
+  files: Array<{ buffer: Buffer; mimeType?: string }>
+) {
+  if (!Array.isArray(files) || files.length < 1 || files.length > 30) {
+    throw new AppError("Vui lòng chọn từ 1 đến 30 ảnh trang đề.", 400, "VALIDATION_ERROR");
+  }
+
+  const existing = await prisma.worksheet.findUnique({
+    where: { id: worksheetId },
+    select: {
+      id: true,
+      ownerId: true,
+      title: true,
+      pdfFileKey: true,
+      pages: { select: { imageKey: true } },
+    },
+  });
+  if (!existing) {
+    throw new AppError("Không tìm thấy phiếu bài tập.", 404, "NOT_FOUND");
+  }
+
+  if ((await countWorksheetSubmissions(worksheetId)) > 0) {
+    throw new AppError(
+      "Không thể thay ảnh nền vì đã có học sinh làm bài trên worksheet này.",
+      409,
+      "WORKSHEET_HAS_SUBMISSIONS"
+    );
+  }
+
+  const parsedFiles: Array<{
+    buffer: Buffer;
+    ext: ".jpg" | ".png" | ".webp";
+    mime: string;
+    widthPt: number;
+    heightPt: number;
+  }> = [];
+
+  for (const f of files) {
+    if (f.buffer.byteLength === 0 || f.buffer.byteLength > MAX_PAGE_IMAGE_BYTES) {
+      throw new AppError("Ảnh vượt quá dung lượng tối đa cho phép.", 400, "FILE_TOO_LARGE");
+    }
+    if (f.mimeType && !f.mimeType.startsWith("image/") && f.mimeType !== "application/octet-stream") {
+      throw new AppError("Vui lòng chọn file ảnh hợp lệ (PNG, JPG hoặc WebP).", 400, "INVALID_IMAGE");
+    }
+    const meta = detectImageMeta(f.buffer);
+    if (!meta) {
+      throw new AppError("Vui lòng chọn file ảnh hợp lệ (PNG, JPG hoặc WebP).", 400, "INVALID_IMAGE");
+    }
+    const dims = normalizeImagePagePt(meta.width, meta.height);
+    parsedFiles.push({
+      buffer: f.buffer,
+      ext: meta.ext,
+      mime: meta.mime,
+      widthPt: dims.widthPt,
+      heightPt: dims.heightPt,
+    });
+  }
+
+  const storage = getStorageProvider();
+  const uploadedPages: Array<{
+    pageIndex: number;
+    widthPt: number;
+    heightPt: number;
+    imageKey: string;
+  }> = [];
+
+  for (let i = 0; i < parsedFiles.length; i++) {
+    const pf = parsedFiles[i]!;
+    const imageKey = `worksheets/${worksheetId}/images/${crypto.randomUUID()}${pf.ext}`;
+    await storage.put(imageKey, pf.buffer, pf.mime, {
+      ownerId: existing.ownerId,
+      kind: "WORKSHEET_PDF",
+      worksheetId,
+      worksheetTitle: existing.title,
+      fileName: `trang-${i + 1}${pf.ext}`,
+    });
+    uploadedPages.push({
+      pageIndex: i,
+      widthPt: pf.widthPt,
+      heightPt: pf.heightPt,
+      imageKey,
+    });
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.worksheetPage.deleteMany({ where: { worksheetId } });
+    return tx.worksheet.update({
+      where: { id: worksheetId },
+      data: {
+        pdfFileKey: null,
+        pageCount: uploadedPages.length,
+        pages: {
+          create: uploadedPages,
+        },
+      },
+      include: {
+        pages: { orderBy: { pageIndex: "asc" } },
+        fields: { orderBy: { order: "asc" } },
+      },
+    });
+  });
+
+  if (existing.pdfFileKey) {
+    await storage.delete(existing.pdfFileKey).catch(() => undefined);
+  }
+  for (const oldPg of existing.pages) {
+    if (oldPg.imageKey) {
+      await storage.delete(oldPg.imageKey).catch(() => undefined);
+    }
+  }
+
+  return updated;
+}
+
 export interface SaveFieldPayload {
   id?: string;
   placement: "OVERLAY" | "ANSWER_SHEET";
@@ -276,6 +487,7 @@ export interface SaveFieldPayload {
   skillTag?: "GRAMMAR" | "VOCABULARY" | "READING" | "LISTENING" | "WRITING" | "SPEAKING" | null;
   passageId?: string | null;
   audioId?: string | null;
+  imageKey?: string | null;
   order: number;
   points: number;
   pageIndex?: number | null;
@@ -346,6 +558,12 @@ export async function saveWorksheetFields(worksheetId: string, fields: SaveField
     for (let i = 0; i < fields.length; i++) {
       const f = fields[i]!;
       const safeAudioId = f.audioId && validAudioIds.has(f.audioId) ? f.audioId : null;
+      const safeImageKey =
+        typeof f.imageKey === "string" &&
+        !f.imageKey.includes("..") &&
+        f.imageKey.startsWith(`worksheets/${worksheetId}/images/`)
+          ? f.imageKey
+          : null;
       const data = {
         placement: f.placement,
         type: f.type,
@@ -355,6 +573,7 @@ export async function saveWorksheetFields(worksheetId: string, fields: SaveField
         skillTag: f.skillTag ?? null,
         passageId: f.passageId ?? null,
         audioId: safeAudioId,
+        imageKey: safeImageKey,
         order: i,
         points: f.points,
         pageIndex: f.placement === "OVERLAY" ? (f.pageIndex ?? 0) : null,
@@ -440,6 +659,70 @@ export async function authorizeFileDownload(
       const assignedToChild = await prisma.assignment.findFirst({
         where: {
           worksheetId: worksheet.id,
+          class: {
+            deletedAt: null,
+            enrollments: {
+              some: {
+                status: "ACTIVE",
+                student: {
+                  parentLinksAsChild: {
+                    some: { parentId: userId, verifiedAt: { not: null } },
+                  },
+                },
+              },
+            },
+          },
+        },
+        select: { id: true },
+      });
+      return Boolean(assignedToChild);
+    }
+    return false;
+  }
+
+  // Check if worksheet background/illustration image (worksheets/{id}/images/{file})
+  const imgMatch = /^worksheets\/([A-Za-z0-9_-]+)\/images\/[A-Za-z0-9_.-]+$/.exec(fileKey);
+  if (imgMatch) {
+    const wsId = imgMatch[1]!;
+    const ws = await prisma.worksheet.findFirst({
+      where: { id: wsId, deletedAt: null },
+      select: { id: true, ownerId: true, isShared: true },
+    });
+    if (!ws) return false;
+    if (role === "TEACHER" && ws.ownerId === userId) return true;
+
+    // For non-owner teachers (shared), students, and parents, confirm the key actually belongs to this worksheet
+    const isReferenced = await prisma.worksheet.findFirst({
+      where: {
+        id: wsId,
+        OR: [
+          { pages: { some: { imageKey: fileKey } } },
+          { fields: { some: { imageKey: fileKey } } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (!isReferenced) return false;
+
+    if (role === "TEACHER") return Boolean(ws.isShared);
+    if (role === "STUDENT") {
+      const assigned = await prisma.assignment.findFirst({
+        where: {
+          worksheetId: wsId,
+          class: {
+            deletedAt: null,
+            enrollments: { some: { studentId: userId, status: "ACTIVE" } },
+          },
+          submissions: { some: { studentId: userId } },
+        },
+        select: { id: true },
+      });
+      return Boolean(assigned);
+    }
+    if (role === "PARENT") {
+      const assignedToChild = await prisma.assignment.findFirst({
+        where: {
+          worksheetId: wsId,
           class: {
             deletedAt: null,
             enrollments: {

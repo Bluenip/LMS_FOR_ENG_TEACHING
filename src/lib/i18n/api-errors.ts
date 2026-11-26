@@ -77,6 +77,16 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
   "Mã phát âm thanh không hợp lệ hoặc đã hết hạn.": "Audio playback token is invalid or expired.",
   "Không có quyền truy cập file nghe.": "You do not have permission to access this audio file.",
   "Không tìm thấy dữ liệu file nghe.": "Audio file data not found.",
+  "Vui lòng chọn file ảnh hợp lệ (PNG, JPG hoặc WebP).":
+    "Please select a valid image file (PNG, JPG, or WebP).",
+  "Ảnh vượt quá dung lượng tối đa cho phép.": "Image exceeds the maximum allowed size.",
+  "Vui lòng chọn từ 1 đến 30 ảnh trang đề.": "Please select between 1 and 30 page images.",
+  "Không thể thay ảnh nền vì đã có học sinh làm bài trên worksheet này.":
+    "Cannot replace background images because students have already submitted work on this worksheet.",
+  "Câu hỏi này không phải dạng nộp ảnh bài làm.":
+    "This question does not accept uploaded photo answers.",
+  "File được chú thích không thuộc bài làm của học sinh.":
+    "Annotated file does not belong to the student's submission.",
 
   // Worksheet transfer & Word import
   "Không thể thay file PDF vì đã có học sinh làm bài trên worksheet này (vị trí các ô sẽ bị lệch).":

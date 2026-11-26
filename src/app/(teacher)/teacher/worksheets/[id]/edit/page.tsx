@@ -36,6 +36,7 @@ export default async function WorksheetEditPage({
       skillTag: f.skillTag,
       passageId: f.passageId,
       audioId: f.audioId,
+      imageKey: f.imageKey,
       order: f.order,
       points: f.points,
       pageIndex: f.pageIndex,

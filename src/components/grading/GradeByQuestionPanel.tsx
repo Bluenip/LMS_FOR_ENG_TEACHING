@@ -11,6 +11,7 @@ import {
   isManualFieldType,
   isPhotoUploadAnswer,
   type AnswerValue,
+  type PhotoAnnotationMap,
   type RubricCriterion,
   type RubricScoreMap,
   type UploadedAnswerFile,
@@ -23,7 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { PromptText } from "@/components/worksheet/PromptText";
-import { PhotoLightboxModal } from "@/components/worksheet/PhotoLightboxModal";
+import { PhotoAnnotatorModal } from "@/components/worksheet/PhotoAnnotatorModal";
 import { CommentPresetBar } from "./CommentPresetBar";
 
 interface QuestionMeta {
@@ -48,6 +49,7 @@ interface QuestionGradingItem {
     isCorrect: boolean | null;
     teacherNote: string | null;
     rubricScores: RubricScoreMap | null;
+    annotations?: PhotoAnnotationMap | null;
   } | null;
 }
 
@@ -81,9 +83,13 @@ export function GradeByQuestionPanel({
   const [rubricEdits, setRubricEdits] = useState<Record<string, RubricScoreMap>>({});
   const [noteEdits, setNoteEdits] = useState<Record<string, string>>({});
   const [savingKey, setSavingKey] = useState<string | null>(null);
-  const [lightbox, setLightbox] = useState<{ files: UploadedAnswerFile[]; index: number } | null>(
-    null
-  );
+  const [lightbox, setLightbox] = useState<{
+    submissionId: string;
+    fieldId: string;
+    files: UploadedAnswerFile[];
+    index: number;
+    annotations: PhotoAnnotationMap | null;
+  } | null>(null);
 
   const queryUrl = selectedFieldId
     ? `/api/assignments/${assignmentId}/grading/by-question?fieldId=${encodeURIComponent(selectedFieldId)}`
@@ -345,7 +351,13 @@ export function GradeByQuestionPanel({
                                 key={uf.key}
                                 type="button"
                                 onClick={() =>
-                                  setLightbox({ files: imgs, index: Math.max(0, imgIdx) })
+                                  setLightbox({
+                                    submissionId: item.submissionId,
+                                    fieldId: field.id,
+                                    files: imgs,
+                                    index: Math.max(0, imgIdx),
+                                    annotations: (item.answer?.annotations as PhotoAnnotationMap | null) ?? null,
+                                  })
                                 }
                                 className="h-24 overflow-hidden rounded-lg border border-slate-200 bg-white"
                               >
@@ -480,11 +492,25 @@ export function GradeByQuestionPanel({
       )}
 
       {lightbox && (
-        <PhotoLightboxModal
+        <PhotoAnnotatorModal
           files={lightbox.files}
           initialIndex={lightbox.index}
           open={true}
           onClose={() => setLightbox(null)}
+          editable
+          annotations={lightbox.annotations}
+          onSave={async (next) => {
+            await apiFetchJson(`/api/submissions/${lightbox.submissionId}/annotations`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ fieldId: lightbox.fieldId, annotations: next }),
+            });
+            setLightbox((prev) => (prev ? { ...prev, annotations: next } : null));
+            toast.success(tr("Đã lưu nét chấm ảnh.", "Saved photo annotations."));
+            await queryClient.invalidateQueries({
+              queryKey: ["assignment-question-grading", assignmentId, selectedFieldId],
+            });
+          }}
         />
       )}
     </div>

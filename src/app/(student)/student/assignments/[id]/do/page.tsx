@@ -30,7 +30,12 @@ import type {
   ViolationAction,
   WorksheetSubject,
 } from "@prisma/client";
-import type { AnswerValue, DictationGradeDetail, RubricScoreMap } from "@/lib/grading/types";
+import type {
+  AnswerValue,
+  DictationGradeDetail,
+  PhotoAnnotationMap,
+  RubricScoreMap,
+} from "@/lib/grading/types";
 import type { ScaledScoreResult } from "@/lib/score-scale";
 import {
   clearOfflineDraft,
@@ -144,6 +149,7 @@ interface StudentAssignmentPayload {
       teacherNote: string | null;
       gradeDetail?: DictationGradeDetail | null;
       rubricScores?: RubricScoreMap | null;
+      annotations?: PhotoAnnotationMap | null;
     }>;
   } | null;
   attemptsSummary: Array<{
@@ -821,6 +827,7 @@ export default function StudentDoAssignmentPage() {
         teacherNote: a.teacherNote,
         gradeDetail: a.gradeDetail ?? null,
         rubricScores: a.rubricScores ?? null,
+        annotations: a.annotations ?? null,
       },
     ])
   );
@@ -1176,6 +1183,7 @@ export default function StudentDoAssignmentPage() {
                   <PdfCanvasPage
                     key={p.pageIndex}
                     pdfDoc={pdfDoc}
+                    imageUrl={p.imageKey ? `/api/files/${p.imageKey}` : null}
                     pageIndex={p.pageIndex}
                     widthPt={p.widthPt}
                     heightPt={p.heightPt}

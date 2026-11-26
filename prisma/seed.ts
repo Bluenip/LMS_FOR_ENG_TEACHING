@@ -1,4 +1,5 @@
 import "dotenv/config";
+import zlib from "zlib";
 import bcrypt from "bcryptjs";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { prisma } from "../src/lib/db";
@@ -204,6 +205,62 @@ function generateSampleWavBuffer(durationSec = 2, freqHz = 440): Buffer {
     buf.writeInt16LE(sample, 44 + i * 2);
   }
   return buf;
+}
+
+function pngCrc32(buf: Buffer): number {
+  let crc = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) {
+    crc ^= buf[i]!;
+    for (let j = 0; j < 8; j++) {
+      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function makePngChunk(type: string, data: Buffer): Buffer {
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length, 0);
+  const typeAndData = Buffer.concat([Buffer.from(type, "ascii"), data]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(pngCrc32(typeAndData), 0);
+  return Buffer.concat([len, typeAndData, crc]);
+}
+
+function generateSolidPngBuffer(
+  width: number,
+  height: number,
+  rgbColor: [number, number, number]
+): Buffer {
+  const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 2; // RGB color type
+  ihdr[10] = 0;
+  ihdr[11] = 0;
+  ihdr[12] = 0;
+
+  const rowStride = 1 + width * 3;
+  const raw = Buffer.alloc(rowStride * height);
+  for (let y = 0; y < height; y++) {
+    const rowOff = y * rowStride;
+    raw[rowOff] = 0; // filter none
+    for (let x = 0; x < width; x++) {
+      const px = rowOff + 1 + x * 3;
+      raw[px] = rgbColor[0];
+      raw[px + 1] = rgbColor[1];
+      raw[px + 2] = rgbColor[2];
+    }
+  }
+  const idat = zlib.deflateSync(raw);
+  return Buffer.concat([
+    sig,
+    makePngChunk("IHDR", ihdr),
+    makePngChunk("IDAT", idat),
+    makePngChunk("IEND", Buffer.alloc(0)),
+  ]);
 }
 
 async function main() {
@@ -1093,6 +1150,77 @@ async function main() {
       blockCopyPaste: true,
       oneQuestionPerPage: true,
     },
+  });
+
+  // Phase 17 seed: Math Fill-on-Image worksheet with KaTeX formula & field illustration PNG
+  const wsMathImg = await prisma.worksheet.create({
+    data: {
+      ownerId: teacher1.id,
+      title: "Toán 10 — Phương trình bậc hai (Fill on image & Minh hoạ)",
+      subject: "MATH",
+      instructions:
+        "Điền nghiệm trực tiếp lên ảnh phiếu bài tập bên trái và chọn đáp án đúng cho câu hỏi đồ thị.",
+      pdfFileKey: null,
+      pageCount: 1,
+      isShared: true,
+    },
+  });
+
+  const mathBgPng = generateSolidPngBuffer(850, 600, [244, 247, 255]);
+  const mathBgKey = `worksheets/${wsMathImg.id}/images/seed-math-bg-page-0.png`;
+  await storage.put(mathBgKey, mathBgPng, "image/png");
+
+  const mathDiagramPng = generateSolidPngBuffer(400, 240, [238, 242, 255]);
+  const mathDiagramKey = `worksheets/${wsMathImg.id}/images/seed-math-q2-diagram.png`;
+  await storage.put(mathDiagramKey, mathDiagramPng, "image/png");
+
+  await prisma.worksheetPage.create({
+    data: {
+      worksheetId: wsMathImg.id,
+      pageIndex: 0,
+      widthPt: 595,
+      heightPt: 420,
+      imageKey: mathBgKey,
+    },
+  });
+
+  await prisma.field.createMany({
+    data: [
+      {
+        worksheetId: wsMathImg.id,
+        placement: "OVERLAY",
+        type: "TEXT",
+        label: "1",
+        order: 0,
+        points: 1,
+        pageIndex: 0,
+        x: 0.25,
+        y: 0.35,
+        w: 0.25,
+        h: 0.08,
+        answerKey: { accepted: ["x = 2", "2"] },
+        gradingOpts: { caseSensitive: false, ignoreExtraSpaces: true, ignorePunctuation: true },
+        style: { fontSize: 13, align: "center", transparentBg: false },
+      },
+      {
+        worksheetId: wsMathImg.id,
+        placement: "ANSWER_SHEET",
+        type: "MULTIPLE_CHOICE",
+        label: "2",
+        prompt: "Tìm tập nghiệm của phương trình $x^2 - 4 = 0$ từ đồ thị $y = x^2 - 4$:",
+        explanation: "Ta có $x^2 = 4 \\Leftrightarrow x = \\pm 2$.",
+        imageKey: mathDiagramKey,
+        order: 1,
+        points: 1,
+        options: [
+          { id: "A", text: "$S = \\{-2; 2\\}$" },
+          { id: "B", text: "$S = \\{2\\}$" },
+          { id: "C", text: "$S = \\{-4; 4\\}$" },
+          { id: "D", text: "$S = \\emptyset$" },
+        ],
+        answerKey: { correct: "A" },
+      },
+    ],
   });
 
   // Notifications

@@ -6,12 +6,13 @@ import { Camera, FileText, ImagePlus, Loader2, Trash2, Upload } from "lucide-rea
 import {
   isPhotoUploadAnswer,
   type AnswerValue,
+  type PhotoAnnotationMap,
   type PhotoUploadAnswerValue,
   type UploadedAnswerFile,
 } from "@/lib/grading/types";
 import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
-import { PhotoLightboxModal } from "./PhotoLightboxModal";
+import { PhotoAnnotatorModal } from "./PhotoAnnotatorModal";
 
 interface PhotoUploadInputProps {
   submissionId?: string | null;
@@ -22,6 +23,7 @@ interface PhotoUploadInputProps {
   maxFiles?: number;
   previewOnly?: boolean;
   compact?: boolean;
+  annotations?: PhotoAnnotationMap | null;
 }
 
 /** Downscales large smartphone camera images client-side so uploads stay fast even on 4G. */
@@ -72,6 +74,7 @@ export function PhotoUploadInput({
   maxFiles = 5,
   previewOnly = false,
   compact = false,
+  annotations = null,
 }: PhotoUploadInputProps) {
   const { tr } = useI18n();
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
@@ -255,8 +258,8 @@ export function PhotoUploadInput({
                   <button
                     type="button"
                     onClick={() => imgIndex >= 0 && setLightboxIdx(imgIndex)}
-                    className="block h-28 w-full overflow-hidden bg-slate-100"
-                    title={tr("Nhấn để phóng to / xoay ảnh", "Click to zoom / rotate")}
+                    className="relative block h-28 w-full overflow-hidden bg-slate-100"
+                    title={tr("Nhấn để phóng to / xem nét chấm", "Click to zoom / view annotations")}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
@@ -264,6 +267,14 @@ export function PhotoUploadInput({
                       alt={f.name}
                       className="h-full w-full object-cover transition group-hover:scale-105"
                     />
+                    {(annotations?.[f.key]?.length ?? 0) > 0 && (
+                      <span
+                        data-testid={`photo-annotated-badge-${f.key}`}
+                        className="absolute bottom-1.5 left-1.5 rounded-full bg-red-600/90 px-2 py-0.5 text-[10px] font-bold text-white shadow"
+                      >
+                        {tr("Có nét chấm", "Annotated")} ({annotations?.[f.key]?.length})
+                      </span>
+                    )}
                   </button>
                 )}
 
@@ -295,11 +306,13 @@ export function PhotoUploadInput({
       )}
 
       {imageFiles.length > 0 && (
-        <PhotoLightboxModal
+        <PhotoAnnotatorModal
           files={imageFiles}
           initialIndex={lightboxIdx ?? 0}
           open={lightboxIdx !== null}
           onClose={() => setLightboxIdx(null)}
+          editable={false}
+          annotations={annotations}
         />
       )}
     </div>

@@ -2,7 +2,7 @@
 
 > **Tài liệu thiết kế & lộ trình duy nhất của dự án.** Mọi tính năng ở mục 1 đã hoàn thành trên `main`, **không làm lại**. Bản plan cũ (Phase 1–12) còn trong lịch sử git.
 >
-> Mỗi Phase từ Phase 16 → Phase 26 được mô tả chi tiết theo đúng 6 phần **(A. Database & Migration → B. Pure Libs & JSON Schema → C. Services & Quyền/Bảo mật → D. API Routes → E. UI & Responsive/i18n → F. Env/Cron/Seed/Test)** để triển khai nhất quán, không nhầm lẫn.
+> Mỗi Phase từ Phase 16 → Phase 32 được mô tả chi tiết theo đúng 6 phần **(A. Database & Migration → B. Pure Libs & JSON Schema → C. Services & Quyền/Bảo mật → D. API Routes → E. UI & Responsive/i18n → F. Env/Cron/Seed/Test)** để triển khai nhất quán, không nhầm lẫn.
 >
 > Làm **theo đúng thứ tự Phase**. Xong mỗi Phase phải: chạy đủ `pnpm db:seed`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, `pnpm build:check`, cập nhật mục **"Tiến độ"** ở cuối file, merge fast-forward vào `main`, push GitHub và xác minh server production deploy thành công rồi mới sang Phase tiếp theo.
 >
@@ -460,7 +460,7 @@ Quy chuẩn rõ 3 cấu trúc `options`, `answerKey`, `value` và logic chấm t
 
 ### A. Database & Migration (`phase22_question_bank_exams` — tương thích ngược 100%)
 - `QuestionBankItem { id, ownerId, subject WorksheetSubject @default(GENERAL), type FieldType, prompt String, options Json?, answerKey Json, explanation String?, rubric Json?, skillTag SkillTag?, topicTag String?, level String?, difficulty Int @default(3), tags String[] @default([]), audioKey String?, imageKey String?, isShared Boolean @default(false), deletedAt DateTime?, createdAt, updatedAt }` (`@@index([ownerId, subject])`, `@@index([isShared, subject])`).
-- `Field`: thêm `bankItemId String?`.
+- `Field`: thêm `bankItemId String?`, `topicTag String?` (tự sao chép từ `QuestionBankItem.topicTag` khi tạo từ ma trận và cho GV gắn chủ đề trên `WorksheetEditor` để phục vụ Bản đồ năng lực Phase 30).
 - `ExamVariant { id, assignmentId, code String, questionOrder Json, optionOrder Json, createdAt }` (`@@unique([assignmentId, code])`).
 - `Submission`: thêm `examVariantId String?`.
 - `ExamSession { id, ownerId, title String, worksheetId String, openAt DateTime?, dueAt DateTime?, timeLimitMin Int?, proctorConfig Json, createdAt, updatedAt }` (`@@index([ownerId])`).
@@ -678,6 +678,280 @@ Quy chuẩn rõ 3 cấu trúc `options`, `answerKey`, `value` và logic chấm t
 
 ---
 
+## Phase 27 — Live Quiz trên lớp, Exit Ticket & Điểm cộng Sao thưởng
+
+### A. Database & Migration (`phase27_live_quiz_behavior_points` — tương thích ngược 100%)
+- **Enums mới:** `LiveQuizMode { HOST_PACED, SELF_PACED }`, `LiveQuizStatus { LOBBY, QUESTION_OPEN, QUESTION_CLOSED, FINISHED }`.
+- **Bảng mới:**
+  - `LiveQuizSession { id, hostId, classId?, worksheetId?, title String, pinCode String @unique, mode LiveQuizMode @default(HOST_PACED), status LiveQuizStatus @default(LOBBY), currentIndex Int @default(0), questionStartedAt DateTime?, questionLimitSec Int @default(30), isExitTicket Boolean @default(false), questionsSnapshot Json, createdAt, endedAt DateTime? }` (`@@index([hostId, createdAt])`, `@@index([classId])`).
+  - `LiveQuizParticipant { id, sessionId, userId?, displayName String, joinTokenHash String, totalScore Int @default(0), correctCount Int @default(0), streak Int @default(0), joinedAt DateTime @default(now()) }` (`@@unique([sessionId, joinTokenHash])`, `@@index([sessionId, totalScore])`).
+  - `LiveQuizAnswer { id, sessionId, participantId, questionIndex Int, answer Json, isCorrect Boolean, responseMs Int, pointsAwarded Int @default(0), answeredAt DateTime @default(now()) }` (`@@unique([participantId, questionIndex])`, `@@index([sessionId, questionIndex])`).
+  - `ClassBehaviorPreset { id, classId, label String, delta Int, icon String?, createdAt }` (`@@index([classId])`).
+  - `StudentBehaviorPoint { id, classId, studentId, sessionId?, presetId?, delta Int, reason String, awardedById String, createdAt }` (`@@index([classId, studentId])`, `@@index([sessionId])`).
+
+### B. Pure Libs & Thuật toán (`src/lib/live-quiz/*`)
+1. **`src/lib/live-quiz/scoring.ts`:**
+   - `computeLiveQuizPoints({ isCorrect, responseMs, limitMs, streak })`: trả `0` nếu sai; nếu đúng trả `Math.round(500 + 500 * clamp(1 - responseMs / limitMs, 0, 1)) + Math.min(streak, 5) * 50`.
+2. **`src/lib/live-quiz/pin.ts`:**
+   - `generateLiveQuizPin()`: sinh mã PIN 6 chữ số (`100000..999999`), kiểm tra tránh trùng toàn bảng `LiveQuizSession` (khớp ràng buộc `@unique`).
+   - `sanitizeLiveQuestionForPlayer(q)`: chỉ trả `id`, `type`, `prompt`, `options`, `imageKey`, `timeLimitSec` — **tuyệt đối không trả `answerKey`** khi trạng thái là `QUESTION_OPEN`.
+3. **`src/lib/live-quiz/live-bus.ts`:**
+   - Tái sử dụng adapter `src/lib/redis.ts` (Phase 26) với fallback `InMemoryLiveQuizBus` trên kênh `pivora:livequiz:${sessionId}` để phát sự kiện `LOBBY_UPDATE`, `QUESTION_START`, `ANSWER_COUNT`, `QUESTION_REVEAL`, `SESSION_END`.
+
+### C. Services & Kiểm soát quyền
+- **`liveQuizService.ts` (mới):**
+  - `createLiveQuizFromWorksheet(hostId, { worksheetId, classId?, mode, questionLimitSec })`: trích các câu tự chấm (`MULTIPLE_CHOICE`, `MULTI_SELECT`, `TRUE_FALSE`, `TEXT`, `NUMBER`) đóng băng vào `questionsSnapshot` (để sửa worksheet sau đó không làm sai lệch phiên live).
+  - `createExitTicketSession(hostId, { classId?, title, type: "MULTIPLE_CHOICE"|"TEXT", prompt, options?, answerKey? })`: tạo nhanh phiên 1 câu hỏi (`isExitTicket = true`) không cần tạo worksheet trước.
+  - `joinLiveQuiz(pinCode, { userId?, displayName })`: áp dụng rate limit trên `POST /api/live-quiz/join` để chống dò mã PIN; nếu phiên gắn `classId`, bắt buộc user đã đăng nhập & có `Enrollment.status === "ACTIVE"` (chống người ngoài phá lớp); nếu phiên mở không gắn lớp cho phép khách nhập tên và cấp `joinToken` lưu dạng `SHA-256` hash trong `LiveQuizParticipant.joinTokenHash` (dùng xác thực khách ở `/answer` và `/stream`).
+  - `advanceLiveQuiz(sessionId, hostId, action: "OPEN"|"CLOSE"|"NEXT"|"FINISH")`: chỉ `hostId`, `ADMIN`, hoặc `CO_TEACHER`/`ASSISTANT` của `classId`; cập nhật trạng thái trong transaction, phát SSE; chỉ công bố phân bố đáp án `A/B/C/D` & đáp án đúng khi chuyển sang `QUESTION_CLOSED` hoặc `FINISHED`.
+  - `submitLiveQuizAnswer(sessionId, participantAuth, { questionIndex, answer })`: xác thực trạng thái `QUESTION_OPEN` và đúng `currentIndex` (hoặc bất kỳ khi `SELF_PACED`), tính `responseMs` bằng đồng hồ server (`Date.now() - questionStartedAt`), chống nộp trùng bằng `@@unique([participantId, questionIndex])`, chấm thuần qua `src/lib/grading/` và tính điểm qua `computeLiveQuizPoints`.
+  - `exportLiveQuizToOfflineGrade(sessionId, hostId, { columnTitle, maxScore })`: đẩy tỉ lệ đúng của các HS có `userId` sang `OfflineGradeColumn` (Phase 21) trong 1 chạm.
+- **`behaviorPointService.ts` (mới):**
+  - CRUD `ClassBehaviorPreset` (tự khởi tạo 4 mẫu mặc định nếu lớp chưa có: *Phát biểu hay +2*, *Làm bài tốt +2*, *Hỗ trợ bạn +1*, *Mất trật tự -1*).
+  - `awardBehaviorPoints(classId, actorId, { studentIds[], delta, reason, sessionId?, presetId? })`: hỗ trợ cộng/trừ 1 hoặc nhiều HS cùng lúc, lọc HS `ACTIVE` (`deletedAt: null`), liên kết `ClassSession` (Phase 23) nếu có.
+  - `getClassBehaviorSummary(classId, { from?, to? })`; tích hợp cột điểm cộng vào `gradebookService.ts` (Phase 21) và lịch sử sao thưởng của con vào `parentService.ts`.
+
+### D. API Routes & Validators
+- `/api/live-quiz` (`GET`, `POST`), `/api/live-quiz/[id]` (`GET`), `/api/live-quiz/[id]/control` (`POST`), `/api/live-quiz/[id]/stream` (`GET` SSE), `/api/live-quiz/join` (`POST`), `/api/live-quiz/[id]/answer` (`POST`), `/api/live-quiz/[id]/export-grade` (`POST`).
+- `/api/classes/[id]/behavior/presets` (`GET`, `POST`, `DELETE`), `/api/classes/[id]/behavior/points` (`GET`, `POST`, `DELETE`).
+- Bổ sung nhãn & lỗi API vào `messages/vi.ts`, `messages/en.ts`, `src/lib/i18n/api-errors.ts`.
+
+### E. Giao diện UI (VI/EN, Dark mode, Mobile 375px)
+- `/teacher/live-quiz/[id]`: **Màn hình trình chiếu cho giáo viên** (font lớn đọc từ cuối lớp, mã PIN + QR code lớn ở Lobby, đồng hồ đếm ngược, đếm số HS đã trả lời live, biểu đồ cột phân bố phương án sau mỗi câu, bảng xếp hạng Top 5 và nút chuyển điểm sang Sổ điểm).
+- `/live` & `/live/[pin]`: **Màn tham gia của học sinh** tối ưu cảm ứng 375px (4 nút đáp án lớn ≥ 56px, phản hồi Đúng/Sai, streak và thứ hạng tức thì).
+- Nút **"Mở Live Quiz"** trên thẻ Worksheet & nút **"Hỏi nhanh (Exit Ticket)"** trên `ClassDetailView.tsx`.
+- Khối/Tab **"Sao thưởng & Điểm cộng"** trong `ClassDetailView.tsx` và tích hợp thao tác cộng/trừ nhanh ngay trong màn điểm danh buổi học `ClassSession`.
+
+### F. Seed & Kiểm thử
+- `prisma/seed.ts`: thêm 4 `ClassBehaviorPreset`, 6 `StudentBehaviorPoint` mẫu cho lớp 12A1 và 1 `LiveQuizSession` đã hoàn thành mẫu.
+- Tests: unit (`computeLiveQuizPoints`, `sanitizeLiveQuestionForPlayer`, `generateLiveQuizPin`), integration (tuyệt đối không lộ `answerKey` khi `QUESTION_OPEN`, chặn người ngoài lớp join phiên gắn `classId`, chặn nộp trùng câu, IDOR điểm thưởng), E2E (GV tạo Live Quiz → HS tham gia trên 375px → trả lời → hiện biểu đồ cột & BXH; cộng sao thưởng và kiểm tra ở Cổng Phụ huynh).
+
+---
+
+## Phase 28 — Quét & Chấm Phiếu Tô Trắc Nghiệm Giấy bằng Camera (OMR)
+
+### A. Database & Migration (`phase28_omr_paper_scanner` — tương thích ngược 100%)
+- **Enum mới:** `OmrSheetTemplate { MC_20, MC_40, MC_50, THPT_2025 }`.
+- **Bảng mới:**
+  - `OmrExamSheet { id, ownerId, classId, assignmentId?, title String, template OmrSheetTemplate, answerKeyByVariant Json, pointsConfig Json, offlineColumnId?, createdAt, updatedAt }` (`@@index([classId, createdAt])`).
+  - `OmrScanResult { id, sheetId, studentId?, detectedSbd String?, variantCode String?, scanImageKey String, rawBubbles Json, resolvedAnswers Json, score Float, maxScore Float, confidence Float, needsReview Boolean @default(false), confirmedById?, confirmedAt DateTime?, createdAt }` (`@@index([sheetId, createdAt])`, `@@index([studentId])`).
+
+### B. Pure Libs & Thuật toán (`src/lib/omr/*` — 100% client-side Canvas + pure TS, không cần GPU server)
+1. **`src/lib/omr/templates.ts`:** định nghĩa toạ độ chuẩn hoá `(0..1)` bên trong khung 4 ô vuông định vị góc (fiducial square markers) cho 4 mẫu phiếu (`MC_20`, `MC_40`, `MC_50`, và `THPT_2025` gồm 12 câu TN 4 chọn + 4 câu Đúng/Sai 4 ý + 6 câu trả lời ngắn tô số), kèm khu vực ô tô SBD (6 chữ số) và Mã đề (3 chữ số khớp `ExamVariant.code` Phase 22).
+2. **`src/lib/omr/pdf-sheet-generator.ts`:** dùng `pdf-lib` + `@pdf-lib/fontkit` + `public/fonts/NotoSans-*.ttf` xuất file PDF phiếu tô A4 sắc nét có 4 fiducial markers góc, vùng SBD/Mã đề và tuỳ chọn in sẵn họ tên + SBD từng học sinh trong lớp.
+3. **`src/lib/omr/perspective-warp.ts`:** nhận dữ liệu ảnh chuẩn `{ width, height, data: Uint8ClampedArray }` (chạy thuần được cả trên Node/Vitest lẫn Browser Canvas), chuyển grayscale, adaptive threshold tìm 4 fiducial markers ở 4 góc ảnh, giải ma trận homography 3×3 (`solveHomography8pt`) và nắn phẳng ảnh nghiêng về kích thước chuẩn `1000×1414`.
+4. **`src/lib/omr/bubble-reader.ts`:** nhận ảnh `{ width, height, data: Uint8ClampedArray }`, tính tỉ lệ pixel tối trung bình bên trong từng ô tròn theo mẫu `templates.ts`; ngưỡng thích nghi cục bộ theo từng hàng (`fillRatio >= 0.42` và vượt ô tối thứ 2 ≥ `0.15` → chắc chắn; tô mờ `0.28..0.42` hoặc tô ≥ 2 ô gần nhau → gắn cờ `needsReview = true`).
+5. **`src/lib/omr/grader.ts`:** đối chiếu `resolvedAnswers` với `answerKeyByVariant[variantCode]` (tái sử dụng chấm luỹ tiến chuẩn THPT 2025 cho phần Đúng/Sai 4 ý), trả `{ score, maxScore, perQuestion }`.
+
+### C. Services & Kiểm soát quyền
+- **`omrService.ts` (mới):**
+  - `createOmrExamSheet`: tạo bài chấm OMR từ `Worksheet`/`Assignment` có sẵn (tự đọc đáp án theo từng `ExamVariant` Phase 22 nếu có) hoặc nhập bảng đáp án thủ công.
+  - `generateOmrPdf(sheetId, actorId, { prefillStudents?: boolean })`: xuất PDF phiếu tô cho GV (`requireTeacherOfClass`, `ASSISTANT` trở lên).
+  - `saveOmrScanResult(sheetId, actorId, { scanImageBuffer, mimeType, detectedSbd, variantCode, rawBubbles, resolvedAnswers })`: kiểm tra magic bytes JPG/PNG ≤ 8MB, lưu ảnh gốc tại `omr/${sheetId}/${uuid}.jpg` (dùng `DriveFileKind.SUBMISSION_FILE` hoặc bổ sung `OMR_SCAN`), tự ghép `studentId` theo SBD/danh sách lớp, **tính điểm lại trên server** bằng `omr/grader.ts` (không tin điểm gửi từ client).
+  - `confirmAndSyncOmrToGradebook(sheetId, actorId)`: tạo hoặc cập nhật `OfflineGradeColumn` + `OfflineGradeEntry` (Phase 21) cho toàn bộ phiếu đã xác nhận và gửi thông báo điểm kèm ảnh phiếu chấm cho phụ huynh.
+- Cập nhật `authorizeFileDownload` cho prefix `omr/${sheetId}/*` (GV lớp, Admin, học sinh sở hữu phiếu, và phụ huynh đã `verifiedAt != null` của học sinh đó).
+
+### D. API Routes & Validators
+- `/api/omr/sheets` (`GET`, `POST`), `/api/omr/sheets/[id]` (`GET`, `PATCH`, `DELETE`), `/api/omr/sheets/[id]/pdf` (`GET`), `/api/omr/sheets/[id]/scans` (`GET`, `POST`), `/api/omr/scans/[scanId]` (`PATCH` sửa câu tô mờ / đổi HS, `DELETE`), `/api/omr/sheets/[id]/sync-gradebook` (`POST`).
+
+### E. Giao diện UI (VI/EN, Dark mode, ưu tiên Mobile 375px camera sau)
+- `/teacher/classes/[id]/omr` & `/teacher/omr/[sheetId]/scan`:
+  - Trình quét mở camera sau (`facingMode: "environment"`) có khung căn 4 góc tự động bắt phiếu + nút chọn ảnh từ thư viện (hữu ích trên máy tính và E2E test).
+  - Màn duyệt kết quả vẽ vòng tròn xanh (đúng) / đỏ (sai) / vàng (tô mờ cần duyệt) đè lên ảnh phiếu đã nắn phẳng; chạm từng câu để chỉnh tay trong 1 chạm.
+  - Bảng tổng hợp các phiếu đã quét, tỉ lệ đúng từng câu và nút **"Đẩy điểm vào Sổ điểm lớp"**.
+- Cổng Học sinh & Phụ huynh: cho xem lại ảnh phiếu tô giấy đã khoanh xanh/đỏ ngay tại mục điểm kiểm tra giấy.
+
+### F. Seed & Kiểm thử
+- `prisma/seed.ts`: thêm 1 `OmrExamSheet` mẫu `MC_20` cho lớp 12A1 + 2 `OmrScanResult` mẫu (ảnh PNG sinh thuần qua `zlib.deflateSync`).
+- Tests: unit (`solveHomography8pt`, `bubble-reader` trên ảnh synthetic tô rõ/tô mờ/tô 2 ô, `grader` cả `THPT_2025`, `pdf-sheet-generator` trả `%PDF`), integration (server chấm lại chống sửa điểm client, IDOR ảnh `omr/*`, đồng bộ sang `OfflineGradeColumn`), E2E (tạo bài OMR → tải ảnh phiếu synthetic → sửa 1 câu cờ vàng → đẩy sang Sổ điểm & kiểm tra 375px).
+
+---
+
+## Phase 29 — AI Chấm Bài Nâng Cao, OCR Ảnh Đề Thi & Chống Đạo Văn
+
+### A. Database & Migration (`phase29_ai_ocr_grading_plagiarism` — tương thích ngược 100%)
+- **Bảng mới:**
+  - `AiGradingSuggestion { id, submissionId, fieldId, suggestedScore Float, suggestedRubricScores Json?, suggestedComment String, model String, appliedAt DateTime?, createdById String, createdAt }` (`@@unique([submissionId, fieldId])`).
+  - `SimilarityReport { id, assignmentId, fieldId, submissionAId String, submissionBId String, similarity Float, matchedSpans Json, status String @default("OPEN"), reviewedById?, reviewedAt DateTime?, createdAt }` (`@@unique([assignmentId, fieldId, submissionAId, submissionBId])`, `@@index([assignmentId, similarity])`).
+
+### B. Pure Libs & Thuật toán
+1. **`src/lib/plagiarism/winnowing.ts` (100% nội bộ, không gọi API ngoài):**
+   - `normalizeEssayText(text)`: chuẩn hoá chữ thường tiếng Việt/Anh, loại dấu câu thừa, giữ từ có dấu và map ngược chỉ số ký tự gốc.
+   - `normalizeCodeTokens(code, language)`: loại comment, chuẩn hoá chuỗi/tên biến/khoảng trắng cho JS/Python/C++/Pascal để phát hiện chép code đổi tên biến.
+   - Thuật toán **Winnowing** (k-gram `k = 5` từ cho `ESSAY`, `k = 7` token cho `CODE`; cửa sổ `w = 4`) chọn fingerprints, tính hệ số Jaccard & Containment và xuất `matchedSpans: Array<{ startA, endA, startB, endB }>` để tô màu đối chiếu song song.
+2. **`src/lib/ai/ocr-prompt.ts`:**
+   - Xây dựng prompt Gemini Vision nhận 1–5 ảnh chụp tờ đề giấy / trang PDF scan, yêu cầu trả JSON thuần (`responseMimeType: "application/json"`) khớp Zod schema của `Field` (`MULTIPLE_CHOICE`, `TRUE_FALSE_GROUP`, `TEXT`, `ESSAY`) kèm chuẩn hoá công thức Toán/Lý/Hoá thành `$...$` / `$$...$$`.
+3. **`src/lib/ai/rubric-grade-prompt.ts`:**
+   - Đóng gói ngữ cảnh chấm bài **đã ẩn danh 100% PII** (chỉ gửi đề câu hỏi, đáp án mẫu, `rubric`, và văn bản/ảnh bài làm — **tuyệt đối không gửi tên, email, mã HS, tên lớp**).
+   - Parse kết quả `{ rubricScores, score, comment }` và kẹp điểm qua `computeRubricTotal` (Phase 16).
+
+### C. Services & Kiểm soát quyền
+- **`aiOcrService.ts` (mới):** `extractQuestionsFromImages(teacherId, files[])` — kiểm tra `GEMINI_API_KEY`, validate magic bytes JPG/PNG/WebP ≤ 6MB/ảnh (tối đa 5 ảnh), trừ hạn mức ngày trên `AiUsageLog` (Phase 25, `AI_DAILY_LIMIT_PER_TEACHER`), gọi Gemini Vision timeout 45s, trả câu hỏi nháp để GV sửa trước khi lưu.
+- **`aiGradingService.ts` (mới):** `suggestManualGrade(submissionId, fieldId, teacherId)` — hỗ trợ `ESSAY`, `PHOTO_UPLOAD`, `CODE`; kiểm tra quyền GV lớp (`ASSISTANT` trở lên) và hạn mức `AiUsageLog`; lưu vào `AiGradingSuggestion` (**không tự ghi đè `Answer.score` hay `Answer.teacherNote`** — GV bấm "Áp dụng" mới gọi `saveSingleFieldGrade` và ghi `appliedAt`).
+- **`similarityService.ts` (mới):** `runAssignmentSimilarityCheck(assignmentId, actorId, { fieldId?, minThreshold = 0.35 })` — so sánh chéo mọi cặp bài `SUBMITTED`/`GRADED` của 2 học sinh khác nhau (`studentA !== studentB`), bỏ qua bài quá ngắn (< 25 từ hoặc < 40 ký tự code), upsert `SimilarityReport`, cho GV cập nhật trạng thái `DISMISSED` hoặc `CONFIRMED`.
+
+### D. API Routes & Validators
+- `POST /api/ai/ocr-worksheet` (`requireRole(["TEACHER", "ADMIN"])`)
+- `POST /api/submissions/[id]/ai-suggest-grade` (`requireSubmissionAccess` + `isTeacher`)
+- `POST /api/assignments/[id]/similarity/scan`, `GET /api/assignments/[id]/similarity`, `PATCH /api/assignments/[id]/similarity/[reportId]` (`requireTeacherOfAssignment`)
+
+### E. Giao diện UI (VI/EN, Dark mode, Mobile 375px)
+- `/teacher/worksheets` & `WorksheetEditor.tsx`: nút **"Quét ảnh đề giấy (AI OCR)"** (tải 1–5 ảnh chụp đề hoặc chuyển trang PDF scan → xem trước câu hỏi + công thức KaTeX đã trích xuất → chỉnh sửa → bấm Thêm vào đề).
+- `grading/page.tsx` & `GradeByQuestionPanel.tsx`:
+  - Nút **"AI gợi ý chấm"** cạnh Rubric/nhận xét → hiện hộp gợi ý điểm từng tiêu chí + nhận xét nháp kèm nút **"Áp dụng vào form"** / **"Bỏ qua"** và nhãn rõ *Gợi ý từ AI — giáo viên cần kiểm duyệt*.
+  - Tab **"Kiểm tra tương đồng"** trên trang chấm bài: nút Quét, danh sách cặp bài giống cao xếp giảm dần, bấm mở Dialog so sánh 2 cột (tô màu vàng các đoạn trùng khớp), nút xác nhận/bỏ qua.
+
+### F. Seed & Kiểm thử
+- `prisma/seed.ts`: thêm 1 `SimilarityReport` mẫu giữa 2 bài tự luận demo để kiểm tra màn đối chiếu.
+- Tests: unit (`winnowing.ts` cho văn bản tiếng Việt, sao chép 1 phần, đổi tên biến code; `ocr-prompt` & `rubric-grade-prompt` kiểm tra zero-PII), integration (mock `fetch` Gemini Vision OCR & suggest grade + quota `AiUsageLog`, xác nhận `ai-suggest-grade` không tự sửa `Answer.score`, IDOR similarity report), E2E (OCR mock → thêm câu vào đề; AI gợi ý chấm → áp dụng điểm; quét tương đồng & xem đối chiếu 2 cột).
+
+---
+
+## Phase 30 — Bản Đồ Năng Lực (Mastery), Cảnh Báo Sớm & Phân Tích Khảo Thí
+
+### A. Database & Migration (`phase30_mastery_analytics_psychometrics` — tương thích ngược 100%)
+- `Class`: thêm `atRiskScoreThreshold Float @default(5.0)` và `atRiskMissingCount Int @default(2)`.
+- **Bảng mới:**
+  - `RemedialPlanLog { id, classId, createdById, topicTags Json, targetStudentIds Json, assignmentId String, createdAt }` (`@@index([classId, createdAt])`).
+- Không xoá/đổi cột cũ; số liệu Mastery và Item Analysis tổng hợp trực tiếp từ `Answer`, `Submission`, `Field.topicTag`/`skillTag`, `AttendanceRecord` (tối ưu truy vấn + cache ngắn 60s).
+
+### B. Pure Libs & Thuật toán (`src/lib/analytics/*`)
+1. **`src/lib/analytics/mastery.ts`:**
+   - `computeMasteryMatrix(students, taggedAnswers)`: nhóm theo `(studentId, topicTag || skillTag)`, tính `accuracy = earnedPoints / maxPoints`, `attemptsCount`, gắn mức `MASTERED` (`>= 0.80`), `DEVELOPING` (`0.50..0.79`), `NEEDS_WORK` (`< 0.50`), `NO_DATA` (0 câu).
+2. **`src/lib/analytics/at-risk.ts`:**
+   - `detectAtRiskStudents(studentStats, config)` kiểm tra 3 tín hiệu rủi ro:
+     1. Điểm TB 3 bài gần nhất < `atRiskScoreThreshold` hoặc tụt liên tục ≥ 1.5 điểm.
+     2. Chưa nộp ≥ `atRiskMissingCount` bài quá hạn trong 30 ngày.
+     3. Vắng không phép (`ABSENT`) ≥ 2 buổi trong 30 ngày (khi có dữ liệu Phase 23).
+   - Xếp mức `HIGH` (≥ 2 tín hiệu) / `MEDIUM` (1 tín hiệu) kèm lý do VI/EN rõ ràng.
+3. **`src/lib/analytics/item-analysis.ts`:**
+   - **Độ khó (`pValue`):** `mean(score_i / maxPoints_i)` trên toàn bộ bài nộp (`> 0.85` quá dễ, `< 0.25` quá khó).
+   - **Độ phân biệt (`discriminationIndex`):** tách 27% nhóm điểm cao nhất (`U`) và 27% thấp nhất (`L`) (khi có ≥ 6 bài nộp), tính `D = p_U - p_L` (`-1..+1`) kết hợp hệ số **Point-Biserial (`r_pb`)** giữa điểm câu và tổng điểm phần còn lại.
+   - **Phân tích phương án nhiễu (Distractor Analysis):** tỉ lệ chọn A/B/C/D ở nhóm cao vs nhóm thấp; gắn cờ **`CHECK_KEY`** khi `D < 0` (nhóm điểm thấp làm đúng nhiều hơn nhóm điểm cao — dấu hiệu sai đáp án cài đặt).
+
+### C. Services & Kiểm soát quyền
+- **`masteryAnalyticsService.ts` (mới):**
+  - `getClassMasteryMatrix(classId, { from?, to?, subject? })` (`requireTeacherOfClass`, `ASSISTANT` trở lên).
+  - `getStudentMasteryProfile(studentId, viewer)` (HS tự xem bản đồ của mình, PH chỉ xem của con đã liên kết, GV xem HS trong lớp mình — chống IDOR).
+  - `getClassAtRiskStudents(classId)` & `getTeacherAtRiskSummary(teacherId)` (hiển thị tổng hợp trên `/teacher`).
+  - `createRemedialAssignmentFromWeakTopics(classId, actorId, { topicTags[], studentIds[], questionCount, dueAt? })`: tự bốc câu từ `QuestionBankItem` (Phase 22) theo các `topicTags` yếu → tạo Worksheet `[Ôn bù] ...` → tạo `Assignment` gắn `AssignmentTarget` (Phase 16) cho đúng `studentIds` → ghi `RemedialPlanLog`.
+- **`reportService.ts`:** bổ sung `getAssignmentItemAnalysis(assignmentId)` gọi `item-analysis.ts`, trả `pValue`, `discriminationIndex`, `pointBiserial`, phân bố phương án nhiễu và cờ `GOOD` / `TOO_EASY` / `TOO_HARD` / `CHECK_KEY`.
+
+### D. API Routes & Validators
+- `GET /api/classes/[id]/mastery` & `POST /api/classes/[id]/remedial` (`requireTeacherOfClass`)
+- `GET /api/classes/[id]/at-risk` & `GET /api/teacher/at-risk`
+- `GET /api/student/mastery` & `GET /api/parent/children/[studentId]/mastery`
+- `GET /api/assignments/[id]/item-analysis` (`requireTeacherOfAssignment`)
+
+### E. Giao diện UI (VI/EN, Dark mode, Mobile 375px)
+- Tab **"Thống kê"** trong `ClassDetailView.tsx`: thêm sub-tab **"Bản đồ năng lực"** (heatmap Xanh/Vàng/Đỏ cuộn ngang có cột tên HS cố định trái, chọn chủ đề Đỏ → bấm **"Tạo bài ôn bù cho nhóm này"**) và card **"Học sinh cần quan tâm (At-Risk)"** (xuất hiện cả ở đầu dashboard `/teacher`).
+- Trang `/teacher/assignments/[id]/grading`: thêm bảng **Phân tích câu hỏi (Item Analysis)** hiển thị Độ khó, Độ phân biệt, cảnh báo đỏ *"Kiểm tra lại đáp án"* khi `D < 0` và biểu đồ phương án nhiễu.
+- Dashboard Học sinh (`/student`) & Cổng Phụ huynh (`/parent`): thêm card **"Điểm mạnh & Chủ đề cần ôn"**.
+
+### F. Seed & Kiểm thử
+- `prisma/seed.ts`: gán `topicTag` đồng bộ cho các câu hỏi đã chấm của lớp 12A1 để heatmap có đủ 3 mức Xanh/Vàng/Đỏ và ít nhất 1 HS ở trạng thái `At-Risk`.
+- Tests: unit (`mastery.ts`, `at-risk.ts`, `item-analysis.ts` gồm case `D < 0` bật `CHECK_KEY`), integration (IDOR mastery HS/PH/GV, tạo bài ôn bù đúng `AssignmentTarget` + `RemedialPlanLog`), E2E (xem heatmap → tạo bài ôn bù 1 chạm → xác minh chỉ HS nhóm yếu thấy bài; xem bảng Item Analysis).
+
+---
+
+## Phase 31 — Công Cụ Làm Bài Nội Bộ, Video Tương Tác, Bài Tập Nhóm & Q&A Câu Hỏi
+
+### A. Database & Migration (`phase31_exam_tools_video_groups_qa` — tương thích ngược 100%)
+- `Assignment`: thêm `allowedTools Json?` (`{ calculator?: boolean, scratchpad?: boolean, periodicTable?: boolean, formulaSheet?: boolean, highlighter?: boolean, tts?: boolean }`), `isGroupAssignment Boolean @default(false)`, `peerReviewEnabled Boolean @default(false)`, `peerReviewsPerStudent Int @default(1)`.
+- **Video tương tác (kiểu Edpuzzle):**
+  - `LessonVideoCheckpoint { id, lessonItemId, timestampSec Int, type FieldType, prompt String, options Json?, answerKey Json?, order Int @default(0), createdAt }` (`@@index([lessonItemId, timestampSec])`).
+  - `LessonVideoProgress { id, lessonItemId, studentId, maxWatchedSec Int @default(0), durationSec Int @default(0), checkpointAnswers Json?, completed Boolean @default(false), updatedAt }` (`@@unique([lessonItemId, studentId])`).
+- **Bài tập nhóm:**
+  - `ClassGroup { id, classId, name String, createdAt }` (`@@index([classId])`).
+  - `ClassGroupMember { groupId, studentId, isLeader Boolean @default(false) }` (`@@id([groupId, studentId])`, `@@index([studentId])`).
+  - `Submission`: thêm `groupId String?`, `memberScoreOverrides Json?` (`Record<studentId, number>` nếu GV điều chỉnh điểm riêng từng thành viên).
+- **Chấm chéo ẩn danh (Peer Review):**
+  - `PeerReviewAssignment { id, assignmentId, submissionId, reviewerId, rubricScores Json?, comment String?, submittedAt DateTime?, createdAt }` (`@@unique([submissionId, reviewerId])`, `@@index([assignmentId, reviewerId])`).
+- **Hỏi đáp gắn từng câu (Question Q&A):**
+  - `QuestionDoubt { id, assignmentId, fieldId, studentId, question String, teacherReply String?, repliedById?, repliedAt DateTime?, isPublicToClass Boolean @default(true), createdAt }` (`@@index([assignmentId, fieldId])`).
+
+### B. Pure Libs & Thuật toán
+1. **`src/lib/exam-tools/calculator.ts`:** bộ tính biểu thức khoa học viết thuần bằng thuật toán Shunting-Yard (`+ - * / ^ ( )`, `sin/cos/tan/log/ln/sqrt/pi/e`, độ/radian) — **tuyệt đối không dùng `eval` hay `new Function`**.
+2. **`src/lib/exam-tools/periodic-table.ts`:** dữ liệu tĩnh 118 nguyên tố (ký hiệu, số hiệu, nguyên tử khối, nhóm, chu kỳ, tên VI/EN) dùng tra cứu nhanh không cần mạng.
+3. **`src/lib/peer-review/matcher.ts`:** hàm thuần `assignPeerReviewers(submissions, reviewsPerStudent)` ghép hoán vị không điểm cố định (derangement) bảo đảm không HS nào tự chấm bài mình và mỗi bài nhận đều số lượt góp ý.
+
+### C. Services & Kiểm soát quyền
+- **`videoLessonService.ts` (mới):** CRUD `LessonVideoCheckpoint` (chỉ chủ sở hữu bài giảng / Admin); `getLessonVideoForStudent` (**không trả `answerKey`** của checkpoint chưa làm); `submitCheckpointAnswer` (chấm thuần & lưu vào `LessonVideoProgress`); `reportVideoHeartbeat` (cập nhật `maxWatchedSec` phục vụ chặn tua nhanh lần xem đầu).
+- **`classGroupService.ts` (mới):** CRUD nhóm & chia nhóm ngẫu nhiên theo sĩ số; khi `assignment.isGroupAssignment === true`, `startOrResumeSubmission` dùng chung 1 `Submission` theo `groupId` (các thành viên cùng làm/xem, 1 đại diện nộp bài); đồng thời cập nhật kiểm tra quyền ở `requireSubmissionAccess`, `autosaveSubmissionAnswers`, `submitByStudent`, `getStudentAssignmentPayload` và `authorizeFileDownload` cho phép mọi thành viên `ClassGroupMember` thuộc `submission.groupId` truy cập (chặn người ngoài nhóm); `reportService.ts` và `gradebookService.ts` phân bổ điểm tới từng thành viên (ưu tiên `memberScoreOverrides[studentId]` nếu có).
+- **`peerReviewService.ts` (mới):** `generatePeerReviewPairs(assignmentId, actorId)` (chạy sau khi đóng nộp hoặc khi GV kích hoạt); `getMyPeerReviews(assignmentId, studentId)` trả bài làm **ẩn danh tuyệt đối** (xoá sạch `student.name`, `student.email`, `studentId` ở server); `submitPeerReview(peerReviewId, reviewerId, { rubricScores, comment })`.
+- **`questionDoubtService.ts` (mới):** HS chỉ được tạo `QuestionDoubt` cho bài đã nộp và `canRevealResult === true` (không hỏi trong lúc đang thi); GV trả lời 1 lần và chọn `isPublicToClass` để cả lớp cùng đọc giải thích chung ngay dưới câu hỏi đó.
+
+### D. API Routes & Validators
+- `/api/lessons/items/[itemId]/checkpoints` (`GET`, `POST`, `DELETE`) & `/api/lessons/items/[itemId]/video-progress` (`GET`, `POST`).
+- `/api/classes/[id]/groups` (`GET`, `POST`, `PATCH`, `DELETE`, `POST .../auto-assign`).
+- `/api/assignments/[id]/peer-reviews/assign` (`POST`), `/api/assignments/[id]/peer-reviews` (`GET`), `/api/peer-reviews/[id]` (`PUT`).
+- `/api/assignments/[id]/doubts` (`GET`, `POST`), `/api/doubts/[id]/reply` (`PATCH`).
+- Cập nhật `createAssignmentSchema`/`updateAssignmentSchema` thêm `allowedTools`, `isGroupAssignment`, `peerReviewEnabled`, `peerReviewsPerStudent`.
+
+### E. Giao diện UI (VI/EN, Dark mode, Mobile 375px)
+- **`src/components/worksheet/ExamToolsDrawer.tsx`** tích hợp ngay trong `/student/assignments/[id]/do`: chỉ hiển thị công cụ GV bật (`Máy tính khoa học`, `Bảng nháp vẽ tay`, `Bảng tuần hoàn`, `Bảng công thức`, `Bút dạ quang highlight trên PassageCard`, nút `Đọc đề TTS` & chỉnh cỡ chữ) mở dạng drawer nổi ngay trong trang để HS không phải chuyển tab gây dính chống gian lận.
+- **`InteractiveVideoPlayer.tsx`:** tự dừng video tại `timestampSec`, mở câu hỏi checkpoint, chặn kéo tua vượt `maxWatchedSec`, hiển thị `% đã xem` cho GV.
+- Quản lý nhóm trong `ClassDetailView.tsx` + màn **Chấm chéo ẩn danh** trên trang kết quả bài tập của HS + hàng đợi **Hỏi đáp câu hỏi (`DoubtQueue`)** trên trang chấm bài của GV và khung hỏi đáp dưới từng câu sai của HS.
+
+### F. Seed & Kiểm thử
+- `prisma/seed.ts`: bật `allowedTools` (máy tính + bảng nháp + highlighter) cho 1 bài mẫu; tạo 2 `ClassGroup` trong lớp 12A1; thêm 2 `LessonVideoCheckpoint` và 1 `QuestionDoubt` đã có phản hồi của GV.
+- Tests: unit (`calculator.ts` biểu thức khoa học & chống input độc hại, `matcher.ts` derangement), integration (peer review ẩn danh tuyệt đối không lộ tên/email, bài tập nhóm đồng bộ điểm + override, checkpoint không lộ `answerKey`, Q&A chặn gửi trước khi nộp bài), E2E (dùng máy tính & highlight ngữ liệu trong `/do`, trả lời checkpoint video, gửi & trả lời QuestionDoubt).
+
+---
+
+## Phase 32 — Vận Hành Phòng Thi Trực Tiếp, Học Kỳ, Đơn Xin Nghỉ, Đồng Bộ Lịch & Chuẩn Quốc Tế
+
+### A. Database & Migration (`phase32_exam_ops_terms_interop` — tương thích ngược 100%)
+- **Enum mới:** `LeaveRequestStatus { PENDING, APPROVED, REJECTED }`.
+- **Bảng mới:**
+  - `AcademicTerm { id, name String, startsAt DateTime, endsAt DateTime, isLocked Boolean @default(false), isActive Boolean @default(true), createdAt, updatedAt }` (`@@index([isActive, startsAt])`).
+  - `LeaveRequest { id, classId, sessionId, studentId, parentId, reason String, status LeaveRequestStatus @default(PENDING), reviewedById?, reviewNote String?, reviewedAt DateTime?, createdAt }` (`@@unique([sessionId, studentId])`, `@@index([classId, status])`).
+  - `CalendarFeedToken { id, userId String @unique, tokenHash String @unique, createdAt, rotatedAt DateTime @default(now()) }`.
+  - `SystemPreCheckLog { id, userId, assignmentId?, browserInfo String, pingMs Int?, cameraOk Boolean, micOk Boolean, batteryPct Int?, passed Boolean, checkedAt DateTime @default(now()) }` (`@@index([assignmentId, userId])`).
+  - `SystemBanner { id, message String, level String @default("INFO"), maintenanceMode Boolean @default(false), startsAt DateTime?, endsAt DateTime?, active Boolean @default(false), updatedById?, updatedAt }`.
+- `Class`: thêm `termId String?`, `gradebookLockedAt DateTime?`, `gradebookLockedById String?`.
+
+### B. Pure Libs & Thuật toán
+1. **`src/lib/calendar/ics-generator.ts`:** sinh chuẩn **RFC 5545 iCalendar (`.ics`)** (escape ký tự đặc biệt, gập dòng 75 octet, `DTSTART`/`DTEND`/`UID`/`SUMMARY` theo UTC) từ danh sách `ClassSession` và hạn nộp `Assignment`.
+2. **`src/lib/import/standard-exam-parsers.ts`:**
+   - `parseAikenText(text)`: chuẩn Aiken (`QUESTION`, `A. ...`, `ANSWER: B`) → mảng `Field` `MULTIPLE_CHOICE`.
+   - `parseMoodleXml(xml)`: parse bằng XML parser an toàn tắt hoàn toàn entity expansion (`processEntities: false`, **tuyệt đối không bật XXE / Billion Laughs**) hỗ trợ `multichoice`, `truefalse`, `shortanswer`, `essay` → mảng `Field` / `QuestionBankItem`.
+   - `parseQuizizzCsv(csv)` & `parseAnkiCsv(csv)` / `exportAnkiCsv(cards)`: nhập trắc nghiệm từ CSV và nhập/xuất Flashcard định dạng Anki TSV/CSV.
+
+### C. Services & Kiểm soát quyền
+- **`liveRescueService.ts` (mới):** sử dụng `proctor-bus.ts` (Phase 26) cho 3 tác vụ cứu hộ trực tiếp từ màn Giám sát Live (mọi hành động ghi `AuditLog`):
+  1. `sendDirectExamMessage(assignmentId, studentId, message, actorId)`: phát event `TEACHER_MESSAGE` qua SSE hiện popup tức thì trên `/do` của đúng HS đó.
+  2. `grantEmergencyExtraTime(assignmentId, studentId, extraMin, actorId)`: cộng ngay `extraMin` (`1..60` phút) vào `AssignmentOverride.timeLimitMin` và phát `TIME_EXTENDED` cập nhật đồng hồ trên màn hình HS không cần tải lại trang.
+  3. `unlockForDeviceSwitch(submissionId, actorId)`: gỡ khoá trên `Submission` bằng cách đặt `lockedAt = null`, cấp mới/xoá `attemptToken` (vì enum `SubmissionStatus` giữ `IN_PROGRESS | SUBMITTED | GRADED`, trạng thái khoá dùng `lockedAt` và chống đa thiết bị dùng `attemptToken`), phát SSE `SUBMISSION_UNLOCKED` kèm ghi chú đổi thiết bị.
+- **`preCheckService.ts` (mới):** lưu `SystemPreCheckLog` và tổng hợp danh sách sẵn sàng thiết bị cho GV trước giờ thi.
+- **`leaveRequestService.ts` (mới):** phụ huynh có `ParentLink.verifiedAt != null` gửi đơn xin nghỉ cho `ClassSession` sắp tới của con; khi GV bấm `APPROVE`, trong cùng 1 transaction tự động upsert `AttendanceRecord { status: "EXCUSED", note: reason }` (Phase 23) và gửi thông báo xác nhận cho phụ huynh.
+- **`calendarFeedService.ts` (mới):** sinh/thu hồi token bí mật (lưu `SHA-256` hash trong `CalendarFeedToken`, chỉ trả raw token 1 lần), xuất file `.ics` đúng phạm vi lịch của `TEACHER` / `STUDENT` / `PARENT` (từ chối user bị khoá hoặc nằm trong thùng rác).
+- **`termService.ts` (mới):** CRUD `AcademicTerm` (Admin), gán lớp vào học kỳ, khoá/mở khoá sổ điểm (`gradebookLockedAt` — khi đã khoá, `offlineGradeService` & `saveTeacherManualGrading` từ chối sửa điểm trừ khi Admin mở khoá), xuất gói **Hồ sơ tổng kết cuối kỳ (ZIP gồm Sổ điểm Excel + Phiếu báo điểm PDF từng HS)**.
+- **`standardImportService.ts` (mới):** nhập hàng loạt từ Aiken / Moodle XML / Quizizz CSV vào Worksheet hoặc `QuestionBankItem`; nhập/xuất Anki CSV vào `FlashcardDeck`.
+- **`adminSystemOpsService.ts` (mới):** thu thập chỉ số hệ thống cho Admin (`fs.statfs` dung lượng đĩa, kích thước DB từ `pg_database_size`, dung lượng bảng, thời điểm backup gần nhất) và quản lý `SystemBanner` / chế độ bảo trì (vì `src/middleware.ts` chạy Edge Runtime không gọi Prisma, kiểm tra `maintenanceMode` qua cache 5 giây trong Node.js tại `requireLayoutUser()` và guard API `requireAuth`/`requireRole` trả `503 MAINTENANCE_MODE`, luôn cho qua `ADMIN`, `/login`, `/api/health`, `/api/system/banner`, `/api/auth/*`).
+
+### D. API Routes & Validators
+- `POST /api/assignments/[id]/live/rescue` (`requireTeacherOfAssignment`, actions: `MESSAGE` | `EXTEND_TIME` | `UNLOCK_DEVICE`).
+- `POST /api/precheck` (`requireAuth`) & `GET /api/assignments/[id]/precheck` (`requireTeacherOfAssignment`).
+- `/api/leave-requests` (`GET`, `POST` phụ huynh), `PATCH /api/leave-requests/[id]` (`requireTeacherOfClass`).
+- `GET/POST/DELETE /api/account/calendar-token` (`requireAuth`) & `GET /api/calendar/feed?token=...`.
+- `/api/admin/terms` (`GET`, `POST`, `PATCH`), `POST /api/classes/[id]/gradebook/lock`, `GET /api/classes/[id]/gradebook/archive-zip`.
+- `POST /api/import/standard` (`Aiken` / `MoodleXML` / `QuizizzCSV`) & `POST/GET /api/flashcards/[deckId]/anki-csv`.
+- `GET /api/admin/system-health` & `GET/PUT /api/admin/banner` (`requireRole(["ADMIN"])`), `GET /api/system/banner`.
+
+### E. Giao diện UI (VI/EN, Dark mode, Mobile 375px)
+- Màn Giám sát Live (`/teacher/assignments/[id]/live` & `/teacher/exams/[id]/live`): thêm menu cứu hộ trên từng dòng HS (*Nhắn riêng*, *+5/+10 phút*, *Mở khoá đổi máy*); trang `/do` lắng nghe SSE hiển thị thông báo GV & cộng đồng hồ tức thì.
+- Trang `/student/precheck` (và nút truy cập nhanh ngay ở `/rules`): tự đo ping mạng, kiểm tra camera, micro, trình duyệt, pin và lưu kết quả; GV xem cột trạng thái thiết bị trước giờ thi.
+- Cổng Phụ huynh (`/parent`): nút **"Gửi đơn xin nghỉ"** cho buổi học sắp tới; trong `ClassDetailView.tsx` (tab Lịch & Điểm danh): danh sách đơn xin nghỉ duyệt 1 chạm.
+- Trang `/account` & `/teacher/schedule` / `/student/schedule`: hộp **"Đồng bộ lịch Google / Apple Calendar (.ics)"** kèm nút sao chép URL và tạo lại token.
+- `/admin/terms` & `/admin/system`: quản lý Học kỳ, xem bảng giám sát tài nguyên/DB/dung lượng đĩa, bật/tắt banner thông báo & chế độ bảo trì; nút **Khoá sổ điểm** & **Tải gói tổng kết ZIP** trong tab Sổ điểm; thêm tab nhập **Aiken / Moodle XML / Quizizz CSV** và **Anki CSV** trong kho đề & flashcard.
+
+### F. Seed & Kiểm thử
+- `prisma/seed.ts`: tạo 1 `AcademicTerm` mặc định (*Năm học 2026–2027 — Học kỳ 1*) gắn các lớp demo và 1 `LeaveRequest` mẫu ở trạng thái `PENDING`.
+- Tests: unit (`ics-generator` chuẩn RFC 5545, `parseAikenText`, `parseMoodleXml` chống XXE, `parseQuizizzCsv`, `parseAnkiCsv`), integration (duyệt đơn nghỉ tự ghi `AttendanceRecord EXCUSED`, khoá sổ điểm chặn sửa điểm tay/offline, token `.ics` thu hồi trả `401`, cứu hộ cộng giờ cập nhật `AssignmentOverride` + `AuditLog`), E2E (GV gửi tin nhắn & cộng giờ từ màn Live → HS thấy ngay trên `/do`; PH gửi đơn nghỉ → GV duyệt → kiểm tra điểm danh `EXCUSED`; import đề Aiken; Admin bật banner hệ thống).
+
+---
+
 ## Ngoài phạm vi (chưa làm, chỉ ghi lại)
 Quản lý học phí / thanh toán online (VNPay / VietQR / MoMo), bán khoá học / website cá nhân thương mại cho giáo viên, đa trường / đa cơ sở (Multi-tenant), app mobile native (iOS / Android) riêng ngoài PWA, tích hợp Zoom SDK bản quyền, biên tập video bằng AI, "gia sư AI" chat trực tiếp cho học sinh, cấp chứng chỉ, tích hợp Google Classroom / Microsoft Teams, import từ Liveworksheets.
 
@@ -718,3 +992,15 @@ _(Agent ghi vào đây sau mỗi Phase: đã làm gì, còn thiếu gì, quyết
   - **Trải nghiệm làm bài & Đồng bộ:** Hàng đợi bản nháp ngoại tuyến `src/lib/offline-answer-queue.ts` (khôi phục an toàn theo `attemptVersion`, tự đồng bộ khi có mạng, xoá khi nộp/reset/stale), lưu bền trạng thái **Gắn cờ xem lại (Flag)** qua `F5`, thay `window.confirm` ở `/teacher/settings` bằng Radix `Dialog`.
   - **Tài liệu & Đổi tên PIVORA:** Cập nhật `README.md` (11 môn học, 11 loại câu, tính năng Phase 13–16, ngưỡng Camera AI chuẩn từ `camera-rules.ts`, URL clone `https://github.com/Bluenip/PIVORA.git`) và `docs/GOOGLE_DRIVE.md`, đổi remote `origin` sang `https://github.com/Bluenip/PIVORA.git`.
 - **Kết quả kiểm tra:** `pnpm db:seed` pass; `pnpm lint` 0 lỗi / 0 cảnh báo; `pnpm typecheck` 0 lỗi; `pnpm test` 21/21 files (144/144 tests) pass; `pnpm test:e2e` 19/19 tests pass; `pnpm build:check` pass.
+
+### Phase 17 — Nâng cấp Worksheet Studio, Import Word Đa Dạng & Chú thích Ảnh Chấm Bài (27/11/2026)
+
+- **Nhánh:** `phase-17` (merged fast-forward vào `main`).
+- **Migration Prisma:** `20261126161706_phase17_studio_annotations_image_ws` (`WorksheetPage.imageKey`, `Field.imageKey`, `Assignment.shuffleOptions`, `Submission.optionOrder`, `Answer.annotations`) — tương thích ngược 100%.
+- **Đã làm:**
+  - **Studio Undo/Redo & Toolbar gọn 2 hàng:** `src/lib/worksheet/editor-history.ts` (giới hạn 50 bước, gộp thao tác 400ms, phím tắt `Ctrl+Z` / `Ctrl+Shift+Z` & nút toolbar); tối ưu thanh công cụ 2 hàng + huy hiệu tải PDF không nhảy bố cục.
+  - **Import Đề Word/Text đa dạng & Thanh công thức KaTeX:** `src/lib/worksheet/word-exam-parser.ts` + `POST /api/worksheets/parse-word-exam` nhận diện Trắc nghiệm A/B/C/D (in đậm/gạch chân/`*`/bảng đáp án), Đúng/Sai 4 ý THPT 2025, điền từ `__đáp án__`, tự luận; nâng cấp hộp thoại Word trên `/teacher/worksheets`; `FormulaToolbar.tsx` chèn nhanh ký hiệu Cơ bản / Giải tích / Hình học / Hoá học.
+  - **Fill on Image, Ảnh minh hoạ câu hỏi & Tự quét ô trống PDF:** `src/lib/image-meta.ts` kiểm tra magic bytes + chuẩn hoá kích thước trang 595pt; `POST /api/worksheets/[id]/images` + `POST/DELETE /api/worksheets/[id]/field-image` + bảo vệ anti-IDOR trong `authorizeFileDownload` và đóng gói qua `.engclass.zip` / clone; `src/lib/worksheet/pdf-blank-detector.ts` quét gợi ý `TEXT`/`CHECKBOX` và lọc trùng IoU > 0.3; cập nhật `prisma/seed.ts` thêm worksheet mẫu Toán Fill-on-Image.
+  - **Trộn phương án, Xuất PDF in ấn Tiếng Việt & Chú thích chấm ảnh:** `Assignment.shuffleOptions` xáo trộn thứ tự phương án theo từng `Submission.optionOrder` vẫn chấm đúng `option.id`; `src/lib/pdf/export-printable-pdf.ts` + `@pdf-lib/fontkit` + `public/fonts/NotoSans-*.ttf` xuất `PDF (HS)` / `PDF (ĐA)` tại `GET /api/worksheets/[id]/export?format=pdf`; `PhotoAnnotatorModal.tsx` + `PUT /api/submissions/[id]/annotations` cho giáo viên vẽ bút đỏ/tick/hình học trên ảnh bài làm, đồng thời chỉ hiển thị chế độ chỉ đọc cho học sinh khi `revealResult === true`.
+  - **Rà soát PLAN.md tới Phase 32:** Bổ sung 6 chi tiết kỹ thuật không phá vỡ tương thích cho Phase 22, 27, 28, 29, 31, 32 (`Field.topicTag`, `generateLiveQuizPin` toàn bảng, OMR buffer thuần Node, `Answer.teacherNote`, quyền nhóm `ClassGroupMember`, `unlockForDeviceSwitch` dùng `lockedAt` + `attemptToken` và kiểm tra `maintenanceMode` ở Node runtime).
+- **Kết quả kiểm tra:** `pnpm db:seed` pass (idempotent x2); `pnpm lint` 0 lỗi / 0 cảnh báo; `pnpm typecheck` 0 lỗi; `pnpm test` 23/23 files (152/152 tests) pass; `pnpm test:e2e` 21/21 tests pass; `pnpm build:check` pass.

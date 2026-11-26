@@ -44,7 +44,7 @@ import { PdfCanvasPage, usePdfDocument } from "@/components/worksheet/PdfCanvasP
 import { OverlayFieldInput } from "@/components/worksheet/OverlayFieldInput";
 import { DictationDiffView } from "@/components/worksheet/DictationDiffView";
 import { PromptText } from "@/components/worksheet/PromptText";
-import { PhotoLightboxModal } from "@/components/worksheet/PhotoLightboxModal";
+import { PhotoAnnotatorModal } from "@/components/worksheet/PhotoAnnotatorModal";
 import { CommentPresetBar } from "@/components/grading/CommentPresetBar";
 import { OverrideDialog, type StudentOverrideInfo } from "@/components/grading/OverrideDialog";
 import { GradeByQuestionPanel } from "@/components/grading/GradeByQuestionPanel";
@@ -57,6 +57,7 @@ import {
   type DictationGradeDetail,
   type FieldOption,
   type FieldStyle,
+  type PhotoAnnotationMap,
   type RubricCriterion,
   type RubricScoreMap,
   type UploadedAnswerFile,
@@ -146,7 +147,13 @@ interface ReviewSubmissionDetail {
     worksheet: {
       id: string;
       pdfFileKey: string | null;
-      pages: Array<{ id: string; pageIndex: number; widthPt: number; heightPt: number }>;
+      pages: Array<{
+        id: string;
+        pageIndex: number;
+        widthPt: number;
+        heightPt: number;
+        imageKey?: string | null;
+      }>;
       audios?: Array<{ id: string; title: string }>;
       fields: Array<{
         id: string;
@@ -179,6 +186,7 @@ interface ReviewSubmissionDetail {
     teacherNote: string | null;
     gradeDetail?: DictationGradeDetail | null;
     rubricScores?: RubricScoreMap | null;
+    annotations?: PhotoAnnotationMap | null;
   }>;
   proctorEvents: Array<{
     id: string;
@@ -204,6 +212,7 @@ function SubmissionReviewModal({
   onSaved: () => void;
 }) {
   const { m: vi, tr, locale } = useI18n();
+  const modalQueryClient = useQueryClient();
   const { data, isLoading } = useQuery<{ submission: ReviewSubmissionDetail }>({
     queryKey: ["submission-review", submissionId],
     queryFn: () =>
@@ -226,9 +235,12 @@ function SubmissionReviewModal({
   const [teacherComment, setTeacherComment] = useState<string | null>(null);
   const [flagged, setFlagged] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
-  const [lightbox, setLightbox] = useState<{ files: UploadedAnswerFile[]; index: number } | null>(
-    null
-  );
+  const [lightbox, setLightbox] = useState<{
+    fieldId: string;
+    files: UploadedAnswerFile[];
+    index: number;
+    annotations: PhotoAnnotationMap | null;
+  } | null>(null);
 
   const handleSave = async () => {
     if (!sub) return;
@@ -300,6 +312,7 @@ function SubmissionReviewModal({
                   <PdfCanvasPage
                     key={p.pageIndex}
                     pdfDoc={pdfDoc}
+                    imageUrl={p.imageKey ? `/api/files/${p.imageKey}` : null}
                     pageIndex={p.pageIndex}
                     widthPt={p.widthPt}
                     heightPt={p.heightPt}
@@ -504,7 +517,14 @@ function SubmissionReviewModal({
                                           key={uf.key}
                                           type="button"
                                           onClick={() =>
-                                            setLightbox({ files: imgFiles, index: Math.max(0, imgIdx) })
+                                            setLightbox({
+                                              fieldId: f.id,
+                                              files: imgFiles,
+                                              index: Math.max(0, imgIdx),
+                                              annotations:
+                                                (ans.annotations as PhotoAnnotationMap | null) ??
+                                                null,
+                                            })
                                           }
                                           className="group relative h-20 overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
                                           title={tr("Nhấn để phóng to / xoay ảnh", "Click to zoom / rotate")}
@@ -723,12 +743,27 @@ function SubmissionReviewModal({
         )}
       </DialogContent>
 
-      {lightbox && (
-        <PhotoLightboxModal
+      {lightbox && sub && (
+        <PhotoAnnotatorModal
           files={lightbox.files}
           initialIndex={lightbox.index}
           open={true}
           onClose={() => setLightbox(null)}
+          editable
+          annotations={lightbox.annotations}
+          onSave={async (next) => {
+            await apiFetchJson(`/api/submissions/${sub.id}/annotations`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ fieldId: lightbox.fieldId, annotations: next }),
+            });
+            setLightbox((prev) => (prev ? { ...prev, annotations: next } : null));
+            toast.success(tr("Đã lưu nét chấm ảnh.", "Saved photo annotations."));
+            await modalQueryClient.invalidateQueries({
+              queryKey: ["submission-review", submissionId],
+            });
+            onSaved();
+          }}
         />
       )}
     </Dialog>

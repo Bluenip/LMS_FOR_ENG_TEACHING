@@ -7,6 +7,7 @@ import {
   type FieldOption,
   type FieldStyle,
   type GradingOptions,
+  type PhotoAnnotationMap,
   type RubricCriterion,
   type RubricScoreMap,
 } from "@/lib/grading/types";
@@ -16,6 +17,7 @@ export interface WorksheetPageDTO {
   pageIndex: number;
   widthPt: number;
   heightPt: number;
+  imageKey?: string | null;
 }
 
 export interface WorksheetAudioDTO {
@@ -46,6 +48,7 @@ export interface EditorFieldDTO {
   skillTag?: SkillTag | null;
   passageId?: string | null;
   audioId?: string | null;
+  imageKey?: string | null;
   order: number;
   points: number;
   pageIndex?: number | null;
@@ -70,6 +73,7 @@ export interface StudentFieldDTO {
   skillTag?: SkillTag | null;
   passageId?: string | null;
   audioId?: string | null;
+  imageKey?: string | null;
   order: number;
   points: number;
   pageIndex?: number | null;
@@ -94,6 +98,7 @@ export interface StudentAnswerState {
   teacherNote?: string | null;
   gradeDetail?: DictationGradeDetail | null;
   rubricScores?: RubricScoreMap | null;
+  annotations?: PhotoAnnotationMap | null;
 }
 
 export function isAnswerFilled(value: AnswerValue): boolean {

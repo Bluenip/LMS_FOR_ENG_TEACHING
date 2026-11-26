@@ -12,10 +12,18 @@ import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { normalizeSubject } from "@/lib/subjects";
 import { getStorageProvider } from "@/lib/storage";
+import type { RubricCriterion } from "@/lib/grading/types";
+import { detectImageMeta } from "@/lib/image-meta";
+import { buildPrintableWorksheetPdf } from "@/lib/pdf/export-printable-pdf";
 import {
   parseFillBlankText,
   type FillBlankParseResult,
 } from "@/lib/worksheet/fill-blank-parser";
+import {
+  parseWordExamHtml,
+  parseWordExamText,
+  type WordExamParseResult,
+} from "@/lib/worksheet/word-exam-parser";
 import { buildDocxBuffer, type DocxParagraph } from "@/lib/worksheet/docx-builder";
 import { resolveAudioExtension } from "./worksheetAudioService";
 
@@ -30,7 +38,7 @@ export interface ExportedWorksheetManifest {
     pageCount: number;
     hasPdf: boolean;
     pdfEntry?: string;
-    pages: Array<{ pageIndex: number; widthPt: number; heightPt: number }>;
+    pages: Array<{ pageIndex: number; widthPt: number; heightPt: number; imageEntry?: string }>;
     audios: Array<{
       oldId: string;
       title: string;
@@ -48,6 +56,7 @@ export interface ExportedWorksheetManifest {
       skillTag: SkillTag | null;
       passageId?: string | null;
       audioOldId: string | null;
+      imageEntry?: string;
       order: number;
       points: number;
       pageIndex: number | null;
@@ -119,6 +128,40 @@ export async function parseWordOrTextFile(
 }
 
 /**
+ * Extracts HTML (preserving bold/underline formatting and answer tables) from .docx or plain text
+ * and parses MCQ, THPT 2025 True/False groups, fill-in-the-blank, and Essay questions.
+ */
+export async function parseWordExamFile(
+  buffer: Buffer,
+  filename: string,
+  opts?: { defaultPoints?: number; startNumber?: number }
+): Promise<{ parsed: WordExamParseResult }> {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".docx")) {
+    let html = "";
+    try {
+      const res = await mammoth.convertToHtml({ buffer });
+      html = res.value ?? "";
+    } catch {
+      throw new AppError(
+        "Không thể đọc file Word (.docx). Hãy kiểm tra định dạng file không bị hỏng hoặc mật khẩu.",
+        400,
+        "INVALID_DOCX"
+      );
+    }
+    return { parsed: parseWordExamHtml(html, opts) };
+  }
+  if (lower.endsWith(".txt") || lower.endsWith(".md")) {
+    return { parsed: parseWordExamText(buffer.toString("utf8"), opts) };
+  }
+  throw new AppError(
+    "Chỉ hỗ trợ file Word (.docx) hoặc văn bản (.txt).",
+    400,
+    "UNSUPPORTED_FILE"
+  );
+}
+
+/**
  * Builds a portable manifest + adds binary files (PDF + audios) into the given JSZip folder.
  */
 async function packWorksheetIntoZip(
@@ -165,6 +208,47 @@ async function packWorksheetIntoZip(
     });
   }
 
+  const exportedPages: ExportedWorksheetManifest["worksheet"]["pages"] = [];
+  if (hasPdf) {
+    for (const p of ws.pages) {
+      exportedPages.push({ pageIndex: p.pageIndex, widthPt: p.widthPt, heightPt: p.heightPt });
+    }
+  } else {
+    for (const p of ws.pages) {
+      let imageEntry: string | undefined;
+      if (p.imageKey) {
+        const img = await storage.get(p.imageKey);
+        if (img) {
+          const ext = p.imageKey.match(/\.[a-z0-9]+$/i)?.[0] ?? ".png";
+          imageEntry = `images/page-${p.pageIndex}${ext}`;
+          targetZip.file(imageEntry, img.buffer);
+        }
+      }
+      if (imageEntry) {
+        exportedPages.push({
+          pageIndex: p.pageIndex,
+          widthPt: p.widthPt,
+          heightPt: p.heightPt,
+          imageEntry,
+        });
+      }
+    }
+  }
+
+  const fieldImageEntries = new Map<string, string>();
+  for (let i = 0; i < ws.fields.length; i++) {
+    const f = ws.fields[i]!;
+    if (!f.imageKey) continue;
+    if (fieldImageEntries.has(f.imageKey)) continue;
+    const img = await storage.get(f.imageKey);
+    if (img) {
+      const ext = f.imageKey.match(/\.[a-z0-9]+$/i)?.[0] ?? ".png";
+      const entry = `images/field-${i + 1}${ext}`;
+      targetZip.file(entry, img.buffer);
+      fieldImageEntries.set(f.imageKey, entry);
+    }
+  }
+
   const manifest: ExportedWorksheetManifest = {
     format: "engclass-worksheet-v1",
     exportedAt: new Date().toISOString(),
@@ -175,16 +259,10 @@ async function packWorksheetIntoZip(
       passages: Array.isArray(ws.passages)
         ? (ws.passages as Array<{ id: string; title: string; content: string; order: number }>)
         : null,
-      pageCount: hasPdf ? ws.pageCount : 0,
+      pageCount: exportedPages.length,
       hasPdf,
       pdfEntry: hasPdf ? "document.pdf" : undefined,
-      pages: hasPdf
-        ? ws.pages.map((p) => ({
-            pageIndex: p.pageIndex,
-            widthPt: p.widthPt,
-            heightPt: p.heightPt,
-          }))
-        : [],
+      pages: exportedPages,
       audios: exportedAudios,
       fields: ws.fields.map((f) => ({
         placement: f.placement,
@@ -195,6 +273,9 @@ async function packWorksheetIntoZip(
         skillTag: f.skillTag,
         passageId: f.passageId ?? null,
         audioOldId: f.audioId,
+        ...(f.imageKey && fieldImageEntries.get(f.imageKey)
+          ? { imageEntry: fieldImageEntries.get(f.imageKey) }
+          : {}),
         order: f.order,
         points: f.points,
         pageIndex: f.pageIndex,
@@ -470,7 +551,7 @@ async function restoreManifestForOwner(
     },
   });
 
-  // Restore PDF if bundled in zip
+  // Restore PDF OR background page images if bundled in zip
   if (zip && data.hasPdf && data.pdfEntry) {
     const pdfZipObj = zip.file(folderPrefix + data.pdfEntry);
     if (pdfZipObj) {
@@ -489,6 +570,39 @@ async function restoreManifestForOwner(
               heightPt: p.heightPt,
             })),
           },
+        },
+      });
+    }
+  } else if (zip && Array.isArray(data.pages) && data.pages.some((p) => p.imageEntry)) {
+    const restoredPages: Array<{
+      pageIndex: number;
+      widthPt: number;
+      heightPt: number;
+      imageKey: string;
+    }> = [];
+    for (const p of data.pages) {
+      if (!p.imageEntry) continue;
+      const imgObj = zip.file(folderPrefix + p.imageEntry);
+      if (!imgObj) continue;
+      const buf = Buffer.from(await imgObj.async("nodebuffer"));
+      const meta = detectImageMeta(buf);
+      const ext = meta?.ext ?? (p.imageEntry.match(/\.[a-z0-9]+$/i)?.[0] || ".png");
+      const mime = meta?.mime ?? "image/png";
+      const imageKey = `worksheets/${created.id}/images/${crypto.randomUUID()}${ext}`;
+      await storage.put(imageKey, buf, mime);
+      restoredPages.push({
+        pageIndex: p.pageIndex,
+        widthPt: p.widthPt,
+        heightPt: p.heightPt,
+        imageKey,
+      });
+    }
+    if (restoredPages.length > 0) {
+      await prisma.worksheet.update({
+        where: { id: created.id },
+        data: {
+          pageCount: restoredPages.length,
+          pages: { create: restoredPages },
         },
       });
     }
@@ -520,6 +634,23 @@ async function restoreManifestForOwner(
     }
   }
 
+  // Restore field illustration images if present
+  const restoredFieldImgMap = new Map<string, string>();
+  if (zip && Array.isArray(data.fields)) {
+    for (const f of data.fields) {
+      if (!f.imageEntry || restoredFieldImgMap.has(f.imageEntry)) continue;
+      const imgObj = zip.file(folderPrefix + f.imageEntry);
+      if (!imgObj) continue;
+      const buf = Buffer.from(await imgObj.async("nodebuffer"));
+      const meta = detectImageMeta(buf);
+      const ext = meta?.ext ?? (f.imageEntry.match(/\.[a-z0-9]+$/i)?.[0] || ".png");
+      const mime = meta?.mime ?? "image/png";
+      const key = `worksheets/${created.id}/images/${crypto.randomUUID()}${ext}`;
+      await storage.put(key, buf, mime);
+      restoredFieldImgMap.set(f.imageEntry, key);
+    }
+  }
+
   // Restore all fields
   if (Array.isArray(data.fields) && data.fields.length > 0) {
     await prisma.field.createMany({
@@ -533,6 +664,7 @@ async function restoreManifestForOwner(
         skillTag: f.skillTag ?? null,
         passageId: f.passageId ?? null,
         audioId: f.audioOldId ? audioIdMap.get(f.audioOldId) ?? null : null,
+        imageKey: f.imageEntry ? restoredFieldImgMap.get(f.imageEntry) ?? null : null,
         order: f.order ?? idx,
         points: Number(f.points) || 1,
         pageIndex: f.placement === "OVERLAY" ? (f.pageIndex ?? 0) : null,
@@ -709,4 +841,78 @@ export async function cloneWorksheetForTeacher(
       ? `${manifest.worksheet.title} (Bản sao)`
       : manifest.worksheet.title;
   return restoreManifestForOwner(targetOwnerId, manifest, zip, "");
+}
+
+/**
+ * Exports a printable Vietnamese A4 PDF handout (`student` mode) or answer key (`key` mode).
+ */
+export async function exportWorksheetAsPdf(
+  worksheetId: string,
+  mode: "student" | "key"
+): Promise<{ buffer: Buffer; filename: string }> {
+  const ws = await prisma.worksheet.findUnique({
+    where: { id: worksheetId },
+    include: {
+      pages: { orderBy: { pageIndex: "asc" } },
+      fields: { orderBy: { order: "asc" } },
+    },
+  });
+  if (!ws) {
+    throw new AppError("Không tìm thấy phiếu bài tập.", 404, "NOT_FOUND");
+  }
+
+  const storage = getStorageProvider();
+  const sourcePdf = ws.pdfFileKey ? await storage.get(ws.pdfFileKey) : null;
+
+  const pagesWithImages = await Promise.all(
+    ws.pages.map(async (p) => {
+      const img = p.imageKey ? await storage.get(p.imageKey) : null;
+      return {
+        pageIndex: p.pageIndex,
+        widthPt: p.widthPt,
+        heightPt: p.heightPt,
+        imageBytes: img?.buffer ?? null,
+      };
+    })
+  );
+
+  const fieldsWithImages = await Promise.all(
+    ws.fields.map(async (f) => {
+      const img = f.imageKey ? await storage.get(f.imageKey) : null;
+      return {
+        id: f.id,
+        placement: f.placement,
+        type: f.type,
+        label: f.label,
+        prompt: f.prompt,
+        explanation: f.explanation,
+        points: f.points,
+        options: Array.isArray(f.options) ? (f.options as Array<{ id: string; text: string }>) : null,
+        answerKey: (f.answerKey as Record<string, unknown>) ?? {},
+        rubric: Array.isArray(f.rubric) ? (f.rubric as unknown as RubricCriterion[]) : null,
+        imageBytes: img?.buffer ?? null,
+      };
+    })
+  );
+
+  const buffer = await buildPrintableWorksheetPdf(
+    {
+      title: ws.title,
+      subject: ws.subject,
+      instructions: ws.instructions,
+      passages: Array.isArray(ws.passages)
+        ? (ws.passages as Array<{ id: string; title: string; content: string; order: number }>)
+        : [],
+      sourcePdfBuffer: sourcePdf?.buffer ?? null,
+      pages: pagesWithImages,
+      fields: fieldsWithImages,
+    },
+    mode
+  );
+
+  const suffix = mode === "key" ? "co-dap-an" : "de-in";
+  return {
+    buffer,
+    filename: `${slugifyFilename(ws.title)}-${suffix}.pdf`,
+  };
 }

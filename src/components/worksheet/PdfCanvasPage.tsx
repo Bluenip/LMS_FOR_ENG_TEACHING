@@ -74,6 +74,7 @@ export function usePdfDocument(pdfUrl: string | null) {
 
 interface PdfCanvasPageProps {
   pdfDoc: PDFDocumentProxy | null;
+  imageUrl?: string | null;
   pageIndex: number; // 0-based
   widthPt: number;
   heightPt: number;
@@ -90,6 +91,7 @@ interface PdfCanvasPageProps {
  */
 export function PdfCanvasPage({
   pdfDoc,
+  imageUrl = null,
   pageIndex,
   widthPt,
   heightPt,
@@ -135,7 +137,7 @@ export function PdfCanvasPage({
   }, [eager]);
 
   useEffect(() => {
-    if (!pdfDoc || !inView) return;
+    if (imageUrl || !pdfDoc || !inView) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -180,7 +182,7 @@ export function PdfCanvasPage({
         }
       }
     };
-  }, [pdfDoc, inView, pageIndex, scale]);
+  }, [pdfDoc, imageUrl, inView, pageIndex, scale]);
 
   return (
     <div
@@ -192,11 +194,23 @@ export function PdfCanvasPage({
         height: `${heightPx}px`,
       }}
     >
-      <canvas
-        ref={canvasRef}
-        className="block h-full w-full"
-        style={{ width: `${widthPx}px`, height: `${heightPx}px` }}
-      />
+      {imageUrl ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={imageUrl}
+          alt={tr(`Trang ${pageIndex + 1}`, `Page ${pageIndex + 1}`)}
+          draggable={false}
+          onLoad={() => setRendered(true)}
+          className="block h-full w-full object-fill select-none"
+          style={{ width: `${widthPx}px`, height: `${heightPx}px` }}
+        />
+      ) : (
+        <canvas
+          ref={canvasRef}
+          className="block h-full w-full"
+          style={{ width: `${widthPx}px`, height: `${heightPx}px` }}
+        />
+      )}
       {!rendered && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-50/80 text-xs font-medium text-slate-400">
           {tr("Đang hiển thị trang", "Showing page")} {pageIndex + 1}…

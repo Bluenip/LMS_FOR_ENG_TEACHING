@@ -25,18 +25,22 @@ import {
   Grid,
   Hash,
   Headphones,
+  ImagePlus,
   ListChecks,
   ListOrdered,
   Mic,
   MousePointer2,
   Plus,
+  Redo2,
   Save,
+  ScanSearch,
   Send,
   Share2,
   Sigma,
   Sparkles,
   Trash2,
   Type,
+  Undo2,
   Upload,
   ZoomIn,
   ZoomOut,
@@ -44,6 +48,18 @@ import {
 } from "lucide-react";
 import type { FieldType, SkillTag, WorksheetSubject } from "@prisma/client";
 import { gradeSubmission, parseBulkAnswerString, type AnswerValue } from "@/lib/grading";
+import {
+  createHistory,
+  pushHistory,
+  undoHistory,
+  redoHistory,
+  canUndo,
+  canRedo,
+} from "@/lib/worksheet/editor-history";
+import {
+  detectPdfBlanks,
+  type DetectedPdfBlank,
+} from "@/lib/worksheet/pdf-blank-detector";
 import {
   getSubjectMeta,
   getSubjectProfile,
@@ -58,6 +74,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { PdfCanvasPage, usePdfDocument } from "./PdfCanvasPage";
 import { OverlayFieldInput } from "./OverlayFieldInput";
 import { AnswerSheetPanel } from "./AnswerSheetPanel";
@@ -67,6 +91,7 @@ import { PromptText } from "./PromptText";
 import { PassagesEditorPanel } from "./PassagesEditorPanel";
 import { RubricEditor } from "./RubricEditor";
 import { TrueFalseGroupEditor } from "./TrueFalseGroupEditor";
+import { FormulaToolbar } from "./FormulaToolbar";
 import type {
   EditorFieldDTO,
   StudentFieldDTO,
@@ -300,10 +325,43 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
   const [isShared, setIsShared] = useState(Boolean(initialWorksheet.isShared));
   const [uploadingAudio, setUploadingAudio] = useState(false);
   const [importingWord, setImportingWord] = useState(false);
+  const [uploadingBgImages, setUploadingBgImages] = useState(false);
+  const [uploadingFieldImageId, setUploadingFieldImageId] = useState<string | null>(null);
+  const [detectingBlanks, setDetectingBlanks] = useState(false);
+  const [detectedBlanks, setDetectedBlanks] = useState<DetectedPdfBlank[]>([]);
+  const [selectedBlankIndices, setSelectedBlankIndices] = useState<number[]>([]);
+  const [detectDialogOpen, setDetectDialogOpen] = useState(false);
   const wordAppendInputRef = useRef<HTMLInputElement | null>(null);
-  const [fields, setFields] = useState<EditorFieldDTO[]>(
-    initialWorksheet.fields.map((f) => ({ ...f, isPersisted: true }))
+  const bgImagesInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [history, setHistory] = useState(() =>
+    createHistory<EditorFieldDTO[]>(
+      initialWorksheet.fields.map((f) => ({ ...f, isPersisted: true }))
+    )
   );
+  const fields = history.present;
+  const setFields = useCallback(
+    (
+      updater: EditorFieldDTO[] | ((prev: EditorFieldDTO[]) => EditorFieldDTO[]),
+      opts?: { skipHistory?: boolean; replaceWithinMs?: number }
+    ) => {
+      setHistory((h) => {
+        const next = typeof updater === "function" ? updater(h.present) : updater;
+        if (next === h.present) return h;
+        if (opts?.skipHistory) {
+          return { ...h, present: next };
+        }
+        return pushHistory(h, next, { replaceWithinMs: opts?.replaceWithinMs });
+      });
+    },
+    []
+  );
+  const handleUndo = useCallback(() => {
+    setHistory((h) => undoHistory(h));
+  }, []);
+  const handleRedo = useCallback(() => {
+    setHistory((h) => redoHistory(h));
+  }, []);
 
   const [activeTool, setActiveTool] = useState<ActiveTool>("SELECT");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -450,6 +508,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
               skillTag: f.skillTag ?? null,
               passageId: f.passageId ?? null,
               audioId: f.audioId ?? null,
+              imageKey: f.imageKey ?? null,
               order: idx,
               points: Number(f.points) || 0,
               pageIndex: f.placement === "OVERLAY" ? (f.pageIndex ?? 0) : null,
@@ -480,20 +539,23 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
         const json = (await res.json()) as { fields: EditorFieldDTO[] };
         // Remap client temp IDs to persisted DB IDs without re-triggering autosave loop
         skipNextAutosaveRef.current = true;
-        setFields((prev) => {
-          if (prev.length !== json.fields.length) return prev;
-          const idMap = new Map<string, string>();
-          prev.forEach((p, idx) => {
-            const saved = json.fields[idx];
-            if (saved && p.id !== saved.id) {
-              idMap.set(p.id, saved.id);
+        setFields(
+          (prev) => {
+            if (prev.length !== json.fields.length) return prev;
+            const idMap = new Map<string, string>();
+            prev.forEach((p, idx) => {
+              const saved = json.fields[idx];
+              if (saved && p.id !== saved.id) {
+                idMap.set(p.id, saved.id);
+              }
+            });
+            if (idMap.size > 0) {
+              setSelectedIds((sel) => sel.map((id) => idMap.get(id) ?? id));
             }
-          });
-          if (idMap.size > 0) {
-            setSelectedIds((sel) => sel.map((id) => idMap.get(id) ?? id));
-          }
-          return json.fields.map((saved) => ({ ...saved, isPersisted: true }));
-        });
+            return json.fields.map((saved) => ({ ...saved, isPersisted: true }));
+          },
+          { skipHistory: true }
+        );
         setSaveState("saved");
       } catch (err) {
         console.error("Save fields error:", err);
@@ -501,7 +563,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
         toast.error(err instanceof Error ? err.message : vi.common.saveFailed);
       }
     },
-    [worksheetId, tr, vi]
+    [setFields, worksheetId, tr, vi]
   );
 
   // Debounced 1s autosave whenever fields change
@@ -608,6 +670,153 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
     } finally {
       setUploadingPdf(false);
     }
+  };
+
+  const handleUploadBgImages = async (fileList: FileList) => {
+    const fileArr = Array.from(fileList).slice(0, 30);
+    if (fileArr.length === 0) return;
+    setUploadingBgImages(true);
+    try {
+      const formData = new FormData();
+      fileArr.forEach((f) => formData.append("files", f));
+      const res = await fetch(`/api/worksheets/${worksheetId}/images`, {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? tr("Tải ảnh nền thất bại", "Background image upload failed"));
+      setPdfFileKey(null);
+      setPages(json.worksheet.pages ?? []);
+      setActivePage(0);
+      setStudioView("pdf");
+      toast.success(
+        tr(
+          `Đã tải ${json.worksheet.pageCount} ảnh trang đề (Fill on image)!`,
+          `Uploaded ${json.worksheet.pageCount} background image page(s)!`
+        )
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : tr("Tải ảnh nền thất bại", "Background image upload failed"));
+    } finally {
+      setUploadingBgImages(false);
+    }
+  };
+
+  const handleUploadFieldImage = async (fieldId: string, file: File) => {
+    const target = fields.find((f) => f.id === fieldId);
+    setUploadingFieldImageId(fieldId);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      if (target?.isPersisted) {
+        formData.append("fieldId", fieldId);
+      }
+      const res = await fetch(`/api/worksheets/${worksheetId}/field-image`, {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? tr("Tải ảnh câu hỏi thất bại", "Image upload failed"));
+      setFields((prev) =>
+        prev.map((f) => (f.id === fieldId ? { ...f, imageKey: json.imageKey } : f))
+      );
+      toast.success(tr("Đã gắn ảnh minh hoạ cho câu hỏi!", "Attached question illustration!"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : tr("Tải ảnh câu hỏi thất bại", "Image upload failed"));
+    } finally {
+      setUploadingFieldImageId(null);
+    }
+  };
+
+  const handleDeleteFieldImage = async (fieldId: string) => {
+    const target = fields.find((f) => f.id === fieldId);
+    if (!target?.imageKey) return;
+    try {
+      const qs = new URLSearchParams();
+      if (target.isPersisted) qs.set("fieldId", target.id);
+      qs.set("imageKey", target.imageKey);
+      const res = await fetch(`/api/worksheets/${worksheetId}/field-image?${qs.toString()}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? tr("Xoá ảnh thất bại", "Remove image failed"));
+      setFields((prev) =>
+        prev.map((f) => (f.id === fieldId ? { ...f, imageKey: null } : f))
+      );
+      toast.success(tr("Đã gỡ ảnh minh hoạ.", "Illustration removed."));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : tr("Xoá ảnh thất bại", "Remove image failed"));
+    }
+  };
+
+  const handleDetectPdfBlanks = async () => {
+    if (!pdfDoc) return;
+    setDetectingBlanks(true);
+    try {
+      const found: DetectedPdfBlank[] = [];
+      for (let i = 0; i < pdfDoc.numPages; i++) {
+        const page = await pdfDoc.getPage(i + 1);
+        const viewport = page.getViewport({ scale: 1 });
+        const content = await page.getTextContent();
+        const items = content.items
+          .filter((item): item is typeof item & { str: string; transform: number[]; width: number; height?: number } =>
+            typeof (item as { str?: unknown }).str === "string"
+          )
+          .map((item) => ({
+            str: item.str,
+            transform: item.transform,
+            width: item.width,
+            height: item.height,
+          }));
+        const pageFound = detectPdfBlanks(items, { width: viewport.width, height: viewport.height }, i, fields);
+        found.push(...pageFound);
+      }
+      if (found.length === 0) {
+        toast.info(tr("Không phát hiện ô trống (____ / [ ]) mới nào trên PDF.", "No new blank areas (____ / [ ]) detected in PDF."));
+        return;
+      }
+      setDetectedBlanks(found);
+      setSelectedBlankIndices(found.map((_, idx) => idx));
+      setDetectDialogOpen(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : tr("Quét PDF thất bại", "PDF scan failed"));
+    } finally {
+      setDetectingBlanks(false);
+    }
+  };
+
+  const handleConfirmDetectedBlanks = () => {
+    const selectedSet = new Set(selectedBlankIndices);
+    const chosen = detectedBlanks.filter((_, idx) => selectedSet.has(idx));
+    if (chosen.length === 0) {
+      setDetectDialogOpen(false);
+      return;
+    }
+    const created: EditorFieldDTO[] = chosen.map((b, idx) => {
+      const base = createDefaultFieldPayload(
+        b.type,
+        String(fields.length + idx + 1),
+        fields.length + idx,
+        tr("Lựa chọn", "Option")
+      );
+      return {
+        id: `tmp-scan-${Date.now()}-${idx}`,
+        isPersisted: false,
+        placement: "OVERLAY",
+        pageIndex: b.pageIndex,
+        x: b.x,
+        y: b.y,
+        w: b.w,
+        h: b.h,
+        ...base,
+      };
+    });
+    setFields((prev) => [...prev, ...created]);
+    setDetectDialogOpen(false);
+    setStudioView("pdf");
+    toast.success(
+      tr(`Đã thêm ${created.length} ô tương tác từ quét PDF!`, `Added ${created.length} interactive boxes from PDF scan!`)
+    );
   };
 
   const handleUploadAudio = async (file: File) => {
@@ -750,27 +959,33 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
     }
   };
 
-  const updateField = useCallback((id: string, patch: Partial<EditorFieldDTO>) => {
-    setFields((prev) => {
-      const target = prev.find((f) => f.id === id);
-      if (
-        !target ||
-        (Object.keys(patch) as Array<keyof EditorFieldDTO>).every(
-          (k) => JSON.stringify(target[k]) === JSON.stringify(patch[k])
-        )
-      ) {
-        return prev; // no-op: keep same array so autosave is not triggered
-      }
-      return prev.map((f) => (f.id === id ? { ...f, ...patch } : f));
-    });
-  }, []);
+  const updateField = useCallback(
+    (id: string, patch: Partial<EditorFieldDTO>) => {
+      setFields(
+        (prev) => {
+          const target = prev.find((f) => f.id === id);
+          if (
+            !target ||
+            (Object.keys(patch) as Array<keyof EditorFieldDTO>).every(
+              (k) => JSON.stringify(target[k]) === JSON.stringify(patch[k])
+            )
+          ) {
+            return prev; // no-op: keep same array so autosave is not triggered
+          }
+          return prev.map((f) => (f.id === id ? { ...f, ...patch } : f));
+        },
+        { replaceWithinMs: 400 }
+      );
+    },
+    [setFields]
+  );
 
   const deleteSelectedFields = useCallback(() => {
     if (selectedIds.length === 0) return;
     const delSet = new Set(selectedIds);
     setFields((prev) => prev.filter((f) => !delSet.has(f.id)));
     setSelectedIds([]);
-  }, [selectedIds]);
+  }, [selectedIds, setFields]);
 
   const duplicateSelectedFields = useCallback(() => {
     if (selectedIds.length === 0) return;
@@ -792,9 +1007,9 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
     });
     setFields((prev) => [...prev, ...clones]);
     setSelectedIds(newIds);
-  }, [fields, selectedIds]);
+  }, [fields, selectedIds, setFields]);
 
-  // Keyboard shortcuts: Delete, Ctrl/Cmd+D, Arrow keys (+Shift for 10px)
+  // Keyboard shortcuts: Ctrl/Cmd+Z Undo, Ctrl/Cmd+Shift+Z Redo, Delete, Ctrl/Cmd+D, Arrow keys
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (previewMode) return;
@@ -808,6 +1023,21 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
       ) {
         return;
       }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+        return;
+      }
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        ((e.key.toLowerCase() === "z" && e.shiftKey) || e.key.toLowerCase() === "y")
+      ) {
+        e.preventDefault();
+        handleRedo();
+        return;
+      }
+
       if (selectedIds.length === 0) return;
 
       if (e.key === "Delete" || e.key === "Backspace") {
@@ -839,7 +1069,16 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [previewMode, selectedIds, deleteSelectedFields, duplicateSelectedFields, zoom]);
+  }, [
+    previewMode,
+    selectedIds,
+    deleteSelectedFields,
+    duplicateSelectedFields,
+    handleUndo,
+    handleRedo,
+    setFields,
+    zoom,
+  ]);
 
   // Auto-number in reading order (pageIndex -> y -> x for OVERLAY, then ANSWER_SHEET)
   const autoNumberReadingOrder = () => {
@@ -976,6 +1215,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
         skillTag: f.skillTag,
         passageId: f.passageId,
         audioId: f.audioId,
+        imageKey: f.imageKey ?? null,
         order: f.order,
         points: f.points,
         pageIndex: f.pageIndex,
@@ -1105,6 +1345,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                 <PdfCanvasPage
                   key={p.pageIndex}
                   pdfDoc={pdfDoc}
+                  imageUrl={p.imageKey ? `/api/files/${p.imageKey}` : null}
                   pageIndex={p.pageIndex}
                   widthPt={p.widthPt}
                   heightPt={p.heightPt}
@@ -1217,7 +1458,8 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
     ])
   );
 
-  const hasPdf = Boolean(pdfFileKey) && pages.length > 0;
+  const hasImagePages = pages.some((p) => Boolean(p.imageKey));
+  const hasPdf = pages.length > 0 && (Boolean(pdfFileKey) || hasImagePages);
 
   // Mode B — answer sheet & quick answer key (shown in the centre tab when there is a PDF)
   const answerSheetSection = (
@@ -1403,7 +1645,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                   </div>
 
                   {/* Question text (from Word or typed): visible and editable right on the card */}
-                  <div className="mt-2.5" onClick={(e) => e.stopPropagation()}>
+                  <div className="mt-2.5 space-y-1.5" onClick={(e) => e.stopPropagation()}>
                     <Label className="text-[10px] font-bold uppercase text-slate-400">
                       {tr("Câu hỏi", "Question")}
                     </Label>
@@ -1415,11 +1657,72 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                       rows={2}
                       className="mt-1 min-h-[52px] text-xs leading-relaxed"
                     />
+                    <FormulaToolbar
+                      compact
+                      onInsert={(snippet) =>
+                        updateField(field.id, {
+                          prompt: `${field.prompt ?? ""}${field.prompt ? " " : ""}${snippet}`,
+                        })
+                      }
+                    />
                     {field.prompt && hasMathSyntax(field.prompt) && (
                       <div className="mt-1 rounded-lg bg-[#F8F9FF] px-2 py-1 text-xs text-[#0B1C30]">
                         <PromptText text={field.prompt} />
                       </div>
                     )}
+
+                    {/* Per-question illustration image */}
+                    <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                      <input
+                        id={`field-img-input-${field.id}`}
+                        data-testid={`field-image-input-${field.id}`}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) void handleUploadFieldImage(field.id, file);
+                          e.target.value = "";
+                        }}
+                      />
+                      <label
+                        htmlFor={`field-img-input-${field.id}`}
+                        data-testid={`field-image-upload-${field.id}`}
+                        className={cn(
+                          "inline-flex cursor-pointer items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-[#464555] hover:border-indigo-300",
+                          uploadingFieldImageId === field.id && "pointer-events-none opacity-60"
+                        )}
+                      >
+                        <ImagePlus className="h-3.5 w-3.5 text-[#4F46E5]" />
+                        {uploadingFieldImageId === field.id
+                          ? tr("Đang tải…", "Uploading…")
+                          : field.imageKey
+                            ? tr("Đổi ảnh minh hoạ", "Change image")
+                            : tr("Ảnh minh hoạ", "Add image")}
+                      </label>
+                      {field.imageKey && (
+                        <button
+                          type="button"
+                          data-testid={`field-image-remove-${field.id}`}
+                          onClick={() => void handleDeleteFieldImage(field.id)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-100"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          {tr("Gỡ ảnh", "Remove")}
+                        </button>
+                      )}
+                    </div>
+                    {field.imageKey && (
+                      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white p-1">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={`/api/files/${field.imageKey}`}
+                          alt={field.label}
+                          className="max-h-36 w-full rounded object-contain"
+                        />
+                      </div>
+                    )}
+
                     <Label className="mt-2 block text-[10px] font-bold uppercase text-slate-400">
                       {field.type === "ESSAY" || field.type === "PHOTO_UPLOAD"
                         ? tr("Hướng dẫn chấm", "Rubric")
@@ -1578,10 +1881,11 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
   return (
     <div className="space-y-4">
       {/* Top Floating Stitch Toolbar */}
-      <div data-editor-toolbar className="sticky top-16 z-30 rounded-2xl border border-slate-200/90 bg-white/95 p-3 shadow-toolbar backdrop-blur">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <div data-editor-toolbar className="sticky top-16 z-30 rounded-2xl border border-slate-200/90 bg-white/95 p-2.5 shadow-toolbar backdrop-blur">
+        {/* Row 1: Title/Status + Document Actions */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
           {/* Left: Back + Title + Autosave status */}
-          <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
             <BackLink
               iconOnly
               fallbackHref="/teacher/worksheets"
@@ -1592,7 +1896,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 onBlur={() => void saveTitle(title)}
-                className="w-52 sm:w-64 truncate rounded-lg bg-transparent px-1.5 py-0.5 text-sm font-bold text-[#0B1C30] hover:bg-slate-100 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                className="w-48 sm:w-64 truncate rounded-lg bg-transparent px-1.5 py-0.5 text-sm font-bold text-[#0B1C30] hover:bg-slate-100 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
               />
               <div className="mt-0.5 flex items-center gap-2 px-1.5 text-[11px]">
                 <span
@@ -1647,37 +1951,6 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
             </div>
           </div>
 
-          {/* Center: Field Tool Palette */}
-          <div className="flex flex-wrap items-center gap-1 rounded-xl bg-[#EFF4FF] p-1">
-            {tools.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                data-tool={t.id}
-                onClick={() => setActiveTool(t.id)}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition",
-                  activeTool === t.id
-                    ? "bg-[#4F46E5] text-white shadow-sm"
-                    : "text-[#464555] hover:bg-white hover:text-[#3525CD]"
-                )}
-              >
-                {t.icon}
-                <span className="hidden sm:inline">{t.label}</span>
-              </button>
-            ))}
-            {profile.allAvailableTools.length > profile.primaryTools.length && (
-              <button
-                type="button"
-                onClick={() => setShowAllTools((v) => !v)}
-                className="inline-flex items-center rounded-lg px-2 py-1.5 text-[11px] font-bold text-[#3525CD] hover:bg-white"
-                title={tr("Hiện thêm / thu gọn công cụ ít dùng", "Toggle secondary tools")}
-              >
-                {showAllTools ? tr("Thu gọn", "Less") : `+${profile.allAvailableTools.length - profile.primaryTools.length}`}
-              </button>
-            )}
-          </div>
-
           {/* Right: Share + Export + Preview + Save + Assign CTA */}
           <div className="flex flex-wrap items-center gap-1.5">
             <Button
@@ -1704,6 +1977,26 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                 <span className="hidden 2xl:inline">.docx</span>
               </a>
             </Button>
+            <Button variant="outline" size="sm" asChild title={tr("Xuất đề PDF in ấn (bản học sinh)", "Export printable PDF (student)")}>
+              <a
+                href={`/api/worksheets/${worksheetId}/export?format=pdf&mode=student`}
+                download
+                data-testid="editor-export-pdf-student"
+              >
+                <FileDown className="h-4 w-4 text-[#4F46E5]" />
+                <span className="hidden 2xl:inline">PDF (HS)</span>
+              </a>
+            </Button>
+            <Button variant="outline" size="sm" asChild title={tr("Xuất đề PDF kèm Đáp án in ấn", "Export printable PDF (key)")}>
+              <a
+                href={`/api/worksheets/${worksheetId}/export?format=pdf&mode=key`}
+                download
+                data-testid="editor-export-pdf-key"
+              >
+                <FileDown className="h-4 w-4 text-emerald-600" />
+                <span className="hidden 2xl:inline">PDF (ĐA)</span>
+              </a>
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setPreviewMode(true)}>
               <Eye className="h-4 w-4" />
               <span className="hidden xl:inline">{vi.worksheets.previewAsStudent}</span>
@@ -1726,9 +2019,39 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
           </div>
         </div>
 
-        {/* Sub-toolbar: Zoom, Grid Snap, Auto-number, Multi-select Align */}
-        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5 text-xs">
-          <div className="flex flex-wrap items-center gap-2">
+        {/* Row 2: Field Tool Palette + Canvas Controls (Zoom, Undo/Redo, Blanks, Snap, Align) */}
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2 text-xs">
+          <div className="flex flex-wrap items-center gap-1 rounded-xl bg-[#EFF4FF] p-1">
+            {tools.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                data-tool={t.id}
+                onClick={() => setActiveTool(t.id)}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition",
+                  activeTool === t.id
+                    ? "bg-[#4F46E5] text-white shadow-sm"
+                    : "text-[#464555] hover:bg-white hover:text-[#3525CD]"
+                )}
+              >
+                {t.icon}
+                <span className="hidden sm:inline">{t.label}</span>
+              </button>
+            ))}
+            {profile.allAvailableTools.length > profile.primaryTools.length && (
+              <button
+                type="button"
+                onClick={() => setShowAllTools((v) => !v)}
+                className="inline-flex items-center rounded-lg px-2 py-1 text-[11px] font-bold text-[#3525CD] hover:bg-white"
+                title={tr("Hiện thêm / thu gọn công cụ ít dùng", "Toggle secondary tools")}
+              >
+                {showAllTools ? tr("Thu gọn", "Less") : `+${profile.allAvailableTools.length - profile.primaryTools.length}`}
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
             <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-1.5 py-0.5">
               <button
                 type="button"
@@ -1750,6 +2073,46 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                 <ZoomIn className="h-3.5 w-3.5" />
               </button>
             </div>
+
+            <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white px-1 py-0.5">
+              <button
+                type="button"
+                data-testid="editor-undo-btn"
+                disabled={!canUndo(history)}
+                onClick={handleUndo}
+                title={tr("Hoàn tác (Ctrl+Z)", "Undo (Ctrl+Z)")}
+                aria-label={tr("Hoàn tác", "Undo")}
+                className="inline-flex h-7 w-7 items-center justify-center rounded text-slate-600 hover:bg-slate-100 hover:text-[#3525CD] disabled:opacity-35 disabled:pointer-events-none"
+              >
+                <Undo2 className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                data-testid="editor-redo-btn"
+                disabled={!canRedo(history)}
+                onClick={handleRedo}
+                title={tr("Làm lại (Ctrl+Shift+Z)", "Redo (Ctrl+Shift+Z)")}
+                aria-label={tr("Làm lại", "Redo")}
+                className="inline-flex h-7 w-7 items-center justify-center rounded text-slate-600 hover:bg-slate-100 hover:text-[#3525CD] disabled:opacity-35 disabled:pointer-events-none"
+              >
+                <Redo2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {pdfDoc && (
+              <button
+                type="button"
+                data-testid="detect-pdf-blanks-btn"
+                disabled={detectingBlanks}
+                onClick={() => void handleDetectPdfBlanks()}
+                className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-[#EEF2FF]/70 px-2.5 py-1 font-semibold text-[#3525CD] hover:bg-[#EEF2FF] disabled:opacity-50"
+              >
+                <ScanSearch className="h-3.5 w-3.5" />
+                {detectingBlanks
+                  ? tr("Đang quét…", "Scanning…")
+                  : tr("Quét ô trống từ PDF", "Detect PDF blanks")}
+              </button>
+            )}
 
             <button
               type="button"
@@ -1806,12 +2169,6 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
               </div>
             )}
           </div>
-
-          <p className="hidden text-slate-400 xl:block">
-            {activeTool === "SELECT"
-              ? tr("Mẹo: Delete xoá ô • Ctrl+D nhân bản • Mũi tên (+Shift) dịch chuyển", "Tip: Delete removes • Ctrl+D duplicates • Arrows (+Shift) move")
-              : vi.worksheets.editor.drawHint}
-          </p>
         </div>
       </div>
 
@@ -1857,6 +2214,16 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                         >
                           {() => null}
                         </PdfCanvasPage>
+                      ) : p.imageKey ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={`/api/files/${p.imageKey}`}
+                          alt={`${tr("Trang", "Page")} ${p.pageIndex + 1}`}
+                          className={cn(
+                            "object-cover",
+                            isLandscape ? "h-12 w-16" : "h-16 w-12"
+                          )}
+                        />
                       ) : (
                         <div
                           className={cn(
@@ -1903,6 +2270,34 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                 : pdfFileKey
                   ? vi.worksheets.replacePdf
                   : vi.worksheets.uploadPdf}
+            </Button>
+            <input
+              ref={bgImagesInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              multiple
+              className="hidden"
+              data-testid="bg-images-input"
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  void handleUploadBgImages(e.target.files);
+                }
+                e.target.value = "";
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-2 w-full"
+              data-testid="upload-bg-images-btn"
+              disabled={uploadingBgImages}
+              onClick={() => bgImagesInputRef.current?.click()}
+            >
+              <ImagePlus className="h-3.5 w-3.5 text-[#4F46E5]" />
+              {uploadingBgImages
+                ? tr("Đang tải ảnh…", "Uploading images…")
+                : tr("Tải ảnh nền (Fill on image)", "Upload images (Fill on image)")}
             </Button>
             {pdfFileKey && (
               <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
@@ -2072,7 +2467,18 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
             >
               {(
                 [
-                  ["pdf", tr(`Đề PDF (${pages.length} trang · ${overlayFields.length} ô)`, `PDF (${pages.length} pages · ${overlayFields.length} boxes)`)],
+                  [
+                    "pdf",
+                    hasImagePages && !pdfFileKey
+                      ? tr(
+                          `Trang ảnh (${pages.length} trang · ${overlayFields.length} ô)`,
+                          `Images (${pages.length} pages · ${overlayFields.length} boxes)`
+                        )
+                      : tr(
+                          `Đề PDF (${pages.length} trang · ${overlayFields.length} ô)`,
+                          `PDF (${pages.length} pages · ${overlayFields.length} boxes)`
+                        ),
+                  ],
                   ["sheet", tr(`Phiếu trả lời (${sheetFields.length} câu)`, `Answer sheet (${sheetFields.length} questions)`)],
                 ] as const
               ).map(([id, label]) => (
@@ -2112,7 +2518,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
               </div>
             )}
 
-            {!pdfFileKey || pages.length === 0 ? (
+            {!hasPdf ? (
               <div
                 className={cn(
                   "flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-indigo-200 bg-white px-6 text-center",
@@ -2126,24 +2532,34 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                         `Bài này dùng Phiếu trả lời (${sheetFields.length} câu, xem và sửa ngay bên dưới)`,
                         `This worksheet uses the answer sheet (${sheetFields.length} questions, view and edit them below)`
                       )
-                    : tr("Tải file PDF đề bài lên để vẽ ô tương tác", "Upload the test PDF to draw interactive boxes")}
+                    : tr("Tải file PDF hoặc ảnh chụp đề lên để vẽ ô tương tác", "Upload a PDF or test images to draw interactive boxes")}
                 </h3>
                 <p className="mt-1 max-w-md text-xs text-[#464555]">
-                  {vi.worksheets.pdfRequirements} {tr("Bạn cũng có thể tạo câu hỏi trực tiếp ở mục “Phiếu trả lời” bên dưới mà không cần PDF.", "You can also create questions directly in the “Answer sheet” section below without a PDF.")}
+                  {vi.worksheets.pdfRequirements} {tr("Bạn cũng có thể tải ảnh trang đề (PNG/JPG/WebP) hoặc tạo câu hỏi ở “Phiếu trả lời” bên dưới.", "You can also upload page images (PNG/JPG/WebP) or create questions in the “Answer sheet” below.")}
                 </p>
-                <Button
-                  className="mt-4"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingPdf}
-                >
-                  <Upload className="h-4 w-4" />
-                  {vi.worksheets.uploadPdf}
-                </Button>
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                  <Button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingPdf}
+                  >
+                    <Upload className="h-4 w-4" />
+                    {vi.worksheets.uploadPdf}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => bgImagesInputRef.current?.click()}
+                    disabled={uploadingBgImages}
+                  >
+                    <ImagePlus className="h-4 w-4 text-[#4F46E5]" />
+                    {tr("Tải ảnh nền", "Upload images")}
+                  </Button>
+                </div>
               </div>
             ) : (
-              <div className="space-y-6">
-                {pdfLoading && (
-                  <p className="text-center text-xs font-medium text-indigo-600">
+              <div className="relative space-y-6">
+                {pdfLoading && !hasImagePages && (
+                  <p className="pointer-events-none sticky top-2 z-20 mx-auto w-fit rounded-full border border-indigo-200 bg-white/95 px-3 py-1 text-center text-xs font-medium text-indigo-600 shadow-sm">
                     {tr("Đang tải nội dung PDF…", "Loading PDF content…")}
                   </p>
                 )}
@@ -2164,6 +2580,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
 
                       <PdfCanvasPage
                         pdfDoc={pdfDoc}
+                        imageUrl={p.imageKey ? `/api/files/${p.imageKey}` : null}
                         pageIndex={p.pageIndex}
                         widthPt={p.widthPt}
                         heightPt={p.heightPt}
@@ -2534,36 +2951,43 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                       rows={4}
                       className="text-xs leading-relaxed"
                     />
-                    {profile.showMathHint && (
-                      <div className="flex flex-wrap gap-1">
-                        {[
-                          ["x²", "$x^2$"],
-                          ["a/b", "$\\frac{a}{b}$"],
-                          ["√x", "$\\sqrt{x}$"],
-                          ["≤", "$\\le$"],
-                          ["π", "$\\pi$"],
-                          ["$$...$$", "$$  $$"],
-                        ].map(([lbl, snippet]) => (
-                          <button
-                            key={lbl}
-                            type="button"
-                            onClick={() =>
-                              updateField(selectedField.id, {
-                                prompt: `${selectedField.prompt ?? ""}${selectedField.prompt ? " " : ""}${snippet}`,
-                              })
-                            }
-                            className="rounded border border-slate-200 bg-[#F8F9FF] px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[#3525CD] hover:bg-[#EEF2FF]"
-                          >
-                            {lbl}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    <FormulaToolbar
+                      compact
+                      onInsert={(snippet) =>
+                        updateField(selectedField.id, {
+                          prompt: `${selectedField.prompt ?? ""}${selectedField.prompt ? " " : ""}${snippet}`,
+                        })
+                      }
+                    />
                     {selectedField.prompt && hasMathSyntax(selectedField.prompt) && (
                       <div className="rounded-lg border border-indigo-100 bg-[#F8F9FF] px-2.5 py-1.5 text-xs text-[#0B1C30]">
                         <PromptText text={selectedField.prompt} />
                       </div>
                     )}
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <label
+                        htmlFor={`field-img-input-${selectedField.id}`}
+                        className={cn(
+                          "inline-flex cursor-pointer items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-[#464555] hover:border-indigo-300",
+                          uploadingFieldImageId === selectedField.id && "pointer-events-none opacity-60"
+                        )}
+                      >
+                        <ImagePlus className="h-3.5 w-3.5 text-[#4F46E5]" />
+                        {selectedField.imageKey
+                          ? tr("Đổi ảnh minh hoạ", "Change illustration")
+                          : tr("Thêm ảnh minh hoạ", "Add illustration")}
+                      </label>
+                      {selectedField.imageKey && (
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteFieldImage(selectedField.id)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-100"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          {tr("Gỡ ảnh", "Remove")}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -3075,6 +3499,77 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
 
       {/* Without a PDF the answer sheet is the whole worksheet: keep it below the studio grid */}
       {!hasPdf && answerSheetSection}
+
+      {/* Dialog review detected PDF blanks */}
+      <Dialog open={detectDialogOpen} onOpenChange={setDetectDialogOpen}>
+        <DialogContent className="max-w-xl" data-testid="detect-blanks-dialog">
+          <DialogHeader>
+            <DialogTitle>{tr("Ô trống gợi ý từ đề PDF", "Suggested blanks from PDF")}</DialogTitle>
+            <DialogDescription>
+              {tr(
+                "Hệ thống tự động tìm thấy các dòng gạch chân (____) và ô chọn ([ ] / ☐). Chọn những ô muốn chuyển thành ô tương tác.",
+                "Automatically detected underline blanks (____) and checkboxes ([ ] / ☐). Choose which ones to add as interactive boxes."
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+            {detectedBlanks.map((b, idx) => {
+              const checked = selectedBlankIndices.includes(idx);
+              return (
+                <label
+                  key={`${b.pageIndex}-${idx}`}
+                  className={cn(
+                    "flex cursor-pointer items-center gap-3 rounded-xl border p-2.5 text-xs transition",
+                    checked
+                      ? "border-[#4F46E5] bg-[#EEF2FF]/60"
+                      : "border-slate-200 bg-white hover:bg-slate-50"
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedBlankIndices((prev) => [...prev, idx]);
+                      } else {
+                        setSelectedBlankIndices((prev) => prev.filter((i) => i !== idx));
+                      }
+                    }}
+                    className="h-4 w-4 rounded accent-[#4F46E5]"
+                  />
+                  <Badge variant={b.type === "CHECKBOX" ? "mint" : "indigo"} className="shrink-0 text-[10px]">
+                    {b.type}
+                  </Badge>
+                  <span className="shrink-0 font-semibold text-slate-600">
+                    {tr("Trang", "Page")} {b.pageIndex + 1}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-[#0B1C30]">
+                    {b.snippet}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={() => setDetectDialogOpen(false)}>
+              {vi.common.cancel}
+            </Button>
+            <Button
+              type="button"
+              data-testid="confirm-detect-blanks-btn"
+              disabled={selectedBlankIndices.length === 0}
+              onClick={handleConfirmDetectedBlanks}
+            >
+              {tr(
+                `Thêm ${selectedBlankIndices.length} ô đã chọn`,
+                `Add ${selectedBlankIndices.length} selected`
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

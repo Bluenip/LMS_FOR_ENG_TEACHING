@@ -10,7 +10,12 @@ import {
   Send,
   XCircle,
 } from "lucide-react";
-import type { AnswerValue, DictationGradeDetail, RubricScoreMap } from "@/lib/grading/types";
+import type {
+  AnswerValue,
+  DictationGradeDetail,
+  PhotoAnnotationMap,
+  RubricScoreMap,
+} from "@/lib/grading/types";
 import { loadFlaggedFieldIds, saveFlaggedFieldIds } from "@/lib/offline-answer-queue";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
@@ -112,6 +117,7 @@ interface FocusQuestionRunnerProps {
       teacherNote?: string | null;
       gradeDetail?: DictationGradeDetail | null;
       rubricScores?: RubricScoreMap | null;
+      annotations?: PhotoAnnotationMap | null;
     }
   >;
 }
@@ -397,6 +403,17 @@ export function FocusQuestionRunner({
               </p>
             )}
 
+            {singleField.imageKey && (
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`/api/files/${singleField.imageKey}`}
+                  alt={tr(`Hình minh hoạ câu ${singleField.label}`, `Illustration for question ${singleField.label}`)}
+                  className="max-h-72 w-auto object-contain"
+                />
+              </div>
+            )}
+
             {singleField.type === "MULTIPLE_CHOICE" && (
               <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                 {(singleField.options ?? []).map((opt) => {
@@ -520,6 +537,7 @@ export function FocusQuestionRunner({
                 value={answers[singleField.id]}
                 onChange={(next) => onChange?.(singleField.id, next)}
                 disabled={disabled}
+                annotations={revealResult ? (gradeByFieldId[singleField.id]?.annotations ?? null) : null}
               />
             )}
 

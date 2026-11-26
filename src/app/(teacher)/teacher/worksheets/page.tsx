@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/dialog";
 import type { WorksheetSubject } from "@prisma/client";
 import type { ParsedFillBlankField } from "@/lib/worksheet/fill-blank-parser";
+import type { ParsedWordExamField } from "@/lib/worksheet/word-exam-parser";
 import { getSubjectMeta, WORKSHEET_SUBJECTS } from "@/lib/subjects";
 import { PromptText } from "@/components/worksheet/PromptText";
 import { SubjectBadge, SubjectPicker } from "@/components/worksheet/SubjectPicker";
@@ -135,11 +136,14 @@ export default function TeacherWorksheetsPage() {
 
   // Word auto-create modal state
   const [wordOpen, setWordOpen] = useState(false);
+  const [wordMode, setWordMode] = useState<"fill-blank" | "exam">("fill-blank");
   const [wordTitle, setWordTitle] = useState("");
   const [wordSubject, setWordSubject] = useState<WorksheetSubject>("ENGLISH");
   const [wordText, setWordText] = useState("");
   const [wordPoints, setWordPoints] = useState(1);
   const [wordParsed, setWordParsed] = useState<ParsedFillBlankField[]>([]);
+  const [wordExamParsed, setWordExamParsed] = useState<ParsedWordExamField[]>([]);
+  const [wordWarnings, setWordWarnings] = useState<string[]>([]);
   const [wordSkipped, setWordSkipped] = useState(0);
   const [wordParsing, setWordParsing] = useState(false);
   const [wordCreating, setWordCreating] = useState(false);
@@ -287,20 +291,30 @@ export default function TeacherWorksheetsPage() {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("defaultPoints", String(wordPoints));
-      const res = await fetch("/api/worksheets/parse-word", {
+      const endpoint =
+        wordMode === "exam" ? "/api/worksheets/parse-word-exam" : "/api/worksheets/parse-word";
+      const res = await fetch(endpoint, {
         method: "POST",
         body: formData,
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? tr("Không đọc được file Word", "Could not parse Word file"));
-      setWordText(json.rawText ?? "");
+      if (json.rawText) setWordText(json.rawText);
       if (!wordTitle && json.suggestedTitle) setWordTitle(json.suggestedTitle);
-      setWordParsed(json.fields ?? []);
+      if (wordMode === "exam") {
+        setWordExamParsed(json.fields ?? []);
+        setWordWarnings(json.warnings ?? []);
+        setWordParsed([]);
+      } else {
+        setWordParsed(json.fields ?? []);
+        setWordExamParsed([]);
+        setWordWarnings([]);
+      }
       setWordSkipped((json.skippedLines ?? []).length);
       toast.success(
         tr(
-          `Đã nhận diện tự động ${json.fields?.length ?? 0} câu điền từ từ file!`,
-          `Auto-detected ${json.fields?.length ?? 0} fill-in-the-blank items!`
+          `Đã nhận diện tự động ${json.fields?.length ?? 0} câu hỏi từ file!`,
+          `Auto-detected ${json.fields?.length ?? 0} question(s) from file!`
         )
       );
     } catch (err) {
@@ -313,19 +327,31 @@ export default function TeacherWorksheetsPage() {
   const handleParsePastedWordText = async (textToParse: string) => {
     if (!textToParse.trim()) {
       setWordParsed([]);
+      setWordExamParsed([]);
+      setWordWarnings([]);
       setWordSkipped(0);
       return;
     }
     setWordParsing(true);
     try {
-      const res = await fetch("/api/worksheets/parse-word", {
+      const endpoint =
+        wordMode === "exam" ? "/api/worksheets/parse-word-exam" : "/api/worksheets/parse-word";
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: textToParse, defaultPoints: wordPoints }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? tr("Phân tích thất bại", "Parse failed"));
-      setWordParsed(json.fields ?? []);
+      if (wordMode === "exam") {
+        setWordExamParsed(json.fields ?? []);
+        setWordWarnings(json.warnings ?? []);
+        setWordParsed([]);
+      } else {
+        setWordParsed(json.fields ?? []);
+        setWordExamParsed([]);
+        setWordWarnings([]);
+      }
       setWordSkipped((json.skippedLines ?? []).length);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : vi.common.errorGeneric);
@@ -335,45 +361,70 @@ export default function TeacherWorksheetsPage() {
   };
 
   const handleConfirmWordCreate = async () => {
-    if (wordParsed.length === 0) {
-      toast.error(tr("Chưa có câu hỏi nào được nhận diện (cần dấu __đáp án__).", "No blanks detected (wrap answers in __answer__)."));
+    const activeCount = wordMode === "exam" ? wordExamParsed.length : wordParsed.length;
+    if (activeCount === 0) {
+      toast.error(
+        wordMode === "exam"
+          ? tr("Chưa nhận diện được câu hỏi nào từ đề thi.", "No exam questions detected.")
+          : tr("Chưa có câu hỏi nào được nhận diện (cần dấu __đáp án__).", "No blanks detected (wrap answers in __answer__).")
+      );
       return;
     }
     setWordCreating(true);
     try {
-      const finalTitle = wordTitle.trim() || tr("Bài tập điền từ từ Word", "Fill-in-the-blank from Word");
+      const finalTitle =
+        wordTitle.trim() ||
+        (wordMode === "exam"
+          ? tr("Đề kiểm tra từ Word", "Exam worksheet from Word")
+          : tr("Bài tập điền từ từ Word", "Fill-in-the-blank from Word"));
       const createRes = await fetch("/api/worksheets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: finalTitle,
           subject: wordSubject,
-          instructions: tr("Điền từ hoặc cụm từ thích hợp vào chỗ trống.", "Fill in each blank with the correct word or phrase."),
+          instructions:
+            wordMode === "exam"
+              ? tr("Hoàn thành đầy đủ các câu hỏi dưới đây.", "Complete all questions below.")
+              : tr("Điền từ hoặc cụm từ thích hợp vào chỗ trống.", "Fill in each blank with the correct word or phrase."),
         }),
       });
       const createJson = await createRes.json();
       if (!createRes.ok) throw new Error(createJson.error ?? tr("Không thể tạo phiếu", "Could not create worksheet"));
 
       const wsId = createJson.worksheet.id as string;
+      const fieldsPayload =
+        wordMode === "exam"
+          ? wordExamParsed.map((f, idx) => ({
+              placement: "ANSWER_SHEET" as const,
+              type: f.type,
+              label: f.label,
+              prompt: f.prompt,
+              order: idx,
+              points: f.points,
+              options: f.options ?? null,
+              answerKey: f.answerKey,
+              gradingOpts: f.gradingOpts ?? null,
+            }))
+          : wordParsed.map((f, idx) => ({
+              placement: "ANSWER_SHEET" as const,
+              type: "TEXT" as const,
+              label: f.label,
+              prompt: f.prompt,
+              order: idx,
+              points: f.points,
+              answerKey: { accepted: f.accepted },
+              gradingOpts: {
+                caseSensitive: false,
+                ignorePunctuation: true,
+                ignoreExtraSpaces: true,
+              },
+            }));
+
       const fieldsRes = await fetch(`/api/worksheets/${wsId}/fields`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fields: wordParsed.map((f, idx) => ({
-            placement: "ANSWER_SHEET",
-            type: "TEXT",
-            label: f.label,
-            prompt: f.prompt,
-            order: idx,
-            points: f.points,
-            answerKey: { accepted: f.accepted },
-            gradingOpts: {
-              caseSensitive: false,
-              ignorePunctuation: true,
-              ignoreExtraSpaces: true,
-            },
-          })),
-        }),
+        body: JSON.stringify({ fields: fieldsPayload }),
       });
       if (!fieldsRes.ok) {
         const err = await fieldsRes.json().catch(() => ({}));
@@ -381,12 +432,14 @@ export default function TeacherWorksheetsPage() {
       }
 
       toast.success(
-        tr(`Đã tạo phiếu "${finalTitle}" với ${wordParsed.length} ô điền từ!`, `Created "${finalTitle}" with ${wordParsed.length} blanks!`)
+        tr(`Đã tạo phiếu "${finalTitle}" với ${activeCount} câu hỏi!`, `Created "${finalTitle}" with ${activeCount} question(s)!`)
       );
       setWordOpen(false);
       setWordTitle("");
       setWordText("");
       setWordParsed([]);
+      setWordExamParsed([]);
+      setWordWarnings([]);
       queryClient.invalidateQueries({ queryKey: ["teacher-worksheets"] });
       router.push(`/teacher/worksheets/${wsId}/edit`);
     } catch (err) {
@@ -870,6 +923,24 @@ export default function TeacherWorksheetsPage() {
                     >
                       <FileDown className="h-3 w-3" /> {tr("Word (HS)", "Word (student)")}
                     </a>
+                    <a
+                      href={`/api/worksheets/${ws.id}/export?format=pdf&mode=student`}
+                      download
+                      data-testid={`export-pdf-student-${ws.id}`}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-[#F8F9FF] px-2 py-1 font-semibold text-[#3525CD] hover:bg-[#EEF2FF]"
+                      title={tr("Xuất PDF đề in cho học sinh", "Export printable student PDF")}
+                    >
+                      <FileDown className="h-3 w-3" /> PDF (HS)
+                    </a>
+                    <a
+                      href={`/api/worksheets/${ws.id}/export?format=pdf&mode=key`}
+                      download
+                      data-testid={`export-pdf-key-${ws.id}`}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-[#F8F9FF] px-2 py-1 font-semibold text-[#3525CD] hover:bg-[#EEF2FF]"
+                      title={tr("Xuất PDF kèm đáp án & rubric", "Export PDF with answer key")}
+                    >
+                      <FileDown className="h-3 w-3" /> PDF (ĐA)
+                    </a>
                   </div>
 
                   <div className="flex items-center justify-between gap-2">
@@ -1036,39 +1107,95 @@ export default function TeacherWorksheetsPage() {
           </DialogHeader>
 
           <div className="space-y-4 text-xs">
-            <div className="rounded-xl border border-indigo-200 bg-[#EEF2FF]/60 p-3.5 space-y-1.5 text-[#3525CD]">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="font-bold">
-                  {tr("Quy ước trình bày trong file Word:", "Formatting convention in Word:")}
-                </p>
-                <a
-                  href="/api/worksheets/sample-word"
-                  download
-                  className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-[11px] font-bold text-[#3525CD] shadow-sm hover:bg-indigo-50"
-                >
-                  <FileDown className="h-3.5 w-3.5" />
-                  {tr("Tải file Word mẫu (.docx)", "Download sample .docx")}
-                </a>
-              </div>
-              <ul className="list-disc pl-4 space-y-0.5 text-[11px]">
-                <li>
-                  {tr("Bọc phần cần điền trong cặp dấu gạch dưới kép:", "Wrap the blank answer in double underscores:")}{" "}
-                  <code className="rounded bg-white px-1 py-0.5 font-mono">
-                    Câu 1: How many __planets are there in the universe__?
-                  </code>
-                </li>
-                <li>
-                  {tr("Nhiều đáp án cùng đúng thì ngăn cách bằng dấu", "Separate multiple accepted answers with")}{" "}
-                  <code className="rounded bg-white px-1 py-0.5 font-mono">/</code>:{" "}
-                  <code className="rounded bg-white px-1 py-0.5 font-mono">
-                    __has lived/&apos;s lived__
-                  </code>
-                </li>
-                <li>
-                  {tr("Hỗ trợ nhiều chỗ trống trong cùng một câu (tự tách 7a, 7b và gộp hiển thị đẹp trong Chế độ tập trung 1 câu/màn hình).", "Supports multiple blanks per sentence (automatically split into 7a, 7b and shown inline in Focus Mode).")}
-                </li>
-              </ul>
+            {/* Mode Switch: Fill-in-the-blank vs Mixed Exam */}
+            <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-[#EFF4FF] p-1">
+              <button
+                type="button"
+                data-testid="word-mode-fill-blank"
+                onClick={() => {
+                  setWordMode("fill-blank");
+                  setWordExamParsed([]);
+                  setWordWarnings([]);
+                }}
+                className={cn(
+                  "min-h-9 rounded-lg px-3 py-1.5 text-xs font-bold transition",
+                  wordMode === "fill-blank"
+                    ? "bg-[#4F46E5] text-white shadow-sm"
+                    : "text-[#464555] hover:text-[#0B1C30]"
+                )}
+              >
+                {tr("Điền từ (__đáp án__)", "Fill-in-the-blank (__answer__)")}
+              </button>
+              <button
+                type="button"
+                data-testid="word-mode-exam"
+                onClick={() => {
+                  setWordMode("exam");
+                  setWordParsed([]);
+                }}
+                className={cn(
+                  "min-h-9 rounded-lg px-3 py-1.5 text-xs font-bold transition",
+                  wordMode === "exam"
+                    ? "bg-[#4F46E5] text-white shadow-sm"
+                    : "text-[#464555] hover:text-[#0B1C30]"
+                )}
+              >
+                {tr("Đề thi đa dạng (MCQ / Đ-S / Tự luận)", "Mixed Exam (MCQ / T-F / Essay)")}
+              </button>
             </div>
+
+            {wordMode === "fill-blank" ? (
+              <div className="rounded-xl border border-indigo-200 bg-[#EEF2FF]/60 p-3.5 space-y-1.5 text-[#3525CD]">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-bold">
+                    {tr("Quy ước trình bày trong file Word:", "Formatting convention in Word:")}
+                  </p>
+                  <a
+                    href="/api/worksheets/sample-word"
+                    download
+                    className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-[11px] font-bold text-[#3525CD] shadow-sm hover:bg-indigo-50"
+                  >
+                    <FileDown className="h-3.5 w-3.5" />
+                    {tr("Tải file Word mẫu (.docx)", "Download sample .docx")}
+                  </a>
+                </div>
+                <ul className="list-disc pl-4 space-y-0.5 text-[11px]">
+                  <li>
+                    {tr("Bọc phần cần điền trong cặp dấu gạch dưới kép:", "Wrap the blank answer in double underscores:")}{" "}
+                    <code className="rounded bg-white px-1 py-0.5 font-mono">
+                      Câu 1: How many __planets are there in the universe__?
+                    </code>
+                  </li>
+                  <li>
+                    {tr("Nhiều đáp án cùng đúng thì ngăn cách bằng dấu", "Separate multiple accepted answers with")}{" "}
+                    <code className="rounded bg-white px-1 py-0.5 font-mono">/</code>:{" "}
+                    <code className="rounded bg-white px-1 py-0.5 font-mono">
+                      __has lived/&apos;s lived__
+                    </code>
+                  </li>
+                  <li>
+                    {tr("Hỗ trợ nhiều chỗ trống trong cùng một câu (tự tách 7a, 7b và gộp hiển thị đẹp trong Chế độ tập trung 1 câu/màn hình).", "Supports multiple blanks per sentence (automatically split into 7a, 7b and shown inline in Focus Mode).")}
+                  </li>
+                </ul>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-indigo-200 bg-[#EEF2FF]/60 p-3.5 space-y-1 text-[#3525CD]">
+                <p className="font-bold">
+                  {tr("Tự động nhận diện 4 dạng câu hỏi từ Word (.docx) hoặc văn bản:", "Auto-detects 4 question types from Word (.docx) or text:")}
+                </p>
+                <ul className="list-disc pl-4 space-y-0.5 text-[11px]">
+                  <li>
+                    {tr("Trắc nghiệm A. B. C. D. (tự nhận đáp án in đậm/gạch chân, dấu *A. hoặc bảng đáp án cuối bài).", "MCQ A. B. C. D. (detects bold/underlined options, *A., or answer key section at bottom).")}
+                  </li>
+                  <li>
+                    {tr("Đúng/Sai 4 ý THPT 2025: a) ... b) ... c) ... d) ... với (Đ)/(S) hoặc bảng đáp án a-Đ, b-S.", "True/False 4-part (a-d): inline (T)/(F) or (Đ)/(S), bold cues, or bottom table.")}
+                  </li>
+                  <li>
+                    {tr("Điền từ (__đáp án__) và Tự luận ([Tự luận] hoặc câu hỏi mở).", "Fill-in-the-blank (__answer__) and Essay ([Essay] or open-ended questions).")}
+                  </li>
+                </ul>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
               <div className="sm:col-span-2 space-y-1">
@@ -1163,7 +1290,55 @@ export default function TeacherWorksheetsPage() {
             </div>
 
             {/* Live Parsed Preview */}
-            {wordParsed.length > 0 && (
+            {wordMode === "exam" && wordExamParsed.length > 0 && (
+              <div
+                data-testid="word-exam-preview"
+                className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3.5 space-y-2"
+              >
+                <p className="font-bold text-emerald-800">
+                  {tr(`Đã nhận diện ${wordExamParsed.length} câu hỏi`, `Detected ${wordExamParsed.length} question(s)`)}
+                </p>
+                {wordWarnings.length > 0 && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800 space-y-0.5">
+                    {wordWarnings.map((w, wi) => (
+                      <p key={wi}>• {w}</p>
+                    ))}
+                  </div>
+                )}
+                <div className="max-h-56 space-y-1.5 overflow-y-auto pr-1">
+                  {wordExamParsed.map((f, idx) => (
+                    <div
+                      key={`${f.label}-${idx}`}
+                      className="rounded-lg border border-slate-200 bg-white p-2.5 space-y-1"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-semibold text-[#0B1C30]">
+                          <span className="mr-1.5 inline-block rounded bg-[#EEF2FF] px-1.5 py-0.5 text-[10px] font-bold text-[#3525CD]">
+                            {tr("Câu", "Q")} {f.label} · {f.type}
+                          </span>
+                          <PromptText text={f.prompt} />
+                        </span>
+                        <span className="shrink-0 text-[10px] font-bold text-slate-400">
+                          {f.points}
+                          {tr("đ", "pt")}
+                        </span>
+                      </div>
+                      {f.options && f.options.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 text-[11px] text-[#464555]">
+                          {f.options.map((o) => (
+                            <span key={o.id} className="rounded bg-slate-100 px-1.5 py-0.5">
+                              {o.id}. {o.text}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {wordMode === "fill-blank" && wordParsed.length > 0 && (
               <div
                 data-testid="word-import-preview"
                 className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3.5 space-y-2"
@@ -1216,14 +1391,16 @@ export default function TeacherWorksheetsPage() {
               <Button
                 type="button"
                 variant="accent"
-                disabled={wordParsed.length === 0 || wordCreating}
+                disabled={(wordMode === "exam" ? wordExamParsed.length : wordParsed.length) === 0 || wordCreating}
                 data-testid="confirm-word-import-btn"
                 onClick={() => void handleConfirmWordCreate()}
               >
                 <Sparkles className="h-4 w-4" />
                 {wordCreating
                   ? tr("Đang tạo…", "Creating…")
-                  : tr(`Tạo Worksheet (${wordParsed.length} ô điền)`, `Create worksheet (${wordParsed.length} blanks)`)}
+                  : wordMode === "exam"
+                    ? tr(`Tạo Worksheet (${wordExamParsed.length} câu hỏi)`, `Create worksheet (${wordExamParsed.length} questions)`)
+                    : tr(`Tạo Worksheet (${wordParsed.length} ô điền)`, `Create worksheet (${wordParsed.length} blanks)`)}
               </Button>
             </div>
           </div>

@@ -491,6 +491,7 @@ export async function getAssignmentQuestionGradingData(
                 isCorrect: ans.isCorrect,
                 teacherNote: ans.teacherNote,
                 rubricScores: ans.rubricScores,
+                annotations: ans.annotations,
               }
             : null,
         };

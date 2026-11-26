@@ -21,6 +21,23 @@ export interface RubricCriterion {
 
 export type RubricScoreMap = Record<string, number>;
 
+export type PhotoAnnotationType = "pen" | "rect" | "circle" | "check" | "cross" | "text";
+
+export interface PhotoAnnotationItem {
+  id: string;
+  type: PhotoAnnotationType;
+  color: string;
+  strokeWidth: number;
+  points?: Array<[number, number]>;
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
+  text?: string;
+}
+
+export type PhotoAnnotationMap = Record<string, PhotoAnnotationItem[]>;
+
 export type TrueFalseScoringMode = "THPT_2025" | "ALL_OR_NOTHING" | "EQUAL";
 
 export interface GradingOptions {

@@ -23,6 +23,7 @@ export interface CreateAssignmentInput {
   timeLimitMin?: number | null;
   maxAttempts: number | null;
   shuffle: boolean;
+  shuffleOptions?: boolean;
   showResult: ShowResultMode;
   showAnswerKey: boolean;
   allowLate: boolean;
@@ -124,6 +125,7 @@ export async function createAssignmentsForClasses(
         timeLimitMin: input.timeLimitMin ?? null,
         maxAttempts: input.maxAttempts,
         shuffle: input.shuffle,
+        shuffleOptions: Boolean(input.shuffleOptions),
         showResult: input.showResult,
         showAnswerKey: input.showAnswerKey,
         allowLate: input.allowLate,
@@ -229,10 +231,11 @@ export async function getAssignmentSettings(id: string) {
  */
 export async function updateAssignment(
   id: string,
-  input: Omit<UpdateAssignmentInput, "remindBeforeDue" | "scoreScale" | "weight"> & {
+  input: Omit<UpdateAssignmentInput, "remindBeforeDue" | "scoreScale" | "weight" | "shuffleOptions"> & {
     remindBeforeDue?: boolean;
     scoreScale?: ScoreScale;
     weight?: number;
+    shuffleOptions?: boolean;
   },
   actorId?: string
 ) {
@@ -257,6 +260,7 @@ export async function updateAssignment(
       timeLimitMin: input.timeLimitMin ?? null,
       maxAttempts: input.maxAttempts,
       shuffle: input.shuffle,
+      ...(input.shuffleOptions !== undefined ? { shuffleOptions: Boolean(input.shuffleOptions) } : {}),
       showResult: input.showResult,
       showAnswerKey: input.showAnswerKey,
       allowLate: input.allowLate,

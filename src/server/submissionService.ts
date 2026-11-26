@@ -12,6 +12,7 @@ import {
   sanitizeDictationDetail,
   type AnswerValue,
   type GradingOptions,
+  type PhotoAnnotationMap,
   type RubricCriterion,
   type RubricScoreMap,
 } from "@/lib/grading";
@@ -244,6 +245,29 @@ export async function startOrResumeSubmission(
     }
   }
 
+  // Shuffle A/B/C/D options per question when assignment.shuffleOptions = true
+  let optionOrder: Record<string, string[]> | null = null;
+  if (assignment.shuffleOptions) {
+    const orderMap: Record<string, string[]> = {};
+    for (const f of assignment.worksheet.fields) {
+      if (
+        (f.type === "MULTIPLE_CHOICE" || f.type === "MULTI_SELECT") &&
+        Array.isArray(f.options) &&
+        f.options.length > 1
+      ) {
+        const ids = (f.options as Array<{ id?: unknown }>)
+          .map((o) => (typeof o?.id === "string" ? o.id : null))
+          .filter((id): id is string => Boolean(id));
+        if (ids.length > 1) {
+          orderMap[f.id] = shuffleArray(ids);
+        }
+      }
+    }
+    if (Object.keys(orderMap).length > 0) {
+      optionOrder = orderMap;
+    }
+  }
+
   const nextAttemptNo = (existingSubmissions[0]?.attemptNo ?? 0) + 1;
   const attemptToken = opts?.attemptToken || crypto.randomUUID();
 
@@ -256,6 +280,7 @@ export async function startOrResumeSubmission(
       startedAt: now,
       maxScore: Math.round(maxScore * 100) / 100,
       questionOrder: questionOrder ? (questionOrder as Prisma.InputJsonValue) : undefined,
+      optionOrder: optionOrder ? (optionOrder as Prisma.InputJsonValue) : undefined,
       rulesAcceptedAt: opts?.rulesAccepted ? now : null,
       cameraConsentAt: opts?.cameraConsent ? now : null,
       attemptToken,
@@ -338,7 +363,7 @@ export async function getStudentAssignmentPayload(
           pdfFileKey: true,
           pageCount: true,
           pages: {
-            select: { id: true, pageIndex: true, widthPt: true, heightPt: true },
+            select: { id: true, pageIndex: true, widthPt: true, heightPt: true, imageKey: true },
             orderBy: { pageIndex: "asc" },
           },
           audios: {
@@ -378,6 +403,7 @@ export async function getStudentAssignmentPayload(
       totalScore: true,
       maxScore: true,
       questionOrder: true,
+      optionOrder: true,
       teacherComment: true,
       violationCount: true,
       lockedAt: true,
@@ -396,6 +422,7 @@ export async function getStudentAssignmentPayload(
           teacherNote: true,
           gradeDetail: true,
           rubricScores: true,
+          annotations: true,
         },
       },
       audioPlays: {
@@ -531,6 +558,7 @@ export async function getStudentAssignmentPayload(
             ? sanitizeDictationDetail(a.gradeDetail, revealKey)
             : null,
           rubricScores: revealResult ? (a.rubricScores as RubricScoreMap | null) : null,
+          annotations: revealResult ? (a.annotations as PhotoAnnotationMap | null) : null,
         })),
       }
     : null;
@@ -559,18 +587,38 @@ export async function getStudentAssignmentPayload(
         pdfFileKey: contentUnlocked ? assignment.worksheet.pdfFileKey : null,
         pages: contentUnlocked ? assignment.worksheet.pages : [],
         audios: contentUnlocked ? assignment.worksheet.audios : [],
-        fields: (contentUnlocked ? orderedFields : []).map((f) => ({
-          ...f,
-          ...(revealResult && revealedRubricByFieldId[f.id]
-            ? { rubric: revealedRubricByFieldId[f.id] }
-            : {}),
-          ...(revealKey && revealedKeysByFieldId[f.id]
-            ? {
-                revealedAnswer: revealedKeysByFieldId[f.id]!.correctAnswer,
-                explanation: revealedKeysByFieldId[f.id]!.explanation,
-              }
-            : {}),
-        })),
+        fields: (contentUnlocked ? orderedFields : []).map((f) => {
+          let options = f.options;
+          if (
+            activeSubmission?.optionOrder &&
+            typeof activeSubmission.optionOrder === "object" &&
+            !Array.isArray(activeSubmission.optionOrder) &&
+            Array.isArray(options)
+          ) {
+            const orderIds = (activeSubmission.optionOrder as Record<string, unknown>)[f.id];
+            if (Array.isArray(orderIds)) {
+              const rank = new Map(orderIds.map((id, idx) => [String(id), idx]));
+              options = [...options].sort((a, b) => {
+                const aid = typeof (a as { id?: unknown })?.id === "string" ? (a as { id: string }).id : "";
+                const bid = typeof (b as { id?: unknown })?.id === "string" ? (b as { id: string }).id : "";
+                return (rank.get(aid) ?? 9999) - (rank.get(bid) ?? 9999);
+              });
+            }
+          }
+          return {
+            ...f,
+            options,
+            ...(revealResult && revealedRubricByFieldId[f.id]
+              ? { rubric: revealedRubricByFieldId[f.id] }
+              : {}),
+            ...(revealKey && revealedKeysByFieldId[f.id]
+              ? {
+                  revealedAnswer: revealedKeysByFieldId[f.id]!.correctAnswer,
+                  explanation: revealedKeysByFieldId[f.id]!.explanation,
+                }
+              : {}),
+          };
+        }),
       },
     },
     submission: sanitizedSubmission,
@@ -1322,4 +1370,62 @@ export async function saveSingleFieldGrade(
   }
 
   return updated;
+}
+
+/**
+ * Saves teacher vector annotations (pen strokes, checks, circles, boxes, notes)
+ * over student-uploaded handwritten answer photos without modifying original images.
+ */
+export async function savePhotoAnnotations(
+  submissionId: string,
+  fieldId: string,
+  annotations: PhotoAnnotationMap
+) {
+  const submission = await prisma.submission.findUnique({
+    where: { id: submissionId },
+    include: {
+      assignment: {
+        include: {
+          worksheet: { include: { fields: { select: { id: true, type: true } } } },
+        },
+      },
+      answers: {
+        where: { fieldId },
+        take: 1,
+      },
+    },
+  });
+
+  if (!submission) {
+    throw new AppError("Không tìm thấy bài làm.", 404, "NOT_FOUND");
+  }
+
+  const field = submission.assignment.worksheet.fields.find((f) => f.id === fieldId);
+  if (!field) {
+    throw new AppError("Không tìm thấy câu hỏi trong bài tập này.", 404, "INVALID_FIELD");
+  }
+  if (field.type !== "PHOTO_UPLOAD") {
+    throw new AppError("Câu hỏi này không phải dạng nộp ảnh bài làm.", 400, "INVALID_FIELD_TYPE");
+  }
+
+  const answer = submission.answers[0];
+  if (!answer || !isPhotoUploadAnswer(answer.value)) {
+    throw new AppError("File được chú thích không thuộc bài làm của học sinh.", 400, "INVALID_FILE");
+  }
+
+  const allowedKeys = new Set(answer.value.files.map((f) => f.key));
+  for (const key of Object.keys(annotations)) {
+    if (!allowedKeys.has(key)) {
+      throw new AppError("File được chú thích không thuộc bài làm của học sinh.", 400, "INVALID_FILE");
+    }
+  }
+
+  const saved = await prisma.answer.update({
+    where: { id: answer.id },
+    data: {
+      annotations: annotations as unknown as Prisma.InputJsonValue,
+    },
+  });
+
+  return saved;
 }

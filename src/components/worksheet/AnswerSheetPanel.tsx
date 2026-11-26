@@ -2,7 +2,12 @@
 
 import { Fragment, useEffect, useState } from "react";
 import { CheckCircle2, ChevronUp, ClipboardList, ClipboardX, Flag, XCircle } from "lucide-react";
-import type { AnswerValue, DictationGradeDetail, RubricScoreMap } from "@/lib/grading/types";
+import type {
+  AnswerValue,
+  DictationGradeDetail,
+  PhotoAnnotationMap,
+  RubricScoreMap,
+} from "@/lib/grading/types";
 import { loadFlaggedFieldIds, saveFlaggedFieldIds } from "@/lib/offline-answer-queue";
 import { cn, compareQuestionLabels } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
@@ -51,6 +56,7 @@ interface AnswerSheetPanelProps {
       teacherNote?: string | null;
       gradeDetail?: DictationGradeDetail | null;
       rubricScores?: RubricScoreMap | null;
+      annotations?: PhotoAnnotationMap | null;
     }
   >;
 }
@@ -287,6 +293,17 @@ export function AnswerSheetPanel({
                   </p>
                 )}
 
+                {field.imageKey && (
+                  <div className="mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`/api/files/${field.imageKey}`}
+                      alt={tr(`Hình minh hoạ câu ${field.label}`, `Illustration for question ${field.label}`)}
+                      className="max-h-60 w-auto object-contain"
+                    />
+                  </div>
+                )}
+
                 {field.audioId && (() => {
                   const linkedAudio = audios.find((a) => a.id === field.audioId);
                   if (!linkedAudio) return null;
@@ -445,6 +462,7 @@ export function AnswerSheetPanel({
                       onChange={(next) => onChange?.(field.id, next)}
                       disabled={disabled}
                       previewOnly={previewOnly || audioPreviewMode}
+                      annotations={revealResult ? (grade?.annotations ?? null) : null}
                     />
                   )}
 
