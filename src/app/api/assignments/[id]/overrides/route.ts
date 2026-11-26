@@ -13,7 +13,7 @@ export async function GET(
 ) {
   try {
     const { id } = await context.params;
-    await requireTeacherOfAssignment(id);
+    await requireTeacherOfAssignment(id, "ASSISTANT");
     const overrides = await listAssignmentOverrides(id);
     return NextResponse.json({ overrides });
   } catch (error) {
@@ -27,7 +27,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await context.params;
-    const { user } = await requireTeacherOfAssignment(id);
+    const { user } = await requireTeacherOfAssignment(id, "CO_TEACHER");
     const data = upsertAssignmentOverrideSchema.parse(await req.json());
     const override = await upsertAssignmentOverride(id, data, user.id);
     return NextResponse.json({ override });
@@ -42,7 +42,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await context.params;
-    const { user } = await requireTeacherOfAssignment(id);
+    const { user } = await requireTeacherOfAssignment(id, "CO_TEACHER");
     const url = new URL(req.url);
     const studentId = url.searchParams.get("studentId")?.trim();
     if (!studentId) {

@@ -68,8 +68,9 @@ interface TeacherDashboardClientProps {
     archived: boolean;
     studentCount: number;
     assignmentCount: number;
-    /** set when the class belongs to another teacher (admin view) */
+    /** set when the class belongs to another teacher (admin or co-teacher view) */
     teacherName?: string | null;
+    myRole?: "OWNER" | "CO_TEACHER" | "ASSISTANT";
   }>;
   trashedClasses: TrashedClassItem[];
   assignments: Array<{
@@ -480,8 +481,15 @@ export function TeacherDashboardClient({
                       {cls.name}
                     </h3>
                     {cls.teacherName && (
-                      <p className="mt-0.5 text-xs font-semibold text-[#4F46E5]">
-                        {tr("GV:", "Teacher:")} {cls.teacherName}
+                      <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs font-semibold text-[#4F46E5]">
+                        <span>{tr("GV:", "Teacher:")} {cls.teacherName}</span>
+                        {cls.myRole && cls.myRole !== "OWNER" && (
+                          <Badge variant="sky" className="text-[10px]">
+                            {cls.myRole === "ASSISTANT"
+                              ? tr("Trợ giảng", "Assistant")
+                              : tr("Đồng giáo viên", "Co-teacher")}
+                          </Badge>
+                        )}
                       </p>
                     )}
                     {cls.description && (

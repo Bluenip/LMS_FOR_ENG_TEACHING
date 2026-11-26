@@ -279,18 +279,28 @@ async function main() {
   await prisma.audioPlay.deleteMany();
   await prisma.proctorEvent.deleteMany();
   await prisma.answer.deleteMany();
+  await prisma.submissionRevision.deleteMany();
   await prisma.submission.deleteMany();
+  await prisma.assignment.updateMany({ data: { unlockAfterAssignmentId: null } });
   await prisma.assignment.deleteMany();
+  await prisma.workbookItem.deleteMany();
+  await prisma.workbook.deleteMany();
   await prisma.field.deleteMany();
   await prisma.worksheetAudio.deleteMany();
   await prisma.worksheetPage.deleteMany();
   await prisma.worksheet.deleteMany();
+  await prisma.lessonItemProgress.deleteMany();
   await prisma.lessonItem.deleteMany();
   await prisma.classLesson.deleteMany();
   await prisma.lesson.deleteMany();
   await prisma.comment.deleteMany();
+  await prisma.postPollVote.deleteMany();
+  await prisma.postPollOption.deleteMany();
+  await prisma.postPoll.deleteMany();
+  await prisma.postReaction.deleteMany();
   await prisma.post.deleteMany();
   await prisma.enrollment.deleteMany();
+  await prisma.classTeacher.deleteMany();
   await prisma.class.deleteMany();
   await prisma.parentInviteCode.deleteMany();
   await prisma.parentLink.deleteMany();
@@ -1236,6 +1246,214 @@ async function main() {
       showAnswerKey: true,
       showLeaderboard: "AFTER_SUBMIT",
       proctorMode: "OFF",
+    },
+  });
+
+  // Phase 20 seed: Co-teacher ASSISTANT, 3-session sequential Workbook, GRADED submission, Pinned post + Poll
+  await prisma.classTeacher.create({
+    data: {
+      classId: class1.id,
+      userId: teacher2.id,
+      role: "ASSISTANT",
+    },
+  });
+
+  const wsWb1 = await prisma.worksheet.create({
+    data: {
+      ownerId: teacher1.id,
+      subject: "ENGLISH",
+      title: "Ôn tập Buổi 1 — Thì hiện tại (Phase 20)",
+      instructions: "Hoàn thành 2 câu sau để mở Buổi 2.",
+      fields: {
+        create: [
+          {
+            placement: "ANSWER_SHEET",
+            type: "TEXT",
+            label: "1",
+            prompt: "She _____ to school every morning. (go)",
+            topicTag: "Thì hiện tại",
+            order: 0,
+            points: 1,
+            answerKey: { accepted: ["goes"] },
+            gradingOpts: { caseSensitive: false },
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "TEXT",
+            label: "2",
+            prompt: "They _____ football on Sundays. (play)",
+            topicTag: "Từ vựng",
+            order: 1,
+            points: 1,
+            answerKey: { accepted: ["play"] },
+            gradingOpts: { caseSensitive: false },
+          },
+        ],
+      },
+    },
+    include: { fields: { orderBy: { order: "asc" } } },
+  });
+
+  const wsWb2 = await prisma.worksheet.create({
+    data: {
+      ownerId: teacher1.id,
+      subject: "ENGLISH",
+      title: "Ôn tập Buổi 2 — Câu bị động (Phase 20)",
+      fields: {
+        create: [
+          {
+            placement: "ANSWER_SHEET",
+            type: "TEXT",
+            label: "1",
+            prompt: "The letter was _____ yesterday. (write)",
+            topicTag: "Câu bị động",
+            order: 0,
+            points: 2,
+            answerKey: { accepted: ["written"] },
+            gradingOpts: { caseSensitive: false },
+          },
+        ],
+      },
+    },
+  });
+
+  const wsWb3 = await prisma.worksheet.create({
+    data: {
+      ownerId: teacher1.id,
+      subject: "ENGLISH",
+      title: "Ôn tập Buổi 3 — Tổng hợp (Phase 20)",
+      fields: {
+        create: [
+          {
+            placement: "ANSWER_SHEET",
+            type: "TEXT",
+            label: "1",
+            prompt: "He has lived here _____ 2020.",
+            topicTag: "Thì hiện tại",
+            order: 0,
+            points: 2,
+            answerKey: { accepted: ["since"] },
+            gradingOpts: { caseSensitive: false },
+          },
+        ],
+      },
+    },
+  });
+
+  const seedWorkbook = await prisma.workbook.create({
+    data: {
+      ownerId: teacher1.id,
+      title: "Bộ đề Ôn tập 3 buổi (Phase 20)",
+      description: "Lộ trình ôn tập mở dần từng buổi sau khi nộp bài trước.",
+      items: {
+        create: [
+          { worksheetId: wsWb1.id, order: 0 },
+          { worksheetId: wsWb2.id, order: 1 },
+          { worksheetId: wsWb3.id, order: 2 },
+        ],
+      },
+    },
+  });
+
+  const wbAsg1 = await prisma.assignment.create({
+    data: {
+      classId: class1.id,
+      worksheetId: wsWb1.id,
+      workbookId: seedWorkbook.id,
+      workbookOrder: 0,
+      title: "Ôn tập Workbook — Buổi 1 (Phase 20)",
+      dueAt: nextWeek,
+      maxAttempts: 1,
+      showResult: "AFTER_SUBMIT",
+      showAnswerKey: true,
+      proctorMode: "OFF",
+    },
+  });
+
+  const wbAsg2 = await prisma.assignment.create({
+    data: {
+      classId: class1.id,
+      worksheetId: wsWb2.id,
+      workbookId: seedWorkbook.id,
+      workbookOrder: 1,
+      unlockAfterAssignmentId: wbAsg1.id,
+      title: "Ôn tập Workbook — Buổi 2 (Phase 20)",
+      dueAt: nextWeek,
+      maxAttempts: 1,
+      showResult: "AFTER_SUBMIT",
+      showAnswerKey: true,
+      proctorMode: "OFF",
+    },
+  });
+
+  await prisma.assignment.create({
+    data: {
+      classId: class1.id,
+      worksheetId: wsWb3.id,
+      workbookId: seedWorkbook.id,
+      workbookOrder: 2,
+      unlockAfterAssignmentId: wbAsg2.id,
+      title: "Ôn tập Workbook — Buổi 3 (Phase 20)",
+      dueAt: nextWeek,
+      maxAttempts: 1,
+      showResult: "AFTER_SUBMIT",
+      showAnswerKey: true,
+      proctorMode: "OFF",
+    },
+  });
+
+  // Seed GRADED attempt for student1 on Workbook Session 1 (1 right, 1 wrong -> unlock Session 2, ready for Return test)
+  await prisma.submission.create({
+    data: {
+      assignmentId: wbAsg1.id,
+      studentId: students[0]!.id,
+      attemptNo: 1,
+      status: "GRADED",
+      startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      submittedAt: new Date(Date.now() - 90 * 60 * 1000),
+      autoScore: 1,
+      manualScore: 0,
+      totalScore: 1,
+      maxScore: 2,
+      answers: {
+        create: [
+          { fieldId: wsWb1.fields[0]!.id, value: "goes", isCorrect: true, score: 1 },
+          { fieldId: wsWb1.fields[1]!.id, value: "plays", isCorrect: false, score: 0 },
+        ],
+      },
+    },
+  });
+
+  await prisma.post.create({
+    data: {
+      classId: class1.id,
+      authorId: teacher1.id,
+      pinned: true,
+      content: "Thông báo ghim: Các em hoàn thành lần lượt Bộ đề Ôn tập 3 buổi trước thứ 6 nhé (Phase 20).",
+      reactions: {
+        create: { userId: students[0]!.id, emoji: "👍" },
+      },
+    },
+  });
+
+  await prisma.post.create({
+    data: {
+      classId: class1.id,
+      authorId: teacher1.id,
+      content: "Khảo sát lịch phụ đạo trực tuyến tuần này (Phase 20):",
+      poll: {
+        create: {
+          question: "Em muốn học phụ đạo vào khung giờ nào?",
+          allowMultiple: false,
+          options: {
+            create: [
+              { text: "Thứ 4 — 19:30", order: 0 },
+              { text: "Thứ 6 — 20:00", order: 1 },
+              { text: "Chủ nhật — 09:00", order: 2 },
+            ],
+          },
+        },
+      },
     },
   });
 

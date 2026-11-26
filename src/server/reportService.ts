@@ -13,6 +13,7 @@ import {
   isWordsearchAnswer,
 } from "@/lib/grading";
 import { convertScoreToScale, scoreScaleLabel } from "@/lib/score-scale";
+import { computeScoreHistogram } from "@/lib/analytics/score-histogram";
 import { compareQuestionLabels, formatDateTime } from "@/lib/utils";
 
 export type WrongAnswerCode = "BLANK" | "TRUE" | "FALSE";
@@ -152,7 +153,7 @@ export async function getAssignmentReport(assignmentId: string, locale: Locale =
   const studentRows = sortedEnrollments.map((enr) => {
     const list = subsByStudent.get(enr.studentId) ?? [];
     const latest = list[0] ?? null;
-    const completed = list.filter((s) => s.status !== "IN_PROGRESS");
+    const completed = list.filter((s) => s.status === "SUBMITTED" || s.status === "GRADED");
     const best =
       completed.length > 0
         ? completed.reduce((b, cur) =>
@@ -274,6 +275,7 @@ export async function getAssignmentReport(assignmentId: string, locale: Locale =
       label: field.label,
       type: field.type,
       skillTag: field.skillTag,
+      topicTag: field.topicTag ?? null,
       points: field.points,
       correctCount: correct,
       totalGraded: graded,
@@ -281,6 +283,24 @@ export async function getAssignmentReport(assignmentId: string, locale: Locale =
       commonWrongAnswers,
     };
   });
+
+  const topicMap = new Map<string, { sumRate: number; count: number }>();
+  for (const q of questionAnalytics) {
+    if (!q.topicTag) continue;
+    const cur = topicMap.get(q.topicTag) ?? { sumRate: 0, count: 0 };
+    cur.sumRate += q.correctRate;
+    cur.count += 1;
+    topicMap.set(q.topicTag, cur);
+  }
+  const topicBreakdown = Array.from(topicMap.entries())
+    .map(([tag, info]) => ({
+      tag,
+      questionCount: info.count,
+      avgCorrectRate: Math.round((info.sumRate / info.count) * 10) / 10,
+    }))
+    .sort((a, b) => a.tag.localeCompare(b.tag, "vi"));
+
+  const histogram = computeScoreHistogram(scores10);
 
   return {
     assignment: {
@@ -308,6 +328,8 @@ export async function getAssignmentReport(assignmentId: string, locale: Locale =
       lowestScore10,
       stdDev,
     },
+    histogram,
+    topicBreakdown,
     studentRows,
     questionAnalytics,
   };
@@ -361,12 +383,14 @@ export async function generateAssignmentGradebookExcel(
         IN_PROGRESS: "In progress",
         SUBMITTED: "Awaiting essay grading",
         GRADED: "Graded",
+        RETURNED: "Returned for revision",
       }
     : {
         NOT_STARTED: "Chưa làm",
         IN_PROGRESS: "Đang làm",
         SUBMITTED: "Chờ chấm tự luận",
         GRADED: "Đã chấm",
+        RETURNED: "Đã trả làm lại",
       };
 
   report.studentRows.forEach((row, idx) => {

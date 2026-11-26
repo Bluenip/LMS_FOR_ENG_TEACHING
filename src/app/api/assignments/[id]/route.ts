@@ -35,7 +35,7 @@ export async function GET(
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
-    const { user } = await requireTeacherOfAssignment(id);
+    const { user } = await requireTeacherOfAssignment(id, "CO_TEACHER");
     const data = updateAssignmentSchema.parse(await req.json());
     const assignment = await updateAssignment(id, data, user.id);
     return NextResponse.json({ assignment });
@@ -50,7 +50,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await context.params;
-    await requireTeacherOfAssignment(id);
+    await requireTeacherOfAssignment(id, "CO_TEACHER");
     const subFiles = await prisma.driveFile.findMany({
       where: { submission: { assignmentId: id }, trashedAt: null },
       select: { id: true },

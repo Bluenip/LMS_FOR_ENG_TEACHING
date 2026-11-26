@@ -1,6 +1,26 @@
 import { NextResponse } from "next/server";
-import { handleApiError, requireMemberOfClass } from "@/lib/permissions";
-import { deletePost } from "@/server/classService";
+import {
+  handleApiError,
+  requireMemberOfClass,
+  requireTeacherOfClass,
+} from "@/lib/permissions";
+import { updatePostModerationSchema } from "@/lib/validators";
+import { deletePost, updatePostModeration } from "@/server/postService";
+
+export async function PATCH(
+  req: Request,
+  context: { params: Promise<{ id: string; postId: string }> }
+) {
+  try {
+    const { id, postId } = await context.params;
+    const { user } = await requireTeacherOfClass(id, "CO_TEACHER");
+    const data = updatePostModerationSchema.parse(await req.json());
+    const post = await updatePostModeration(id, postId, data, user.id);
+    return NextResponse.json({ post });
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
 
 export async function DELETE(
   _req: Request,

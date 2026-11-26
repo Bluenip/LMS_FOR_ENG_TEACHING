@@ -54,6 +54,7 @@ export interface ExportedWorksheetManifest {
       prompt: string | null;
       explanation: string | null;
       skillTag: SkillTag | null;
+      topicTag?: string | null;
       passageId?: string | null;
       audioOldId: string | null;
       imageEntry?: string;
@@ -271,6 +272,7 @@ async function packWorksheetIntoZip(
         prompt: f.prompt,
         explanation: f.explanation,
         skillTag: f.skillTag,
+        topicTag: f.topicTag ?? null,
         passageId: f.passageId ?? null,
         audioOldId: f.audioId,
         ...(f.imageKey && fieldImageEntries.get(f.imageKey)
@@ -708,6 +710,7 @@ async function restoreManifestForOwner(
         prompt: f.prompt ?? null,
         explanation: f.explanation ?? null,
         skillTag: f.skillTag ?? null,
+        topicTag: f.topicTag ?? null,
         passageId: f.passageId ?? null,
         audioId: f.audioOldId ? audioIdMap.get(f.audioOldId) ?? null : null,
         imageKey: f.imageEntry ? restoredFieldImgMap.get(f.imageEntry) ?? null : null,

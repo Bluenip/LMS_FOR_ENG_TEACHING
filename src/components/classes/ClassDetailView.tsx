@@ -11,10 +11,15 @@ import { cancelDirectDriveUpload, uploadDirectToDrive } from "@/lib/drive-upload
 import type { DriveStatusPayload } from "@/server/driveService";
 import {
   Archive,
+  BarChart2,
+  BookMarked,
   BookOpen,
   Check,
+  CheckCircle2,
+  ClipboardCheck,
   Clock,
   Copy,
+  CopyPlus,
   ExternalLink,
   FileText,
   Film,
@@ -23,6 +28,7 @@ import {
   Library,
   Lock,
   MessageSquare,
+  Paperclip,
   Pencil,
   Plus,
   Radio,
@@ -55,9 +61,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { PdfCanvasPage, usePdfDocument } from "@/components/worksheet/PdfCanvasPage";
-import type { LessonItemType, ProctorMode, ViolationAction } from "@prisma/client";
+import type { ClassRole, LessonItemType, ProctorMode, ViolationAction } from "@prisma/client";
 import { CreateAccountForm } from "@/components/accounts/CreateAccountForm";
 import { AddLessonsFromLibraryDialog } from "@/components/lessons/AddLessonsFromLibraryDialog";
+import { ClassSubmissionsTab } from "@/components/classes/ClassSubmissionsTab";
+import { ClassAnalyticsTab } from "@/components/classes/ClassAnalyticsTab";
+import {
+  ClassTeachersSection,
+  type ClassTeacherItem,
+} from "@/components/classes/ClassTeachersSection";
+import { PostCard, type RichPostDTO } from "@/components/classes/PostCard";
 import { TRASH_DAYS } from "@/lib/trash";
 import {
   ResetPasswordDialog,
@@ -72,6 +85,7 @@ export interface ClassDetailData {
   archived: boolean;
   requireApproval: boolean;
   teacher: { id: string; name: string; email: string };
+  classTeachers?: ClassTeacherItem[];
   enrollments: Array<{
     id: string;
     status: "ACTIVE" | "PENDING";
@@ -88,18 +102,9 @@ export interface ClassDetailData {
       }>;
     };
   }>;
-  posts: Array<{
-    id: string;
-    content: string;
-    createdAt: string;
-    author: { id: string; name: string; role: string };
-    comments: Array<{
-      id: string;
-      content: string;
-      createdAt: string;
-      author: { id: string; name: string; role: string };
-    }>;
-  }>;
+  posts: RichPostDTO[];
+  workbooks?: Array<{ id: string; title: string; assignmentCount: number }>;
+  lessonActiveStudentCount?: number;
   lessons: Array<{
     id: string;
     title: string;
@@ -115,6 +120,8 @@ export interface ClassDetailData {
       fileKey: string | null;
       url: string | null;
       order: number;
+      completedCount?: number;
+      completedByMe?: boolean;
     }>;
   }>;
   assignments: Array<{
@@ -127,6 +134,11 @@ export interface ClassDetailData {
     requireMicMonitor?: boolean;
     violationAction: ViolationAction;
     maxViolations: number;
+    workbookId?: string | null;
+    workbookOrder?: number | null;
+    unlockAfterAssignmentId?: string | null;
+    workbook?: { id: string; title: string } | null;
+    isLockedByPrerequisite?: boolean;
     worksheet: { id: string; title: string; _count: { fields: number } };
     _count: { submissions: number };
   }>;
@@ -183,27 +195,53 @@ function LessonPdfModal({ fileKey, title, onClose }: { fileKey: string; title: s
   );
 }
 
-const CLASS_TABS = ["feed", "assignments", "lessons", "students", "settings"] as const;
+const CLASS_TABS = [
+  "feed",
+  "assignments",
+  "lessons",
+  "students",
+  "submissions",
+  "analytics",
+  "settings",
+] as const;
 
 export function ClassDetailView({
   initialClass,
   isTeacher,
   currentUserId,
   isAdmin = false,
+  classRole = null,
 }: {
   initialClass: ClassDetailData;
   isTeacher: boolean;
   currentUserId: string;
   isAdmin?: boolean;
+  classRole?: ClassRole | null;
 }) {
   const { m: vi, tr } = useI18n();
   const router = useRouter();
   const [cls, setCls] = useState<ClassDetailData>(initialClass);
+  const effectiveClassRole: ClassRole | null = isAdmin
+    ? "OWNER"
+    : classRole ?? (isTeacher ? "OWNER" : null);
+  const canManageTeachersOrDanger = isAdmin || effectiveClassRole === "OWNER";
+  const canEditClass =
+    isAdmin || effectiveClassRole === "OWNER" || effectiveClassRole === "CO_TEACHER";
 
   // Feed state
   const [postContent, setPostContent] = useState("");
+  const [postAttachments, setPostAttachments] = useState<
+    Array<{ key: string; name: string; mimeType: string; sizeBytes: number }>
+  >([]);
+  const [uploadingPostFile, setUploadingPostFile] = useState(false);
+  const [pollOpen, setPollOpen] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState("");
+  const [pollAllowMultiple, setPollAllowMultiple] = useState(false);
+  const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const [posting, setPosting] = useState(false);
-  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [cloneOpen, setCloneOpen] = useState(false);
+  const [cloneName, setCloneName] = useState(`${initialClass.name} (Bản sao)`);
+  const [cloning, setCloning] = useState(false);
 
   // Lesson creation state
   const [chapterTitle, setChapterTitle] = useState("");
@@ -266,38 +304,111 @@ export function ClassDetailView({
     router.refresh();
   };
 
+  const handleUploadPostAttachment = async (file: File) => {
+    setUploadingPostFile(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`/api/classes/${cls.id}/posts/upload`, {
+        method: "POST",
+        body: fd,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? tr("Tải file thất bại", "Upload failed"));
+      setPostAttachments((prev) => [...prev, json.attachment]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : tr("Tải file thất bại", "Upload failed"));
+    } finally {
+      setUploadingPostFile(false);
+    }
+  };
+
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!postContent.trim()) return;
+    const validPollOpts = pollOptions.map((o) => o.trim()).filter(Boolean);
+    if (pollOpen && (!pollQuestion.trim() || validPollOpts.length < 2)) {
+      toast.error(
+        tr(
+          "Bình chọn cần có câu hỏi và ít nhất 2 lựa chọn.",
+          "Poll requires a question and at least 2 options."
+        )
+      );
+      return;
+    }
     setPosting(true);
     try {
       const res = await fetch(`/api/classes/${cls.id}/posts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: postContent }),
+        body: JSON.stringify({
+          content: postContent,
+          ...(postAttachments.length > 0 ? { attachments: postAttachments } : {}),
+          ...(pollOpen
+            ? {
+                poll: {
+                  question: pollQuestion.trim(),
+                  allowMultiple: pollAllowMultiple,
+                  options: validPollOpts,
+                },
+              }
+            : {}),
+        }),
       });
-      if (!res.ok) throw new Error(tr("Đăng bài thất bại", "Posting failed"));
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? tr("Đăng bài thất bại", "Posting failed"));
       setPostContent("");
+      setPostAttachments([]);
+      setPollOpen(false);
+      setPollQuestion("");
+      setPollOptions(["", ""]);
+      setPollAllowMultiple(false);
       await refreshClass();
       toast.success(tr("Đã đăng bài lên bảng tin!", "Posted to the stream!"));
-    } catch {
-      toast.error(vi.common.errorGeneric);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : vi.common.errorGeneric);
     } finally {
       setPosting(false);
     }
   };
 
-  const handleAddComment = async (postId: string) => {
-    const text = (commentDrafts[postId] ?? "").trim();
-    if (!text) return;
-    const res = await fetch(`/api/classes/${cls.id}/posts/${postId}/comments`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: text }),
-    });
-    if (res.ok) {
-      setCommentDrafts((prev) => ({ ...prev, [postId]: "" }));
-      await refreshClass();
+  const handleCloneClass = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cloneName.trim() || cloning) return;
+    setCloning(true);
+    try {
+      const res = await fetch(`/api/classes/${cls.id}/clone`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: cloneName.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? tr("Nhân bản lớp thất bại", "Clone failed"));
+      toast.success(tr(`Đã tạo lớp bản sao "${json.class.name}"!`, `Cloned class "${json.class.name}"!`));
+      setCloneOpen(false);
+      router.push(`/teacher/classes/${json.class.id}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : tr("Nhân bản lớp thất bại", "Clone failed"));
+    } finally {
+      setCloning(false);
+    }
+  };
+
+  const markLessonItemViewed = async (itemId: string) => {
+    if (isTeacher) return;
+    try {
+      await fetch(`/api/lessons/items/${itemId}/progress`, { method: "POST" });
+      setCls((prev) => ({
+        ...prev,
+        lessons: prev.lessons.map((l) => ({
+          ...l,
+          items: l.items.map((it) =>
+            it.id === itemId ? { ...it, completedByMe: true } : it
+          ),
+        })),
+      }));
+    } catch {
+      // silent non-blocking progress tracking
     }
   };
 
@@ -547,6 +658,13 @@ export function ClassDetailView({
               <span className="rounded-full bg-white/20 px-3 py-0.5 text-xs font-semibold backdrop-blur">
                 {tr("GV:", "Teacher:")} {cls.teacher.name}
               </span>
+              {isTeacher && effectiveClassRole && effectiveClassRole !== "OWNER" && (
+                <span className="rounded-full bg-sky-300/90 px-3 py-0.5 text-xs font-bold text-slate-900">
+                  {effectiveClassRole === "ASSISTANT"
+                    ? tr("Trợ giảng", "Assistant")
+                    : tr("Đồng giáo viên", "Co-teacher")}
+                </span>
+              )}
               {cls.archived && (
                 <span className="rounded-full bg-amber-400/90 px-3 py-0.5 text-xs font-bold text-slate-900">
                   {vi.classes.archived}
@@ -599,13 +717,27 @@ export function ClassDetailView({
               </Link>
             </Button>
 
-            {isTeacher && (
-              <Button variant="accent" asChild>
-                <Link href={`/teacher/assignments/new?classId=${cls.id}`}>
-                  <Plus className="h-4 w-4" />
-                  {tr("Giao bài tập", "Assign work")}
-                </Link>
-              </Button>
+            {isTeacher && canEditClass && (
+              <>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setCloneName(`${cls.name} (Bản sao)`);
+                    setCloneOpen(true);
+                  }}
+                  data-testid="clone-class-btn"
+                >
+                  <CopyPlus className="h-4 w-4 text-[#4F46E5]" />
+                  {tr("Nhân bản lớp", "Clone class")}
+                </Button>
+                <Button variant="accent" asChild>
+                  <Link href={`/teacher/assignments/new?classId=${cls.id}`}>
+                    <Plus className="h-4 w-4" />
+                    {tr("Giao bài tập", "Assign work")}
+                  </Link>
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -636,10 +768,20 @@ export function ClassDetailView({
             )}
           </TabsTrigger>
           {isTeacher && (
-            <TabsTrigger value="settings" className="gap-1.5">
-              <Settings className="h-4 w-4" />
-              {vi.classes.tabs.settings}
-            </TabsTrigger>
+            <>
+              <TabsTrigger value="submissions" className="gap-1.5" data-testid="class-tab-submissions">
+                <ClipboardCheck className="h-4 w-4" />
+                {tr("Bài nộp", "Submissions")}
+              </TabsTrigger>
+              <TabsTrigger value="analytics" className="gap-1.5" data-testid="class-tab-analytics">
+                <BarChart2 className="h-4 w-4" />
+                {tr("Thống kê", "Analytics")}
+              </TabsTrigger>
+              <TabsTrigger value="settings" className="gap-1.5" data-testid="class-tab-settings">
+                <Settings className="h-4 w-4" />
+                {vi.classes.tabs.settings}
+              </TabsTrigger>
+            </>
           )}
         </TabsList>
 
@@ -652,7 +794,115 @@ export function ClassDetailView({
               placeholder={vi.classes.feed.placeholder}
               rows={3}
             />
-            <div className="flex justify-end">
+
+            {postAttachments.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {postAttachments.map((att) => (
+                  <span
+                    key={att.key}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 dark:border-indigo-700 bg-indigo-50/70 dark:bg-indigo-950/40 px-2.5 py-1 text-xs"
+                  >
+                    <Paperclip className="h-3.5 w-3.5 text-[#4F46E5]" />
+                    <span className="max-w-[180px] truncate">{att.name}</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPostAttachments((prev) => prev.filter((a) => a.key !== att.key))
+                      }
+                      className="text-slate-400 hover:text-red-500"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {pollOpen && (
+              <div className="space-y-2.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/40 dark:bg-indigo-950/20 p-3.5">
+                <Input
+                  value={pollQuestion}
+                  onChange={(e) => setPollQuestion(e.target.value)}
+                  placeholder={tr("Câu hỏi bình chọn…", "Poll question…")}
+                  className="h-9 text-xs"
+                />
+                <div className="space-y-1.5">
+                  {pollOptions.map((opt, idx) => (
+                    <Input
+                      key={idx}
+                      value={opt}
+                      onChange={(e) =>
+                        setPollOptions((prev) =>
+                          prev.map((o, i) => (i === idx ? e.target.value : o))
+                        )
+                      }
+                      placeholder={tr(`Lựa chọn ${idx + 1}`, `Option ${idx + 1}`)}
+                      className="h-9 text-xs"
+                    />
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-3">
+                    {pollOptions.length < 8 && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setPollOptions((prev) => [...prev, ""])}
+                      >
+                        + {tr("Thêm lựa chọn", "Add option")}
+                      </Button>
+                    )}
+                    <label className="flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={pollAllowMultiple}
+                        onChange={(e) => setPollAllowMultiple(e.target.checked)}
+                      />
+                      <span>{tr("Chọn nhiều", "Allow multiple")}</span>
+                    </label>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setPollOpen(false)}
+                  >
+                    {tr("Bỏ poll", "Remove poll")}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-[#464555] dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+                  <Paperclip className="h-3.5 w-3.5" />
+                  {uploadingPostFile ? tr("Đang tải…", "Uploading…") : tr("Đính kèm ảnh/PDF/Word", "Attach image/PDF/Word")}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,.pdf,.docx"
+                    className="hidden"
+                    disabled={uploadingPostFile}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void handleUploadPostAttachment(f);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                {!pollOpen && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setPollOpen(true)}
+                  >
+                    <BarChart2 className="h-3.5 w-3.5 text-[#4F46E5]" />
+                    {tr("Thêm bình chọn", "Add poll")}
+                  </Button>
+                )}
+              </div>
               <Button type="submit" disabled={posting || !postContent.trim()}>
                 <Send className="h-4 w-4" />
                 {vi.classes.feed.postButton}
@@ -666,91 +916,36 @@ export function ClassDetailView({
             </div>
           ) : (
             cls.posts.map((post) => (
-              <div key={post.id} className="stitch-card p-5 space-y-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#EEF2FF] text-xs font-bold text-[#3525CD]">
-                      {getInitials(post.author.name)}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-[#0B1C30]">
-                          {post.author.name}
-                        </span>
-                        {post.author.role === "TEACHER" && (
-                          <Badge variant="default">{tr("Giáo viên", "Teacher")}</Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-slate-400">{formatDateTime(post.createdAt)}</p>
-                    </div>
-                  </div>
-                  {(isTeacher || post.author.id === currentUserId) && (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        await fetch(`/api/classes/${cls.id}/posts/${post.id}`, {
-                          method: "DELETE",
-                        });
-                        await refreshClass();
-                      }}
-                      className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#0B1C30]">
-                  {post.content}
-                </p>
-
-                {/* Comments */}
-                <div className="space-y-2.5 border-t border-slate-100 pt-3">
-                  {post.comments.map((c) => (
-                    <div key={c.id} className="flex items-start gap-2.5 rounded-xl bg-[#F8F9FF] p-3">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-bold text-[#3525CD] border border-slate-200">
-                        {getInitials(c.author.name)}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-[#0B1C30]">
-                            {c.author.name}
-                          </span>
-                          <span className="text-[11px] text-slate-400">
-                            {formatDateTime(c.createdAt)}
-                          </span>
-                        </div>
-                        <p className="mt-0.5 text-xs text-[#464555]">{c.content}</p>
-                      </div>
-                    </div>
-                  ))}
-
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={commentDrafts[post.id] ?? ""}
-                      onChange={(e) =>
-                        setCommentDrafts((prev) => ({ ...prev, [post.id]: e.target.value }))
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          void handleAddComment(post.id);
-                        }
-                      }}
-                      placeholder={vi.classes.feed.commentPlaceholder}
-                      className="h-9 text-xs"
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => void handleAddComment(post.id)}
-                    >
-                      {vi.classes.feed.sendComment}
-                    </Button>
-                  </div>
-                </div>
-              </div>
+              <PostCard
+                key={post.id}
+                classId={cls.id}
+                post={post}
+                isTeacher={isTeacher}
+                canModerate={isTeacher && canEditClass}
+                currentUserId={currentUserId}
+                onPostUpdated={(updated) => {
+                  setCls((prev) => ({
+                    ...prev,
+                    posts: prev.posts
+                      .map((p) => (p.id === updated.id ? updated : p))
+                      .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned))),
+                  }));
+                }}
+                onPostDeleted={(postId) => {
+                  setCls((prev) => ({
+                    ...prev,
+                    posts: prev.posts.filter((p) => p.id !== postId),
+                  }));
+                }}
+                onCommentAdded={(postId, comment) => {
+                  setCls((prev) => ({
+                    ...prev,
+                    posts: prev.posts.map((p) =>
+                      p.id === postId ? { ...p, comments: [...p.comments, comment] } : p
+                    ),
+                  }));
+                }}
+              />
             ))
           )}
         </TabsContent>
@@ -779,7 +974,22 @@ export function ClassDetailView({
                 >
                   <div className="space-y-1.5">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-base font-bold text-[#0B1C30]">{asg.title}</h3>
+                      <h3 className="text-base font-bold text-[#0B1C30] dark:text-slate-100">{asg.title}</h3>
+                      {asg.workbook && (
+                        isTeacher ? (
+                          <Link href={`/teacher/classes/${cls.id}/workbooks/${asg.workbook.id}`}>
+                            <Badge variant="indigo">
+                              <BookMarked className="mr-1 h-3 w-3" />
+                              {asg.workbook.title}
+                            </Badge>
+                          </Link>
+                        ) : (
+                          <Badge variant="indigo">
+                            <BookMarked className="mr-1 h-3 w-3" />
+                            {asg.workbook.title}
+                          </Badge>
+                        )
+                      )}
                       {needsRules && (
                         <Badge variant="danger">
                           <Lock className="h-3 w-3" />
@@ -849,6 +1059,11 @@ export function ClassDetailView({
                           </Link>
                         </Button>
                       </>
+                    ) : asg.isLockedByPrerequisite ? (
+                      <Button size="sm" variant="outline" disabled data-testid={`locked-asg-btn-${asg.id}`}>
+                        <Lock className="h-3.5 w-3.5" />
+                        {tr("Nộp bài trước để mở", "Submit previous to unlock")}
+                      </Button>
                     ) : (
                       <Button variant="accent" size="sm" asChild>
                         <Link href={studentTarget}>{tr("Vào làm bài →", "Start →")}</Link>
@@ -974,23 +1189,54 @@ export function ClassDetailView({
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {!isTeacher && item.completedByMe && (
+                              <Badge variant="mint" data-testid={`lesson-done-${item.id}`}>
+                                <CheckCircle2 className="mr-1 h-3 w-3" />
+                                {tr("Đã học", "Completed")}
+                              </Badge>
+                            )}
+                            {isTeacher && typeof item.completedCount === "number" && (
+                              <Badge variant="neutral">
+                                {item.completedCount}/{cls.lessonActiveStudentCount ?? activeStudents.length}{" "}
+                                {tr("HS đã xem", "viewed")}
+                              </Badge>
+                            )}
                             {item.type === "PDF" && item.fileKey && (
                               <Button
                                 size="sm"
                                 variant="secondary"
-                                onClick={() =>
-                                  setViewingPdf({ fileKey: item.fileKey!, title: item.title })
-                                }
+                                data-testid={`lesson-view-pdf-${item.id}`}
+                                onClick={() => {
+                                  void markLessonItemViewed(item.id);
+                                  setViewingPdf({ fileKey: item.fileKey!, title: item.title });
+                                }}
                               >
                                 {tr("Xem PDF", "View PDF")}
                               </Button>
                             )}
                             {item.type === "LINK" && item.url && (
                               <Button size="sm" variant="outline" asChild>
-                                <a href={item.url} target="_blank" rel="noopener noreferrer">
+                                <a
+                                  href={item.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  data-testid={`lesson-open-link-${item.id}`}
+                                  onClick={() => void markLessonItemViewed(item.id)}
+                                >
                                   {tr("Mở liên kết", "Open link")} <ExternalLink className="h-3.5 w-3.5" />
                                 </a>
+                              </Button>
+                            )}
+                            {!isTeacher && !item.completedByMe && (item.type === "VIDEO" || item.type === "AUDIO") && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                data-testid={`lesson-mark-done-${item.id}`}
+                                onClick={() => void markLessonItemViewed(item.id)}
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                {tr("Đánh dấu đã học", "Mark complete")}
                               </Button>
                             )}
                             {canEditLesson(lesson) && (
@@ -1240,13 +1486,39 @@ export function ClassDetailView({
           </div>
         </TabsContent>
 
-        {/* TAB 5: SETTINGS (TEACHER ONLY) */}
+        {/* TAB 5 & 6: SUBMISSIONS & ANALYTICS (TEACHER ONLY) */}
         {isTeacher && (
-          <TabsContent value="settings">
+          <>
+            <TabsContent value="submissions">
+              <ClassSubmissionsTab
+                classId={cls.id}
+                assignments={cls.assignments.map((a) => ({ id: a.id, title: a.title }))}
+                students={activeStudents.map((e) => ({ id: e.student.id, name: e.student.name }))}
+              />
+            </TabsContent>
+            <TabsContent value="analytics">
+              <ClassAnalyticsTab
+                classId={cls.id}
+                workbooks={cls.workbooks ?? []}
+              />
+            </TabsContent>
+          </>
+        )}
+
+        {/* TAB 7: SETTINGS (TEACHER ONLY) */}
+        {isTeacher && (
+          <TabsContent value="settings" className="space-y-6">
+            <ClassTeachersSection
+              classId={cls.id}
+              owner={cls.teacher}
+              initialTeachers={cls.classTeachers ?? []}
+              canManage={canManageTeachersOrDanger}
+            />
+
             <form onSubmit={handleSaveSettings} className="stitch-card max-w-2xl p-6 space-y-5">
               <div className="space-y-1.5">
                 <Label>{vi.classes.name}</Label>
-                <Input value={editName} onChange={(e) => setEditName(e.target.value)} required />
+                <Input value={editName} onChange={(e) => setEditName(e.target.value)} required disabled={!canEditClass} />
               </div>
               <div className="space-y-1.5">
                 <Label>{vi.classes.description}</Label>
@@ -1254,11 +1526,12 @@ export function ClassDetailView({
                   value={editDesc}
                   onChange={(e) => setEditDesc(e.target.value)}
                   rows={3}
+                  disabled={!canEditClass}
                 />
               </div>
-              <label className="flex items-center justify-between rounded-xl border border-slate-200 p-4">
+              <label className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 p-4">
                 <div>
-                  <p className="text-sm font-semibold text-[#0B1C30]">
+                  <p className="text-sm font-semibold text-[#0B1C30] dark:text-slate-100">
                     {vi.classes.requireApproval}
                   </p>
                   <p className="text-xs text-slate-500">
@@ -1268,48 +1541,105 @@ export function ClassDetailView({
                 <Switch
                   checked={editRequireApproval}
                   onCheckedChange={setEditRequireApproval}
+                  disabled={!canEditClass}
                 />
               </label>
               <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => (cls.archived ? void handleToggleArchive() : setArchiveOpen(true))}
-                >
-                  <Archive className="h-4 w-4" />
-                  {cls.archived ? vi.classes.unarchive : vi.classes.archive}
-                </Button>
-                <Button type="submit">
-                  <Check className="h-4 w-4" />
-                  {tr("Lưu thay đổi", "Save changes")}
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {canManageTeachersOrDanger && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => (cls.archived ? void handleToggleArchive() : setArchiveOpen(true))}
+                    >
+                      <Archive className="h-4 w-4" />
+                      {cls.archived ? vi.classes.unarchive : vi.classes.archive}
+                    </Button>
+                  )}
+                  {canEditClass && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setCloneName(`${cls.name} (Bản sao)`);
+                        setCloneOpen(true);
+                      }}
+                    >
+                      <CopyPlus className="h-4 w-4" />
+                      {tr("Nhân bản lớp", "Clone class")}
+                    </Button>
+                  )}
+                </div>
+                {canEditClass && (
+                  <Button type="submit">
+                    <Check className="h-4 w-4" />
+                    {tr("Lưu thay đổi", "Save changes")}
+                  </Button>
+                )}
               </div>
 
-              {/* Danger zone: delete = move to the 30-day trash */}
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-[#BA1A1A]">{tr("Xoá lớp học", "Delete class")}</p>
-                  <p className="text-xs text-[#464555]">
-                    {tr(
-                      `Lớp vào thùng rác ${TRASH_DAYS} ngày (khôi phục ở Lớp học › Thùng rác lớp học hoặc Kho lưu trữ › Thùng rác), sau đó xoá hẳn cùng bài đã giao, bài nộp, bảng tin và danh sách học sinh. Bài giảng vẫn ở trong kho.`,
-                      `The class goes to the trash for ${TRASH_DAYS} days (restore it from Classes › Class trash or Library › Trash), then it is deleted with its assignments, submissions, posts and roster. Lessons stay in your library.`
-                    )}
-                  </p>
+              {/* Danger zone: delete = move to the 30-day trash (OWNER/ADMIN only) */}
+              {canManageTeachersOrDanger && (
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 dark:bg-red-950/30 p-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-[#BA1A1A]">{tr("Xoá lớp học", "Delete class")}</p>
+                    <p className="text-xs text-[#464555] dark:text-slate-300">
+                      {tr(
+                        `Lớp vào thùng rác ${TRASH_DAYS} ngày (khôi phục ở Lớp học › Thùng rác lớp học hoặc Kho lưu trữ › Thùng rác), sau đó xoá hẳn cùng bài đã giao, bài nộp, bảng tin và danh sách học sinh. Bài giảng vẫn ở trong kho.`,
+                        `The class goes to the trash for ${TRASH_DAYS} days (restore it from Classes › Class trash or Library › Trash), then it is deleted with its assignments, submissions, posts and roster. Lessons stay in your library.`
+                      )}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => setDeleteOpen(true)}
+                    data-testid="delete-class-btn"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {tr("Xoá lớp", "Delete class")}
+                  </Button>
                 </div>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={() => setDeleteOpen(true)}
-                  data-testid="delete-class-btn"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  {tr("Xoá lớp", "Delete class")}
-                </Button>
-              </div>
+              )}
             </form>
           </TabsContent>
         )}
       </Tabs>
+
+      {/* Clone Class Dialog */}
+      <Dialog open={cloneOpen} onOpenChange={setCloneOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{tr("Nhân bản lớp học", "Clone class")}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCloneClass} className="space-y-4">
+            <p className="text-xs text-[#464555] dark:text-slate-300">
+              {tr(
+                "Tạo lớp mới với toàn bộ chương bài giảng và cài đặt của lớp hiện tại (không sao chép học sinh, bài đăng và bài nộp cũ).",
+                "Create a new class keeping all lesson chapters and settings (without copying students, posts, or past submissions)."
+              )}
+            </p>
+            <div className="space-y-1.5">
+              <Label>{tr("Tên lớp mới", "New class name")}</Label>
+              <Input
+                value={cloneName}
+                onChange={(e) => setCloneName(e.target.value)}
+                required
+                minLength={2}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCloneOpen(false)}>
+                {vi.common.cancel}
+              </Button>
+              <Button type="submit" disabled={cloning || !cloneName.trim()}>
+                <CopyPlus className="h-4 w-4" />
+                {cloning ? tr("Đang tạo…", "Cloning…") : tr("Nhân bản", "Clone")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Confirm archiving (closing) the class: the teacher must type the class name */}
       <Dialog

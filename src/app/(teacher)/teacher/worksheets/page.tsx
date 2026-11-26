@@ -8,6 +8,7 @@ import { apiFetchJson } from "@/lib/api-client";
 import { toast } from "sonner";
 import {
   AlertTriangle,
+  BookMarked,
   BookOpen,
   Archive,
   Cloud,
@@ -30,6 +31,7 @@ import { cn, formatDateTime } from "@/lib/utils";
 import { foldText } from "@/lib/text-search";
 import { useI18n } from "@/lib/i18n/client";
 import { LessonLibrary } from "@/components/lessons/LessonLibrary";
+import { WorkbookLibrary } from "@/components/workbooks/WorkbookLibrary";
 import { TrashView } from "@/components/library/TrashView";
 import type { DriveStatusPayload } from "@/server/driveService";
 import { Button } from "@/components/ui/button";
@@ -108,13 +110,13 @@ export default function TeacherWorksheetsPage() {
   const queryClient = useQueryClient();
 
   const [tab, setTab] = useState<"mine" | "shared">("mine");
-  // Library tab lives in the URL (?tab=lessons) so links from class pages open it directly
-  const [libraryTab, setLibraryTab] = useState<"worksheets" | "lessons" | "trash">("worksheets");
+  // Library tab lives in the URL (?tab=lessons|workbooks|trash) so links from class pages open it directly
+  const [libraryTab, setLibraryTab] = useState<"worksheets" | "workbooks" | "lessons" | "trash">("worksheets");
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get("tab");
-    if (t === "lessons" || t === "trash") setLibraryTab(t);
+    if (t === "lessons" || t === "workbooks" || t === "trash") setLibraryTab(t);
   }, []);
-  const switchLibraryTab = (next: "worksheets" | "lessons" | "trash") => {
+  const switchLibraryTab = (next: "worksheets" | "workbooks" | "lessons" | "trash") => {
     setLibraryTab(next);
     const url = new URL(window.location.href);
     if (next !== "worksheets") url.searchParams.set("tab", next);
@@ -519,11 +521,12 @@ export default function TeacherWorksheetsPage() {
       <div
         role="tablist"
         aria-label={tr("Kho lưu trữ", "Library")}
-        className="grid w-full grid-cols-3 gap-1 rounded-xl bg-[#EFF4FF] p-1 sm:inline-grid sm:w-auto"
+        className="grid w-full grid-cols-2 gap-1 rounded-xl bg-[#EFF4FF] dark:bg-slate-800 p-1 sm:inline-grid sm:w-auto sm:grid-cols-4"
       >
         {(
           [
             ["worksheets", tr("Worksheet", "Worksheets"), <FileText key="i" className="h-4 w-4" />],
+            ["workbooks", tr("Workbook", "Workbooks"), <BookMarked key="i" className="h-4 w-4" />],
             ["lessons", tr("Bài giảng", "Lessons"), <BookOpen key="i" className="h-4 w-4" />],
             ["trash", tr("Thùng rác", "Trash"), <Trash2 key="i" className="h-4 w-4" />],
           ] as const
@@ -537,7 +540,9 @@ export default function TeacherWorksheetsPage() {
             onClick={() => switchLibraryTab(id)}
             className={cn(
               "inline-flex min-h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-xs font-bold transition sm:gap-2 sm:px-5 sm:text-sm",
-              libraryTab === id ? "bg-white text-[#3525CD] shadow-sm" : "text-[#464555] hover:text-[#0B1C30]"
+              libraryTab === id
+                ? "bg-white dark:bg-slate-900 text-[#3525CD] shadow-sm"
+                : "text-[#464555] dark:text-slate-300 hover:text-[#0B1C30]"
             )}
           >
             {icon}
@@ -553,6 +558,15 @@ export default function TeacherWorksheetsPage() {
       <div className="space-y-6">
         {libraryHeader}
         <TrashView isAdmin={isAdmin} />
+      </div>
+    );
+  }
+
+  if (libraryTab === "workbooks") {
+    return (
+      <div className="space-y-6">
+        {libraryHeader}
+        <WorkbookLibrary />
       </div>
     );
   }

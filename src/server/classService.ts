@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import ExcelJS from "exceljs";
+import type { ClassRole, SubmissionStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { resolveEffectiveAssignment } from "@/lib/assignment-effective";
@@ -7,6 +8,16 @@ import { generateJoinCode } from "@/lib/utils";
 import { createNotification } from "./notificationService";
 import { enqueueDriveTrashByFileIds } from "./driveService";
 import { logAudit } from "@/server/auditService";
+import { getClassLessonProgress } from "./lessonProgressService";
+import {
+  createComment,
+  createPost,
+  deletePost,
+  POST_RICH_INCLUDE,
+  serializePostForViewer,
+} from "./postService";
+
+export { createComment, createPost, deletePost };
 
 async function generateUniqueJoinCode(): Promise<string> {
   for (let attempt = 0; attempt < 15; attempt++) {
@@ -20,20 +31,31 @@ async function generateUniqueJoinCode(): Promise<string> {
   throw new AppError("Không thể tạo mã lớp duy nhất, vui lòng thử lại.", 500, "JOIN_CODE_ERROR");
 }
 
-/** A teacher's own classes; an admin (`allClasses`) gets every class in the system. */
+/** A teacher's own + co-taught classes (owned classes first); an admin (`allClasses`) gets every class. */
 export async function listTeacherClasses(
   teacherId: string,
   includeArchived = false,
   opts?: { allClasses?: boolean }
 ) {
-  return prisma.class.findMany({
+  const rows = await prisma.class.findMany({
     where: {
       deletedAt: null,
-      ...(opts?.allClasses ? {} : { teacherId }),
+      ...(opts?.allClasses
+        ? {}
+        : {
+            OR: [
+              { teacherId },
+              { classTeachers: { some: { userId: teacherId } } },
+            ],
+          }),
       ...(includeArchived ? {} : { archived: false }),
     },
     include: {
       teacher: { select: { id: true, name: true } },
+      classTeachers: {
+        where: { userId: teacherId },
+        select: { role: true },
+      },
       _count: {
         select: {
           enrollments: { where: { status: "ACTIVE" } },
@@ -44,6 +66,24 @@ export async function listTeacherClasses(
     },
     orderBy: { createdAt: "desc" },
   });
+
+  const mapped = rows.map(({ classTeachers, ...c }) => {
+    const myRole: ClassRole =
+      opts?.allClasses || c.teacherId === teacherId
+        ? "OWNER"
+        : (classTeachers[0]?.role ?? "CO_TEACHER");
+    return { ...c, myRole };
+  });
+
+  // Always list OWNER classes before co-taught/assistant classes
+  mapped.sort((a, b) => {
+    const aOwned = a.teacherId === teacherId ? 0 : 1;
+    const bOwned = b.teacherId === teacherId ? 0 : 1;
+    if (aOwned !== bOwned) return aOwned - bOwned;
+    return b.createdAt.getTime() - a.createdAt.getTime();
+  });
+
+  return mapped;
 }
 
 export async function listStudentClasses(studentId: string) {
@@ -216,12 +256,23 @@ export async function joinClassByCode(studentId: string, joinCode: string) {
   return { enrollment, class: cls, alreadyJoined: false };
 }
 
-export async function getClassDetail(classId: string, opts?: { studentId?: string }) {
+export async function getClassDetail(
+  classId: string,
+  opts?: { studentId?: string; viewerId?: string }
+) {
   const studentId = opts?.studentId;
+  const viewerId = opts?.viewerId ?? opts?.studentId;
   const cls = await prisma.class.findUnique({
     where: { id: classId },
     include: {
       teacher: { select: { id: true, name: true, email: true } },
+      classTeachers: {
+        where: { user: { deletedAt: null } },
+        include: {
+          user: { select: { id: true, name: true, email: true, role: true } },
+        },
+        orderBy: { createdAt: "asc" },
+      },
       enrollments: {
         where: { student: { deletedAt: null } },
         include: {
@@ -246,14 +297,8 @@ export async function getClassDetail(classId: string, opts?: { studentId?: strin
         orderBy: [{ status: "asc" }, { joinedAt: "asc" }],
       },
       posts: {
-        include: {
-          author: { select: { id: true, name: true, role: true } },
-          comments: {
-            include: { author: { select: { id: true, name: true, role: true } } },
-            orderBy: { createdAt: "asc" },
-          },
-        },
-        orderBy: { createdAt: "desc" },
+        include: POST_RICH_INCLUDE,
+        orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
       },
       classLessons: {
         where: { lesson: { deletedAt: null } },
@@ -284,6 +329,7 @@ export async function getClassDetail(classId: string, opts?: { studentId?: strin
               _count: { select: { fields: true } },
             },
           },
+          workbook: { select: { id: true, title: true } },
           ...(studentId
             ? {
                 overrides: {
@@ -303,13 +349,48 @@ export async function getClassDetail(classId: string, opts?: { studentId?: strin
   if (!cls || cls.deletedAt) {
     throw new AppError("Không tìm thấy lớp học.", 404, "NOT_FOUND");
   }
+
+  const [lessonProgress, submittedAssignmentIds] = await Promise.all([
+    getClassLessonProgress(classId, { studentId }),
+    studentId
+      ? prisma.submission.findMany({
+          where: {
+            studentId,
+            status: { in: ["SUBMITTED", "GRADED"] },
+            assignment: { classId },
+          },
+          select: { assignmentId: true },
+        })
+      : Promise.resolve([]),
+  ]);
+  const completedPrereqSet = new Set(submittedAssignmentIds.map((s) => s.assignmentId));
+
+  // Build workbook summaries assigned to this class
+  const wbMap = new Map<string, { id: string; title: string; assignmentCount: number }>();
+  for (const a of cls.assignments) {
+    if (!a.workbook) continue;
+    const cur = wbMap.get(a.workbook.id) ?? {
+      id: a.workbook.id,
+      title: a.workbook.title,
+      assignmentCount: 0,
+    };
+    cur.assignmentCount += 1;
+    wbMap.set(a.workbook.id, cur);
+  }
+
   // lessons now come from the library (ClassLesson); keep the old `lessons` shape for the pages
-  const { classLessons, assignments, ...rest } = cls;
+  const { classLessons, assignments, posts, ...rest } = cls;
   const resolvedAssignments = assignments.map((a) => {
     const maybeOverrides = "overrides" in a && Array.isArray(a.overrides) ? a.overrides : [];
     const effective = studentId ? resolveEffectiveAssignment(a, maybeOverrides[0] ?? null) : null;
+    const isLockedByPrerequisite = Boolean(
+      studentId &&
+        a.unlockAfterAssignmentId &&
+        !completedPrereqSet.has(a.unlockAfterAssignmentId)
+    );
     return {
       ...a,
+      isLockedByPrerequisite,
       ...(effective
         ? {
             dueAt: effective.dueAt,
@@ -321,8 +402,19 @@ export async function getClassDetail(classId: string, opts?: { studentId?: strin
   });
   return {
     ...rest,
+    posts: posts.map((p) => serializePostForViewer(p, viewerId)),
     assignments: resolvedAssignments,
-    lessons: classLessons.map((link) => ({ ...link.lesson, order: link.order })),
+    workbooks: Array.from(wbMap.values()),
+    lessonActiveStudentCount: lessonProgress.activeStudentCount,
+    lessons: classLessons.map((link) => ({
+      ...link.lesson,
+      order: link.order,
+      items: link.lesson.items.map((it) => ({
+        ...it,
+        completedCount: lessonProgress.byItem[it.id]?.completedCount ?? 0,
+        completedByMe: lessonProgress.byItem[it.id]?.completedByMe ?? false,
+      })),
+    })),
   };
 }
 
@@ -356,38 +448,6 @@ export async function removeEnrollment(classId: string, enrollmentId: string) {
     throw new AppError("Không tìm thấy học sinh trong lớp.", 404, "NOT_FOUND");
   }
   return prisma.enrollment.delete({ where: { id: enrollment.id } });
-}
-
-export async function createPost(classId: string, authorId: string, content: string) {
-  return prisma.post.create({
-    data: { classId, authorId, content },
-    include: {
-      author: { select: { id: true, name: true, role: true } },
-      comments: true,
-    },
-  });
-}
-
-export async function deletePost(classId: string, postId: string, actorId: string, isTeacher: boolean) {
-  const post = await prisma.post.findFirst({ where: { id: postId, classId } });
-  if (!post) {
-    throw new AppError("Không tìm thấy bài đăng.", 404, "NOT_FOUND");
-  }
-  if (!isTeacher && post.authorId !== actorId) {
-    throw new AppError("Bạn không có quyền xoá bài đăng này.", 403, "FORBIDDEN");
-  }
-  return prisma.post.delete({ where: { id: post.id } });
-}
-
-export async function createComment(classId: string, postId: string, authorId: string, content: string) {
-  const post = await prisma.post.findFirst({ where: { id: postId, classId } });
-  if (!post) {
-    throw new AppError("Không tìm thấy bài đăng.", 404, "NOT_FOUND");
-  }
-  return prisma.comment.create({
-    data: { postId, authorId, content },
-    include: { author: { select: { id: true, name: true, role: true } } },
-  });
 }
 
 /**
@@ -467,4 +527,381 @@ export async function importStudentsFromExcel(classId: string, buffer: Buffer) {
   }
 
   return { createdCount, enrolledCount, skipped, totalProcessed: rows.length };
+}
+
+/** Lists class owner + invited co-teachers & teaching assistants. */
+export async function listClassTeachers(classId: string) {
+  const cls = await prisma.class.findUnique({
+    where: { id: classId },
+    include: {
+      teacher: { select: { id: true, name: true, email: true, role: true } },
+      classTeachers: {
+        where: { user: { deletedAt: null } },
+        include: { user: { select: { id: true, name: true, email: true, role: true } } },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+  if (!cls || cls.deletedAt) {
+    throw new AppError("Không tìm thấy lớp học.", 404, "NOT_FOUND");
+  }
+  return {
+    owner: cls.teacher,
+    teachers: cls.classTeachers.map((ct) => ({
+      id: ct.id,
+      userId: ct.userId,
+      role: ct.role,
+      createdAt: ct.createdAt.toISOString(),
+      user: ct.user,
+    })),
+  };
+}
+
+export async function manageClassTeachers(
+  classId: string,
+  input: { email: string; role: "CO_TEACHER" | "ASSISTANT" }
+) {
+  const cls = await prisma.class.findUnique({
+    where: { id: classId },
+    select: { id: true, teacherId: true, name: true, deletedAt: true },
+  });
+  if (!cls || cls.deletedAt) {
+    throw new AppError("Không tìm thấy lớp học.", 404, "NOT_FOUND");
+  }
+
+  const user = await prisma.user.findFirst({
+    where: { email: input.email.trim().toLowerCase(), deletedAt: null },
+    select: { id: true, name: true, email: true, role: true },
+  });
+  if (!user) {
+    throw new AppError("Không tìm thấy người dùng.", 404, "NOT_FOUND");
+  }
+  if (user.role !== "TEACHER" && user.role !== "ADMIN") {
+    throw new AppError(
+      "Tài khoản này không phải giáo viên hoặc quản trị viên.",
+      400,
+      "INVALID_ROLE"
+    );
+  }
+  if (user.id === cls.teacherId) {
+    throw new AppError(
+      "Chủ sở hữu lớp đã là giáo viên chính rồi.",
+      400,
+      "ALREADY_OWNER"
+    );
+  }
+
+  await prisma.classTeacher.upsert({
+    where: { classId_userId: { classId, userId: user.id } },
+    update: { role: input.role },
+    create: { classId, userId: user.id, role: input.role },
+  });
+
+  return listClassTeachers(classId);
+}
+
+export async function updateClassTeacherRole(
+  classId: string,
+  userId: string,
+  role: "CO_TEACHER" | "ASSISTANT"
+) {
+  const cls = await prisma.class.findUnique({
+    where: { id: classId },
+    select: { teacherId: true, deletedAt: true },
+  });
+  if (!cls || cls.deletedAt) {
+    throw new AppError("Không tìm thấy lớp học.", 404, "NOT_FOUND");
+  }
+  if (userId === cls.teacherId) {
+    throw new AppError(
+      "Chủ sở hữu lớp đã là giáo viên chính rồi.",
+      400,
+      "ALREADY_OWNER"
+    );
+  }
+  const existing = await prisma.classTeacher.findUnique({
+    where: { classId_userId: { classId, userId } },
+    select: { id: true },
+  });
+  if (!existing) {
+    throw new AppError("Không tìm thấy đồng giáo viên trong lớp.", 404, "NOT_FOUND");
+  }
+  await prisma.classTeacher.update({
+    where: { id: existing.id },
+    data: { role },
+  });
+  return listClassTeachers(classId);
+}
+
+export async function removeClassTeacher(classId: string, userId: string) {
+  const cls = await prisma.class.findUnique({
+    where: { id: classId },
+    select: { teacherId: true, deletedAt: true },
+  });
+  if (!cls || cls.deletedAt) {
+    throw new AppError("Không tìm thấy lớp học.", 404, "NOT_FOUND");
+  }
+  if (userId === cls.teacherId) {
+    throw new AppError(
+      "Không thể gỡ chủ sở hữu gốc khỏi danh sách giáo viên lớp.",
+      400,
+      "CANNOT_REMOVE_OWNER"
+    );
+  }
+  await prisma.classTeacher.deleteMany({
+    where: { classId, userId },
+  });
+  return listClassTeachers(classId);
+}
+
+export async function getClassSubmissionsOverview(
+  classId: string,
+  filters?: { assignmentId?: string; studentId?: string; status?: SubmissionStatus }
+) {
+  const submissions = await prisma.submission.findMany({
+    where: {
+      assignment: {
+        classId,
+        ...(filters?.assignmentId ? { id: filters.assignmentId } : {}),
+      },
+      ...(filters?.studentId ? { studentId: filters.studentId } : {}),
+      ...(filters?.status ? { status: filters.status } : {}),
+    },
+    include: {
+      student: { select: { id: true, name: true, email: true } },
+      assignment: {
+        select: {
+          id: true,
+          title: true,
+          dueAt: true,
+          scoreScale: true,
+        },
+      },
+    },
+    orderBy: [{ submittedAt: "desc" }, { startedAt: "desc" }],
+    take: 300,
+  });
+
+  return submissions.map((s) => ({
+    id: s.id,
+    assignmentId: s.assignmentId,
+    assignmentTitle: s.assignment.title,
+    studentId: s.studentId,
+    studentName: s.student.name,
+    studentEmail: s.student.email,
+    attemptNo: s.attemptNo,
+    status: s.status,
+    isLate: s.isLate,
+    totalScore: s.totalScore,
+    maxScore: s.maxScore,
+    submittedAt: s.submittedAt?.toISOString() ?? null,
+    startedAt: s.startedAt.toISOString(),
+  }));
+}
+
+function mondayUtcStart(date: Date): Date {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = d.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setUTCDate(d.getUTCDate() + diff);
+  return d;
+}
+
+export async function getClassAnalytics(classId: string) {
+  const cls = await prisma.class.findUnique({
+    where: { id: classId },
+    include: {
+      enrollments: {
+        where: { status: "ACTIVE", student: { deletedAt: null } },
+        include: { student: { select: { id: true, name: true, email: true } } },
+      },
+      assignments: {
+        include: {
+          targets: { select: { studentId: true } },
+          submissions: {
+            select: {
+              studentId: true,
+              status: true,
+              totalScore: true,
+              maxScore: true,
+              submittedAt: true,
+              startedAt: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      },
+    },
+  });
+
+  if (!cls || cls.deletedAt) {
+    throw new AppError("Không tìm thấy lớp học.", 404, "NOT_FOUND");
+  }
+
+  const now = new Date();
+  const currentWeekStart = mondayUtcStart(now);
+  const weekBuckets: Array<{
+    weekStart: Date;
+    label: string;
+    scores: number[];
+    submissionCount: number;
+  }> = [];
+
+  for (let i = 11; i >= 0; i--) {
+    const start = new Date(currentWeekStart);
+    start.setUTCDate(start.getUTCDate() - i * 7);
+    const dd = String(start.getUTCDate()).padStart(2, "0");
+    const mm = String(start.getUTCMonth() + 1).padStart(2, "0");
+    weekBuckets.push({
+      weekStart: start,
+      label: `${dd}/${mm}`,
+      scores: [],
+      submissionCount: 0,
+    });
+  }
+
+  const missingCountByStudent = new Map<string, number>();
+  for (const enr of cls.enrollments) {
+    missingCountByStudent.set(enr.studentId, 0);
+  }
+
+  let expectedPairs = 0;
+  let completedPairs = 0;
+  const allGradedScores10: number[] = [];
+
+  for (const asg of cls.assignments) {
+    const targetSet =
+      asg.targets.length > 0 ? new Set(asg.targets.map((t) => t.studentId)) : null;
+    const eligibleStudents = cls.enrollments.filter(
+      (e) => !targetSet || targetSet.has(e.studentId)
+    );
+    const completedStudents = new Set(
+      asg.submissions
+        .filter((s) => s.status === "SUBMITTED" || s.status === "GRADED")
+        .map((s) => s.studentId)
+    );
+
+    expectedPairs += eligibleStudents.length;
+    for (const enr of eligibleStudents) {
+      if (completedStudents.has(enr.studentId)) {
+        completedPairs += 1;
+      } else {
+        missingCountByStudent.set(
+          enr.studentId,
+          (missingCountByStudent.get(enr.studentId) ?? 0) + 1
+        );
+      }
+    }
+
+    for (const sub of asg.submissions) {
+      if (sub.status !== "SUBMITTED" && sub.status !== "GRADED") continue;
+      const stamp = sub.submittedAt ?? sub.startedAt;
+      const subWeek = mondayUtcStart(stamp).getTime();
+      const bucket = weekBuckets.find((b) => b.weekStart.getTime() === subWeek);
+      const scale10 =
+        sub.status === "GRADED" && sub.totalScore !== null && sub.maxScore > 0
+          ? Math.round((sub.totalScore / sub.maxScore) * 1000) / 100
+          : null;
+      if (scale10 !== null) {
+        allGradedScores10.push(scale10);
+      }
+      if (bucket) {
+        bucket.submissionCount += 1;
+        if (scale10 !== null) bucket.scores.push(scale10);
+      }
+    }
+  }
+
+  const weeklyTrend = weekBuckets.map((b) => ({
+    weekStart: b.weekStart.toISOString(),
+    label: b.label,
+    submissionCount: b.submissionCount,
+    avgScore10:
+      b.scores.length > 0
+        ? Math.round((b.scores.reduce((a, v) => a + v, 0) / b.scores.length) * 100) / 100
+        : null,
+  }));
+
+  const mostUnsubmittedStudents = cls.enrollments
+    .map((e) => ({
+      studentId: e.studentId,
+      studentName: e.student.name,
+      studentEmail: e.student.email,
+      missingCount: missingCountByStudent.get(e.studentId) ?? 0,
+    }))
+    .filter((s) => s.missingCount > 0)
+    .sort((a, b) => b.missingCount - a.missingCount || a.studentName.localeCompare(b.studentName, "vi"))
+    .slice(0, 8);
+
+  const avgClassScore10 =
+    allGradedScores10.length > 0
+      ? Math.round(
+          (allGradedScores10.reduce((a, v) => a + v, 0) / allGradedScores10.length) * 100
+        ) / 100
+      : 0;
+  const submissionRatePct =
+    expectedPairs > 0 ? Math.round((completedPairs / expectedPairs) * 1000) / 10 : 0;
+
+  return {
+    summary: {
+      totalStudents: cls.enrollments.length,
+      totalAssignments: cls.assignments.length,
+      submissionRatePct,
+      avgScore10: avgClassScore10,
+    },
+    weeklyTrend,
+    mostUnsubmittedStudents,
+  };
+}
+
+/** Clones a class's structure & lesson links into a fresh class with a new joinCode (no students/posts/submissions). */
+export async function cloneClass(classId: string, actorId: string, newName: string) {
+  const src = await prisma.class.findUnique({
+    where: { id: classId },
+    include: {
+      classLessons: {
+        where: { lesson: { deletedAt: null } },
+        select: { lessonId: true, order: true },
+        orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+      },
+    },
+  });
+  if (!src || src.deletedAt) {
+    throw new AppError("Không tìm thấy lớp học.", 404, "NOT_FOUND");
+  }
+
+  const joinCode = await generateUniqueJoinCode();
+  const cloned = await prisma.$transaction(async (tx) => {
+    const created = await tx.class.create({
+      data: {
+        name: newName.trim(),
+        description: src.description,
+        requireApproval: src.requireApproval,
+        joinCode,
+        teacherId: actorId,
+      },
+    });
+    if (src.classLessons.length > 0) {
+      await tx.classLesson.createMany({
+        data: src.classLessons.map((cl) => ({
+          classId: created.id,
+          lessonId: cl.lessonId,
+          order: cl.order,
+        })),
+      });
+    }
+    return created;
+  });
+
+  await logAudit({
+    actorId,
+    action: "CLASS_CLONED",
+    targetType: "CLASS",
+    targetId: cloned.id,
+    summary: `Nhân bản lớp "${src.name}" thành "${cloned.name}"`,
+    summaryEn: `Cloned class "${src.name}" into "${cloned.name}"`,
+    meta: { sourceClassId: src.id, clonedClassId: cloned.id },
+  });
+
+  return cloned;
 }

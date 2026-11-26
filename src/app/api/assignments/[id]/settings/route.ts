@@ -6,7 +6,7 @@ import { getAssignmentSettings } from "@/server/assignmentService";
 export async function GET(_req: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
-    await requireTeacherOfAssignment(id);
+    await requireTeacherOfAssignment(id, "CO_TEACHER");
     return NextResponse.json({ assignment: await getAssignmentSettings(id) });
   } catch (error) {
     return handleApiError(error);

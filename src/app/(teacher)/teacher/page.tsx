@@ -12,16 +12,25 @@ export default async function TeacherDashboardPage() {
   // an admin sees (and manages) every class in the system
   const isAdmin = user.role === "ADMIN";
   // classes in the trash are hidden everywhere until restored
-  const classScope = isAdmin ? { deletedAt: null } : { teacherId: user.id, deletedAt: null };
+  const classScope = isAdmin
+    ? { deletedAt: null }
+    : {
+        deletedAt: null,
+        OR: [{ teacherId: user.id }, { classTeachers: { some: { userId: user.id } } }],
+      };
   const trashedScope = isAdmin
     ? { deletedAt: { not: null } }
     : { teacherId: user.id, deletedAt: { not: null } };
 
-  const [classes, trashedClasses] = await Promise.all([
+  const [rawClasses, trashedClasses] = await Promise.all([
     prisma.class.findMany({
       where: classScope,
       include: {
         teacher: { select: { id: true, name: true } },
+        classTeachers: {
+          where: { userId: user.id },
+          select: { role: true },
+        },
         _count: {
           select: {
             enrollments: { where: { status: "ACTIVE" } },
@@ -45,6 +54,13 @@ export default async function TeacherDashboardPage() {
       orderBy: { deletedAt: "desc" },
     }),
   ]);
+
+  const classes = [...rawClasses].sort((a, b) => {
+    const aOwned = a.teacherId === user.id ? 0 : 1;
+    const bOwned = b.teacherId === user.id ? 0 : 1;
+    if (aOwned !== bOwned) return aOwned - bOwned;
+    return Number(a.archived) - Number(b.archived) || b.createdAt.getTime() - a.createdAt.getTime();
+  });
 
   const assignments = await prisma.assignment.findMany({
     where: { class: classScope },
@@ -105,6 +121,10 @@ export default async function TeacherDashboardPage() {
         studentCount: c._count.enrollments,
         assignmentCount: c._count.assignments,
         teacherName: c.teacherId !== user.id ? c.teacher.name : null,
+        myRole:
+          isAdmin || c.teacherId === user.id
+            ? ("OWNER" as const)
+            : (c.classTeachers[0]?.role ?? ("CO_TEACHER" as const)),
       }))}
       trashedClasses={trashedClasses.map((c) => ({
         id: c.id,

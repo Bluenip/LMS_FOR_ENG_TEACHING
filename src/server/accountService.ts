@@ -50,7 +50,13 @@ async function assertTeacherOwnsClass(teacherId: string, classId: string | undef
   const cls = await prisma.class.findUnique({ where: { id: classId }, select: { id: true, teacherId: true } });
   if (!cls) throw new AppError("Không tìm thấy lớp học.", 404, "NOT_FOUND");
   if (cls.teacherId !== teacherId) {
-    throw new AppError("Bạn không có quyền quản lý lớp học này.", 403, "FORBIDDEN");
+    const ct = await prisma.classTeacher.findUnique({
+      where: { classId_userId: { classId, userId: teacherId } },
+      select: { role: true },
+    });
+    if (!ct || (ct.role !== "OWNER" && ct.role !== "CO_TEACHER")) {
+      throw new AppError("Bạn không có quyền quản lý lớp học này.", 403, "FORBIDDEN");
+    }
   }
   return cls;
 }

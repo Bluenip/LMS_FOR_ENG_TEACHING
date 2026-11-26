@@ -34,6 +34,7 @@ export default async function WorksheetEditPage({
       prompt: f.prompt,
       explanation: f.explanation,
       skillTag: f.skillTag,
+      topicTag: f.topicTag,
       passageId: f.passageId,
       audioId: f.audioId,
       imageKey: f.imageKey,

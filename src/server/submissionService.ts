@@ -93,16 +93,44 @@ export function computeRemainingSeconds(
 
 export function canRevealResult(
   assignment: { showResult: "NEVER" | "AFTER_SUBMIT" | "AFTER_DUE"; dueAt: Date | null },
-  submissionStatus: "IN_PROGRESS" | "SUBMITTED" | "GRADED",
+  submissionStatus: "IN_PROGRESS" | "SUBMITTED" | "GRADED" | "RETURNED",
   now = new Date()
 ): boolean {
-  if (submissionStatus === "IN_PROGRESS") return false;
+  if (submissionStatus === "IN_PROGRESS" || submissionStatus === "RETURNED") return false;
   if (assignment.showResult === "NEVER") return false;
   if (assignment.showResult === "AFTER_SUBMIT") return true;
   if (assignment.showResult === "AFTER_DUE") {
     return Boolean(assignment.dueAt && now >= assignment.dueAt);
   }
   return false;
+}
+
+async function assertPrerequisiteUnlocked(
+  unlockAfterAssignmentId: string | null | undefined,
+  studentId: string
+): Promise<void> {
+  if (!unlockAfterAssignmentId) return;
+  const done = await prisma.submission.findFirst({
+    where: {
+      assignmentId: unlockAfterAssignmentId,
+      studentId,
+      status: { in: ["SUBMITTED", "GRADED"] },
+    },
+    select: { id: true },
+  });
+  if (done) return;
+  const prereq = await prisma.assignment.findUnique({
+    where: { id: unlockAfterAssignmentId },
+    select: { id: true, title: true },
+  });
+  throw new AppError(
+    "Bạn cần nộp bài tập trước đó trong Workbook trước khi mở bài này.",
+    403,
+    "PREREQUISITE_NOT_SUBMITTED",
+    prereq
+      ? { prerequisiteAssignmentId: prereq.id, prerequisiteTitle: prereq.title }
+      : { prerequisiteAssignmentId: unlockAfterAssignmentId }
+  );
 }
 
 /**
@@ -149,6 +177,8 @@ export async function startOrResumeSubmission(
     throw new AppError("Bài tập chưa đến thời gian mở.", 403, "NOT_OPEN_YET");
   }
 
+  await assertPrerequisiteUnlocked(assignment.unlockAfterAssignmentId, studentId);
+
   const existingSubmissions = await prisma.submission.findMany({
     where: { assignmentId, studentId },
     orderBy: { attemptNo: "desc" },
@@ -159,20 +189,25 @@ export async function startOrResumeSubmission(
     },
   });
 
-  const inProgress = existingSubmissions.find((s) => s.status === "IN_PROGRESS");
+  const inProgress = existingSubmissions.find(
+    (s) => s.status === "IN_PROGRESS" || s.status === "RETURNED"
+  );
 
-  // If there is an active in-progress submission
+  // If there is an active in-progress or returned submission
   if (inProgress) {
-    // Check if its server timer already expired -> auto-finalize it!
-    const deadline = getServerDeadline(inProgress, effectiveTiming);
-    if (deadline && now >= deadline) {
-      const finalized = await finalizeSubmissionInternal(inProgress.id);
-      return { submission: finalized, alreadySubmitted: true };
+    // Check if its server timer already expired (IN_PROGRESS only; RETURNED revisions preserve submission slot)
+    if (inProgress.status === "IN_PROGRESS") {
+      const deadline = getServerDeadline(inProgress, effectiveTiming);
+      if (deadline && now >= deadline) {
+        const finalized = await finalizeSubmissionInternal(inProgress.id);
+        return { submission: finalized, alreadySubmitted: true };
+      }
     }
 
     // Handle multi-session detection if proctoring enabled and token mismatches
     const incomingToken = opts?.attemptToken || crypto.randomUUID();
     const tokenChanged =
+      inProgress.status === "IN_PROGRESS" &&
       assignment.proctorMode !== "OFF" &&
       inProgress.attemptToken &&
       opts?.attemptToken &&
@@ -373,6 +408,9 @@ export async function getStudentAssignmentPayload(
       remindBeforeDue: true,
       scoreScale: true,
       weight: true,
+      workbookId: true,
+      workbookOrder: true,
+      unlockAfterAssignmentId: true,
       overrides: {
         where: { studentId },
         take: 1,
@@ -412,6 +450,8 @@ export async function getStudentAssignmentPayload(
   if (!assignment) {
     throw new AppError("Không tìm thấy bài tập.", 404, "NOT_FOUND");
   }
+
+  await assertPrerequisiteUnlocked(assignment.unlockAfterAssignmentId, studentId);
 
   const submissions = await prisma.submission.findMany({
     where: { assignmentId, studentId },
@@ -455,6 +495,18 @@ export async function getStudentAssignmentPayload(
           audioId: true,
         },
       },
+      revisions: {
+        orderBy: { revisionNo: "desc" },
+        select: {
+          id: true,
+          revisionNo: true,
+          submittedAt: true,
+          returnedAt: true,
+          teacherComment: true,
+          totalScore: true,
+          maxScore: true,
+        },
+      },
     },
   });
 
@@ -468,7 +520,9 @@ export async function getStudentAssignmentPayload(
 
   const activeSubmission = requestedSubmissionId
     ? submissions.find((s) => s.id === requestedSubmissionId) ?? submissions[0] ?? null
-    : submissions.find((s) => s.status === "IN_PROGRESS") ?? submissions[0] ?? null;
+    : submissions.find((s) => s.status === "IN_PROGRESS" || s.status === "RETURNED") ??
+      submissions[0] ??
+      null;
 
   // Auto-finalize if active in-progress attempt exceeded server timer
   if (activeSubmission && activeSubmission.status === "IN_PROGRESS") {
@@ -560,7 +614,25 @@ export async function getStudentAssignmentPayload(
             : null,
         autoScore: revealResult ? activeSubmission.autoScore : null,
         manualScore: revealResult ? activeSubmission.manualScore : null,
-        teacherComment: revealResult ? activeSubmission.teacherComment : null,
+        teacherComment:
+          revealResult || activeSubmission.status === "RETURNED"
+            ? activeSubmission.teacherComment
+            : null,
+        revisions: activeSubmission.revisions.map((rev) => ({
+          id: rev.id,
+          revisionNo: rev.revisionNo,
+          submittedAt: rev.submittedAt.toISOString(),
+          returnedAt: rev.returnedAt?.toISOString() ?? null,
+          teacherComment: rev.teacherComment,
+          totalScore: canRevealResult(
+            { showResult: assignment.showResult, dueAt: effective.dueAt },
+            "SUBMITTED",
+            now
+          )
+            ? rev.totalScore
+            : null,
+          maxScore: rev.maxScore,
+        })),
         violationCount: activeSubmission.violationCount,
         lockedAt: activeSubmission.lockedAt?.toISOString() ?? null,
         attemptVersion: activeSubmission.attemptVersion,
@@ -572,7 +644,9 @@ export async function getStudentAssignmentPayload(
         remainingSeconds:
           activeSubmission.status === "IN_PROGRESS"
             ? computeRemainingSeconds(activeSubmission, effectiveAssignmentForTiming, now)
-            : 0,
+            : activeSubmission.status === "RETURNED"
+              ? null
+              : 0,
         answers: activeSubmission.answers.map((a) => ({
           fieldId: a.fieldId,
           value: a.value,
@@ -706,7 +780,7 @@ export async function getStudentAssignmentPayload(
     revealResult,
     revealKey,
     canStartNewAttempt:
-      submissions.every((s) => s.status !== "IN_PROGRESS") &&
+      submissions.every((s) => s.status !== "IN_PROGRESS" && s.status !== "RETURNED") &&
       (effective.maxAttempts === null || submissions.length < effective.maxAttempts) &&
       (!effective.dueAt || now <= effective.dueAt || assignment.allowLate) &&
       (!assignment.openAt || now >= assignment.openAt),
@@ -752,7 +826,7 @@ export async function autosaveSubmissionAnswers(
     verifySebHeaderIfNeeded(submission.assignment, headers);
   }
 
-  if (submission.status !== "IN_PROGRESS") {
+  if (submission.status !== "IN_PROGRESS" && submission.status !== "RETURNED") {
     throw new AppError("Bài làm đã nộp, không thể chỉnh sửa.", 409, "ALREADY_SUBMITTED");
   }
 
@@ -769,7 +843,7 @@ export async function autosaveSubmissionAnswers(
     );
   }
 
-  // Enforce server deadline (respecting per-student AssignmentOverride)
+  // Enforce server deadline (respecting per-student AssignmentOverride; RETURNED revisions preserve slot)
   const override = await prisma.assignmentOverride.findUnique({
     where: { assignmentId_studentId: { assignmentId: submission.assignmentId, studentId } },
   });
@@ -780,7 +854,7 @@ export async function autosaveSubmissionAnswers(
     allowLate: submission.assignment.allowLate,
   };
   const deadline = getServerDeadline(submission, effectiveTiming);
-  if (deadline && now >= deadline) {
+  if (submission.status === "IN_PROGRESS" && deadline && now >= deadline) {
     await finalizeSubmissionInternal(submission.id);
     throw new AppError(
       "Đã hết thời gian làm bài. Hệ thống đã tự động nộp bài của bạn.",
@@ -889,7 +963,7 @@ export async function finalizeSubmissionInternal(
     throw new AppError("Không tìm thấy bài làm.", 404, "NOT_FOUND");
   }
 
-  if (submission.status !== "IN_PROGRESS") {
+  if (submission.status !== "IN_PROGRESS" && submission.status !== "RETURNED") {
     return submission;
   }
 
@@ -938,8 +1012,15 @@ export async function finalizeSubmissionInternal(
     allowLate: submission.assignment.allowLate,
   };
   const deadline = getServerDeadline(submission, effectiveTiming);
-  const effectiveSubmittedAt = deadline && now > deadline ? deadline : now;
-  const isLate = Boolean(effective.dueAt && effectiveSubmittedAt > effective.dueAt);
+  const isReturningRevision = submission.status === "RETURNED";
+  const effectiveSubmittedAt = isReturningRevision
+    ? now
+    : deadline && now > deadline
+      ? deadline
+      : now;
+  const isLate = isReturningRevision
+    ? submission.isLate
+    : Boolean(effective.dueAt && effectiveSubmittedAt > effective.dueAt);
   const newStatus = graded.hasManualFields ? "SUBMITTED" : "GRADED";
   const totalScore = graded.hasManualFields ? graded.autoScore : graded.autoScore;
 
@@ -947,7 +1028,7 @@ export async function finalizeSubmissionInternal(
     // Claim the submission atomically so concurrent finalize calls (timer + submit button,
     // teacher FORCE_SUBMIT...) cannot grade/notify twice.
     const claimed = await tx.submission.updateMany({
-      where: { id: submission.id, status: "IN_PROGRESS" },
+      where: { id: submission.id, status: { in: ["IN_PROGRESS", "RETURNED"] } },
       data: { status: newStatus },
     });
     if (claimed.count === 0) return null;
@@ -972,6 +1053,7 @@ export async function finalizeSubmissionInternal(
           value: (val ?? "") as Prisma.InputJsonValue,
           isCorrect: res.isCorrect,
           score: res.score,
+          isOverridden: false,
           ...(gradeDetail !== undefined ? { gradeDetail } : {}),
         },
       });
@@ -1050,7 +1132,7 @@ export async function submitByStudent(
   if (headers) {
     verifySebHeaderIfNeeded(submission.assignment, headers);
   }
-  if (submission.status !== "IN_PROGRESS") {
+  if (submission.status !== "IN_PROGRESS" && submission.status !== "RETURNED") {
     throw new AppError("Bài làm đã được nộp trước đó.", 409, "ALREADY_SUBMITTED");
   }
   if (submission.lockedAt) {
@@ -1063,7 +1145,7 @@ export async function submitByStudent(
     throw new AppError("Phiên làm bài đã bị đặt lại, vui lòng tải lại trang.", 409, "STALE_ATTEMPT_VERSION");
   }
 
-  // Answers sent after the server deadline are ignored (only what was autosaved in time counts)
+  // Answers sent after the server deadline are ignored (except RETURNED revision submissions)
   const override = await prisma.assignmentOverride.findUnique({
     where: {
       assignmentId_studentId: {
@@ -1078,12 +1160,13 @@ export async function submitByStudent(
     timeLimitMin: effective.timeLimitMin,
     allowLate: submission.assignment.allowLate,
   });
-  const pastDeadline = Boolean(deadline && new Date() >= deadline);
+  const pastDeadline =
+    submission.status === "IN_PROGRESS" && Boolean(deadline && new Date() >= deadline);
   return finalizeSubmissionInternal(submissionId, pastDeadline ? undefined : input?.answers);
 }
 
 /**
- * Teacher review detail for a single student submission (includes answerKey, proctor timeline, PDF).
+ * Teacher review detail for a single student submission (includes answerKey, proctor timeline, PDF, revisions).
  */
 export async function getSubmissionForTeacherReview(submissionId: string) {
   const submission = await prisma.submission.findUnique({
@@ -1105,6 +1188,7 @@ export async function getSubmissionForTeacherReview(submissionId: string) {
       answers: true,
       proctorEvents: { orderBy: { at: "desc" } },
       audioPlays: { orderBy: { startedAt: "asc" } },
+      revisions: { orderBy: { revisionNo: "desc" } },
     },
   });
 
@@ -1495,4 +1579,103 @@ export async function savePhotoAnnotations(
   });
 
   return saved;
+}
+
+/**
+ * Returns a submitted/graded submission back to the student for revision.
+ * Snapshots current answers/scores into SubmissionRevision and sets status = RETURNED
+ * without consuming a new attempt or revealing answerKey.
+ */
+export async function returnSubmissionForRevision(
+  submissionId: string,
+  _teacherId: string,
+  comment?: string | null
+) {
+  const now = new Date();
+  const submission = await prisma.submission.findUnique({
+    where: { id: submissionId },
+    include: {
+      assignment: { select: { id: true, title: true, classId: true } },
+      answers: { orderBy: { fieldId: "asc" } },
+      revisions: { select: { id: true, revisionNo: true } },
+    },
+  });
+
+  if (!submission) {
+    throw new AppError("Không tìm thấy bài làm.", 404, "NOT_FOUND");
+  }
+  if (submission.status !== "SUBMITTED" && submission.status !== "GRADED") {
+    throw new AppError(
+      "Chỉ trả lại được bài đã nộp hoặc đã chấm điểm.",
+      400,
+      "INVALID_STATUS"
+    );
+  }
+
+  const nextRevisionNo =
+    submission.revisions.reduce((m, r) => Math.max(m, r.revisionNo), 0) + 1;
+  const trimmedComment = comment !== undefined ? (comment?.trim() || null) : undefined;
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.submission.updateMany({
+      where: { id: submissionId, status: { in: ["SUBMITTED", "GRADED"] } },
+      data: { status: "RETURNED" },
+    });
+    if (claimed.count === 0) {
+      throw new AppError(
+        "Chỉ trả lại được bài đã nộp hoặc đã chấm điểm.",
+        400,
+        "INVALID_STATUS"
+      );
+    }
+
+    await tx.submissionRevision.create({
+      data: {
+        submissionId,
+        revisionNo: nextRevisionNo,
+        submittedAt: submission.submittedAt ?? submission.startedAt,
+        returnedAt: now,
+        teacherComment:
+          trimmedComment !== undefined ? trimmedComment : (submission.teacherComment ?? null),
+        answersSnapshot: submission.answers.map((a) => ({
+          fieldId: a.fieldId,
+          value: a.value,
+          isCorrect: a.isCorrect,
+          score: a.score,
+          teacherNote: a.teacherNote,
+        })) as unknown as Prisma.InputJsonValue,
+        totalScore: submission.totalScore,
+        maxScore: submission.maxScore,
+      },
+    });
+
+    return tx.submission.update({
+      where: { id: submissionId },
+      data: {
+        status: "RETURNED",
+        lockedAt: null,
+        ...(trimmedComment !== undefined ? { teacherComment: trimmedComment } : {}),
+      },
+      include: {
+        revisions: { orderBy: { revisionNo: "desc" } },
+      },
+    });
+  });
+
+  invalidateLeaderboardCache(submission.assignment.classId);
+
+  await createNotificationsBulk([
+    {
+      userId: submission.studentId,
+      type: "SUBMISSION_RETURNED",
+      title: `Bài "${submission.assignment.title}" cần sửa lại`,
+      body:
+        trimmedComment
+          ? `Giáo viên đã trả bài kèm nhận xét: ${trimmedComment}`
+          : "Giáo viên đã trả bài để bạn chỉnh sửa và nộp lại.",
+      link: `/student/assignments/${submission.assignment.id}/do`,
+    },
+  ]);
+
+  return updated;
 }

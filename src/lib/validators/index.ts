@@ -140,8 +140,27 @@ export const joinClassSchema = z.object({
     .max(12),
 });
 
+export const postAttachmentInputSchema = z.object({
+  key: z.string().trim().min(1).max(300),
+  name: z.string().trim().min(1).max(200),
+  mimeType: z.string().trim().min(1).max(120),
+  sizeBytes: z.number().int().min(0).max(20 * 1024 * 1024),
+});
+
+export const postPollInputSchema = z.object({
+  question: z.string().trim().min(1, "Câu hỏi bình chọn không được để trống").max(300),
+  allowMultiple: z.boolean().optional().default(false),
+  closesAt: z.string().datetime().optional().nullable().or(z.literal("")),
+  options: z
+    .array(z.string().trim().min(1, "Lựa chọn không được để trống").max(200))
+    .min(2, "Cần ít nhất 2 lựa chọn")
+    .max(8, "Tối đa 8 lựa chọn"),
+});
+
 export const createPostSchema = z.object({
   content: z.string().trim().min(1, "Nội dung không được để trống").max(5000),
+  attachments: z.array(postAttachmentInputSchema).max(5).optional(),
+  poll: postPollInputSchema.optional().nullable(),
 });
 
 export const createCommentSchema = z.object({
@@ -214,6 +233,7 @@ export const fieldItemSchema = z
     prompt: z.string().trim().max(2000).optional().nullable(),
     explanation: z.string().trim().max(2000).optional().nullable(),
     skillTag: z.nativeEnum(SkillTag).optional().nullable(),
+    topicTag: z.string().trim().max(80).optional().nullable(),
     passageId: z.string().trim().min(1).max(64).optional().nullable(),
     audioId: z.string().trim().min(1).max(64).optional().nullable(),
     imageKey: z.string().trim().max(300).optional().nullable(),
@@ -549,4 +569,60 @@ export const transferOwnershipSchema = z.object({
   transferAll: z.boolean().optional().default(false),
   classIds: z.array(z.string().trim().min(1)).max(500).optional().default([]),
   worksheetIds: z.array(z.string().trim().min(1)).max(500).optional().default([]),
+});
+
+// ===== Phase 20: Workbooks, Return Revision, Co-teachers & Classroom Feed =====
+export const createWorkbookSchema = z.object({
+  title: z.string().trim().min(2, "Tên workbook tối thiểu 2 ký tự").max(200),
+  description: z.string().trim().max(2000).optional().nullable(),
+  worksheetIds: z.array(z.string().trim().min(1)).max(100).optional().default([]),
+});
+
+export const updateWorkbookSchema = z.object({
+  title: z.string().trim().min(2, "Tên workbook tối thiểu 2 ký tự").max(200).optional(),
+  description: z.string().trim().max(2000).optional().nullable(),
+  worksheetIds: z.array(z.string().trim().min(1)).max(100).optional(),
+});
+
+export const assignWorkbookSchema = z.object({
+  classId: z.string().trim().min(1, "Vui lòng chọn lớp học"),
+  titlePrefix: z.string().trim().max(120).optional().nullable(),
+  sequentialUnlock: z.boolean().optional().default(false),
+  dueAt: z.string().datetime().optional().nullable().or(z.literal("")),
+  timeLimitMin: z.number().int().min(1).max(600).optional().nullable(),
+  maxAttempts: z.number().int().min(1).max(50).nullable().optional().default(1),
+  showResult: z.nativeEnum(ShowResultMode).optional().default("AFTER_SUBMIT"),
+  showAnswerKey: z.boolean().optional().default(false),
+  scoreScale: z.nativeEnum(ScoreScale).optional().default("SCALE_10"),
+});
+
+export const returnSubmissionSchema = z.object({
+  teacherComment: z.string().trim().max(3000).optional().nullable(),
+});
+
+export const manageClassTeacherSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Email không hợp lệ"),
+  role: z.enum(["CO_TEACHER", "ASSISTANT"]).default("CO_TEACHER"),
+});
+
+export const updateClassTeacherRoleSchema = z.object({
+  userId: z.string().trim().min(1),
+  role: z.enum(["CO_TEACHER", "ASSISTANT"]),
+});
+
+export const cloneClassSchema = z.object({
+  name: z.string().trim().min(2, "Tên lớp mới tối thiểu 2 ký tự").max(120),
+});
+
+export const updatePostModerationSchema = z.object({
+  pinned: z.boolean().optional(),
+  commentsLocked: z.boolean().optional(),
+});
+
+export const votePostPollSchema = z.object({
+  optionIds: z.array(z.string().trim().min(1)).max(8),
+});
+
+export const togglePostReactionSchema = z.object({
+  emoji: z.enum(["👍", "❤️", "🎉", "💡", "👏", "😮"]),
 });

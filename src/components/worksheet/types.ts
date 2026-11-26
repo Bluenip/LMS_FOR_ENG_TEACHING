@@ -53,6 +53,7 @@ export interface EditorFieldDTO {
   prompt?: string | null;
   explanation?: string | null;
   skillTag?: SkillTag | null;
+  topicTag?: string | null;
   passageId?: string | null;
   audioId?: string | null;
   imageKey?: string | null;
@@ -78,6 +79,7 @@ export interface StudentFieldDTO {
   label: string;
   prompt?: string | null;
   skillTag?: SkillTag | null;
+  topicTag?: string | null;
   passageId?: string | null;
   audioId?: string | null;
   imageKey?: string | null;

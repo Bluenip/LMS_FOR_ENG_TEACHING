@@ -1,16 +1,30 @@
 import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import type { Role } from "@prisma/client";
+import type { ClassRole, Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import {
+  CLASS_ROLE_RANK,
+  canPerformClassAction,
+  hasMinClassRole,
+  type ClassAction,
+  type ClassRoleValue,
+} from "@/lib/class-roles";
 import { getRequestLocale } from "@/lib/i18n/server";
 import { localizeApiError } from "@/lib/i18n/api-errors";
 import { getHomeForRole } from "@/lib/utils";
 import { recordError } from "@/server/errorLogService";
 
-export { AppError };
+export {
+  AppError,
+  CLASS_ROLE_RANK,
+  canPerformClassAction,
+  hasMinClassRole,
+  type ClassAction,
+  type ClassRoleValue,
+};
 
 export interface SessionUser {
   id: string;
@@ -139,16 +153,46 @@ export async function requireRole(allowedRoles: Role[]): Promise<SessionUser> {
   return user;
 }
 
-export async function requireTeacherOfClass(classId: string) {
+/** Resolves the effective ClassRole of a user inside a class (ADMIN & class.teacherId resolve to OWNER). */
+export async function resolveUserClassRole(
+  classId: string,
+  userId: string,
+  userRole: Role,
+  classTeacherId: string
+): Promise<ClassRole | null> {
+  if (userRole === "ADMIN" || classTeacherId === userId) {
+    return "OWNER";
+  }
+  if (userRole !== "TEACHER") {
+    return null;
+  }
+  const entry = await prisma.classTeacher.findUnique({
+    where: { classId_userId: { classId, userId } },
+    select: { role: true },
+  });
+  return entry?.role ?? null;
+}
+
+export async function requireTeacherOfClass(
+  classId: string,
+  minRole: ClassRole = "CO_TEACHER"
+) {
   const user = await requireRole(["TEACHER", "ADMIN"]);
   const cls = await prisma.class.findUnique({ where: { id: classId } });
   if (!cls || cls.deletedAt) {
     throw new AppError("Không tìm thấy lớp học.", 404, "NOT_FOUND");
   }
-  if (user.role !== "ADMIN" && cls.teacherId !== user.id) {
-    throw new AppError("Bạn không có quyền quản lý lớp học này.", 403, "FORBIDDEN");
+  const classRole = await resolveUserClassRole(cls.id, user.id, user.role, cls.teacherId);
+  if (!hasMinClassRole(classRole, minRole)) {
+    throw new AppError(
+      minRole === "OWNER"
+        ? "Chỉ chủ sở hữu lớp hoặc quản trị viên mới thực hiện được thao tác này."
+        : "Bạn không có quyền quản lý lớp học này.",
+      403,
+      "FORBIDDEN"
+    );
   }
-  return { user, cls };
+  return { user, cls, classRole: classRole! };
 }
 
 export async function requireStudentInClass(classId: string) {
@@ -169,15 +213,18 @@ export async function requireMemberOfClass(classId: string) {
   if (!cls || cls.deletedAt) {
     throw new AppError("Không tìm thấy lớp học.", 404, "NOT_FOUND");
   }
-  if (user.role === "ADMIN" || cls.teacherId === user.id) {
-    return { user, cls, isTeacher: true };
+  if (user.role === "ADMIN" || user.role === "TEACHER") {
+    const classRole = await resolveUserClassRole(cls.id, user.id, user.role, cls.teacherId);
+    if (classRole) {
+      return { user, cls, isTeacher: true, classRole };
+    }
   }
   if (user.role === "STUDENT") {
     const enrollment = await prisma.enrollment.findUnique({
       where: { classId_studentId: { classId, studentId: user.id } },
     });
     if (enrollment && enrollment.status === "ACTIVE") {
-      return { user, cls, isTeacher: false };
+      return { user, cls, isTeacher: false, classRole: null as ClassRole | null };
     }
   }
   throw new AppError("Bạn không có quyền truy cập lớp học này.", 403, "FORBIDDEN");
@@ -220,7 +267,10 @@ export async function requireTeacherOfWorksheet(worksheetId: string) {
   return { user, worksheet };
 }
 
-export async function requireTeacherOfAssignment(assignmentId: string) {
+export async function requireTeacherOfAssignment(
+  assignmentId: string,
+  minRole: ClassRole = "ASSISTANT"
+) {
   const user = await requireRole(["TEACHER", "ADMIN"]);
   const assignment = await prisma.assignment.findUnique({
     where: { id: assignmentId },
@@ -229,10 +279,16 @@ export async function requireTeacherOfAssignment(assignmentId: string) {
   if (!assignment || assignment.class.deletedAt) {
     throw new AppError("Không tìm thấy bài tập.", 404, "NOT_FOUND");
   }
-  if (user.role !== "ADMIN" && assignment.class.teacherId !== user.id) {
+  const classRole = await resolveUserClassRole(
+    assignment.classId,
+    user.id,
+    user.role,
+    assignment.class.teacherId
+  );
+  if (!hasMinClassRole(classRole, minRole)) {
     throw new AppError("Bạn không có quyền quản lý bài tập này.", 403, "FORBIDDEN");
   }
-  return { user, assignment };
+  return { user, assignment, classRole: classRole! };
 }
 
 export async function requireStudentForAssignment(assignmentId: string) {
@@ -285,9 +341,16 @@ export async function requireSubmissionAccess(submissionId: string) {
     throw new AppError("Không tìm thấy bài làm.", 404, "NOT_FOUND");
   }
   const isOwnerStudent = user.role === "STUDENT" && submission.studentId === user.id;
-  const isTeacher =
-    user.role === "ADMIN" ||
-    (user.role === "TEACHER" && submission.assignment.class.teacherId === user.id);
+  const classRole =
+    user.role === "ADMIN" || user.role === "TEACHER"
+      ? await resolveUserClassRole(
+          submission.assignment.classId,
+          user.id,
+          user.role,
+          submission.assignment.class.teacherId
+        )
+      : null;
+  const isTeacher = Boolean(classRole);
 
   let isParent = false;
   if (user.role === "PARENT") {
@@ -303,7 +366,7 @@ export async function requireSubmissionAccess(submissionId: string) {
     throw new AppError("Bạn không có quyền truy cập bài làm này.", 403, "FORBIDDEN");
   }
 
-  return { user, submission, isTeacher, isParent, isOwnerStudent };
+  return { user, submission, isTeacher, isParent, isOwnerStudent, classRole };
 }
 
 export async function handleApiError(error: unknown): Promise<NextResponse> {

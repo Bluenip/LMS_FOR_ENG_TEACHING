@@ -18,9 +18,11 @@ import {
   FileText,
   Flag,
   Headphones,
+  History,
   ListChecks,
   Mic,
   Radio,
+  RotateCcw,
   Scale,
   ShieldAlert,
   Trophy,
@@ -38,6 +40,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -52,6 +55,8 @@ import { isInteractiveFieldType } from "@/components/worksheet/interactive/Inter
 import { CommentPresetBar } from "@/components/grading/CommentPresetBar";
 import { OverrideDialog, type StudentOverrideInfo } from "@/components/grading/OverrideDialog";
 import { GradeByQuestionPanel } from "@/components/grading/GradeByQuestionPanel";
+import { ScoreHistogramChart } from "@/components/grading/ScoreHistogramChart";
+import type { ScoreHistogramResult } from "@/lib/analytics/score-histogram";
 import {
   asOptionList,
   computeRubricTotal,
@@ -100,13 +105,15 @@ interface ReportPayload {
     lowestScore10: number;
     stdDev: number;
   };
+  histogram: ScoreHistogramResult;
+  topicBreakdown: Array<{ tag: string; questionCount: number; avgCorrectRate: number }>;
   studentRows: Array<{
     studentId: string;
     studentName: string;
     studentEmail: string;
     submissionId: string | null;
     attemptNo: number | null;
-    status: "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED" | "GRADED";
+    status: "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED" | "GRADED" | "RETURNED";
     isLate: boolean;
     flagged: boolean;
     violationCount: number;
@@ -125,6 +132,7 @@ interface ReportPayload {
     label: string;
     type: FieldType;
     skillTag: SkillTag | null;
+    topicTag: string | null;
     points: number;
     correctCount: number;
     totalGraded: number;
@@ -145,6 +153,15 @@ interface ReviewSubmissionDetail {
   flagged: boolean;
   violationCount: number;
   teacherComment: string | null;
+  revisions?: Array<{
+    id: string;
+    revisionNo: number;
+    submittedAt: string;
+    returnedAt: string | null;
+    teacherComment: string | null;
+    totalScore: number | null;
+    maxScore: number;
+  }>;
   student: { id: string; name: string; email: string };
   assignment: {
     id: string;
@@ -240,6 +257,9 @@ function SubmissionReviewModal({
   const [teacherComment, setTeacherComment] = useState<string | null>(null);
   const [flagged, setFlagged] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
+  const [returnDialogOpen, setReturnDialogOpen] = useState(false);
+  const [returnComment, setReturnComment] = useState("");
+  const [returning, setReturning] = useState(false);
   const [lightbox, setLightbox] = useState<{
     fieldId: string;
     files: UploadedAnswerFile[];
@@ -299,6 +319,32 @@ function SubmissionReviewModal({
       toast.error(err instanceof Error ? err.message : vi.common.errorGeneric);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleReturnForRevision = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sub || returning) return;
+    setReturning(true);
+    try {
+      await apiFetchJson(`/api/submissions/${submissionId}/return`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teacherComment: returnComment.trim() || null,
+        }),
+      });
+      toast.success(tr("Đã trả bài cho học sinh làm lại!", "Returned submission for revision!"));
+      setReturnDialogOpen(false);
+      await modalQueryClient.invalidateQueries({
+        queryKey: ["submission-review", submissionId],
+      });
+      onSaved();
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : tr("Trả bài thất bại", "Return failed"));
+    } finally {
+      setReturning(false);
     }
   };
 
@@ -834,20 +880,112 @@ function SubmissionReviewModal({
                   />
                 </label>
 
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={onClose}>
-                    {tr("Đóng", "Close")}
-                  </Button>
-                  <Button onClick={handleSave} disabled={saving}>
-                    <CheckCircle2 className="h-4 w-4" />
-                    {saving ? tr("Đang lưu…", "Saving…") : vi.assignments.grading.saveGrading}
-                  </Button>
+                {/* Revision History */}
+                {sub.revisions && sub.revisions.length > 0 && (
+                  <div
+                    className="space-y-2 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/25 p-3"
+                    data-testid="submission-revisions-list"
+                  >
+                    <p className="flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-300">
+                      <History className="h-3.5 w-3.5" />
+                      {tr("Lịch sử các lần nộp / trả bài", "Revision history")} ({sub.revisions.length})
+                    </p>
+                    <div className="space-y-1.5">
+                      {sub.revisions.map((rev) => (
+                        <div
+                          key={rev.id}
+                          className="rounded-lg bg-white dark:bg-slate-900 px-2.5 py-2 text-[11px] border border-amber-100 dark:border-amber-900"
+                        >
+                          <div className="flex items-center justify-between font-semibold text-[#0B1C30] dark:text-slate-100">
+                            <span>
+                              {tr("Lần", "Rev.")} #{rev.revisionNo} • {formatDateTime(rev.submittedAt, locale)}
+                            </span>
+                            {rev.totalScore !== null && (
+                              <span className="text-[#3525CD] tabular-nums">
+                                {rev.totalScore}/{rev.maxScore}
+                              </span>
+                            )}
+                          </div>
+                          {rev.teacherComment && (
+                            <p className="mt-0.5 text-[#464555] dark:text-slate-300">
+                              {tr("Nhận xét trả:", "Return comment:")} {rev.teacherComment}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  {(sub.status === "SUBMITTED" || sub.status === "GRADED") ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setReturnComment(teacherComment ?? sub.teacherComment ?? "");
+                        setReturnDialogOpen(true);
+                      }}
+                      data-testid="return-submission-btn"
+                      className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      {tr("Trả bài làm lại", "Return for revision")}
+                    </Button>
+                  ) : (
+                    <span />
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" onClick={onClose}>
+                      {tr("Đóng", "Close")}
+                    </Button>
+                    <Button onClick={handleSave} disabled={saving}>
+                      <CheckCircle2 className="h-4 w-4" />
+                      {saving ? tr("Đang lưu…", "Saving…") : vi.assignments.grading.saveGrading}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         )}
       </DialogContent>
+
+      {/* Return for revision dialog */}
+      <Dialog open={returnDialogOpen} onOpenChange={setReturnDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{tr("Trả bài cho học sinh sửa lại", "Return submission for revision")}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleReturnForRevision} className="space-y-4">
+            <p className="text-xs text-[#464555] dark:text-slate-300">
+              {tr(
+                "Hệ thống sẽ lưu lại phiên bản bài nộp hiện tại và mở lại quyền sửa bài cho học sinh (không tính thêm lượt làm bài).",
+                "The current answers and score will be saved as a revision snapshot, and the student will be able to edit and resubmit without consuming another attempt."
+              )}
+            </p>
+            <div className="space-y-1.5">
+              <Label>{tr("Nhận xét gửi học sinh (khuyên dùng)", "Revision note for student")}</Label>
+              <Textarea
+                rows={3}
+                value={returnComment}
+                onChange={(e) => setReturnComment(e.target.value)}
+                placeholder={tr("VD: Em xem lại câu 2 và giải thích rõ hơn ở phần tự luận nhé.", "e.g. Please review Q2 and expand your explanation.")}
+                data-testid="return-comment-input"
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setReturnDialogOpen(false)}>
+                {vi.common.cancel}
+              </Button>
+              <Button type="submit" disabled={returning} data-testid="confirm-return-submission-btn">
+                <RotateCcw className="h-4 w-4" />
+                {returning ? tr("Đang trả…", "Returning…") : tr("Xác nhận trả bài", "Confirm return")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {lightbox && sub && (
         <PhotoAnnotatorModal
@@ -891,6 +1029,7 @@ export default function AssignmentGradingPage() {
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
+  const [selectedTopicTag, setSelectedTopicTag] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"overview" | "by-question">("overview");
   const [reviewingSubId, setReviewingSubId] = useState<string | null>(null);
   const [overrideTarget, setOverrideTarget] = useState<ReportPayload["studentRows"][number] | null>(
@@ -925,7 +1064,11 @@ export default function AssignmentGradingPage() {
     );
   }
 
-  const lowestQuestion = [...report.questionAnalytics]
+  const filteredQuestions = selectedTopicTag
+    ? report.questionAnalytics.filter((q) => q.topicTag === selectedTopicTag)
+    : report.questionAnalytics;
+
+  const lowestQuestion = [...filteredQuestions]
     .filter((q) => q.totalGraded > 0)
     .sort((a, b) => a.correctRate - b.correctRate)[0];
 
@@ -1094,6 +1237,9 @@ export default function AssignmentGradingPage() {
         </div>
       </div>
 
+      {/* Phase 20: Score Histogram & Percentiles */}
+      <ScoreHistogramChart histogram={report.histogram} />
+
       {/* Stitch Per-Question Accuracy Bar Chart */}
       <section className="stitch-card p-6 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1117,6 +1263,40 @@ export default function AssignmentGradingPage() {
             </span>
           </div>
         </div>
+
+        {report.topicBreakdown && report.topicBreakdown.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 pt-1" data-testid="topic-tag-filters">
+            <button
+              type="button"
+              onClick={() => setSelectedTopicTag(null)}
+              data-testid="topic-filter-chip-all"
+              className={cn(
+                "min-h-8 rounded-full border px-3 py-1 text-xs font-semibold transition",
+                selectedTopicTag === null
+                  ? "border-[#4F46E5] bg-[#4F46E5] text-white"
+                  : "border-slate-200 bg-white text-[#464555] hover:bg-slate-50"
+              )}
+            >
+              {tr("Tất cả chủ đề", "All topics")}
+            </button>
+            {report.topicBreakdown.map((t) => (
+              <button
+                key={t.tag}
+                type="button"
+                onClick={() => setSelectedTopicTag(selectedTopicTag === t.tag ? null : t.tag)}
+                data-testid={`topic-filter-chip-${t.tag}`}
+                className={cn(
+                  "min-h-8 rounded-full border px-3 py-1 text-xs font-semibold transition",
+                  selectedTopicTag === t.tag
+                    ? "border-[#4F46E5] bg-[#4F46E5] text-white"
+                    : "border-slate-200 bg-white text-[#464555] hover:bg-slate-50"
+                )}
+              >
+                {t.tag} ({t.avgCorrectRate}%)
+              </button>
+            ))}
+          </div>
+        )}
 
         {lowestQuestion && lowestQuestion.correctRate < 60 && (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-200 bg-[#FEF2F2] px-4 py-3 text-xs text-[#93000A]">
@@ -1143,7 +1323,7 @@ export default function AssignmentGradingPage() {
 
         {/* Bar chart */}
         <div className="flex items-end gap-2 overflow-x-auto pb-2 pt-6 min-h-[160px]">
-          {report.questionAnalytics.map((q) => {
+          {filteredQuestions.map((q) => {
             const barColor =
               q.correctRate >= 80
                 ? "bg-[#005338]"
@@ -1181,15 +1361,19 @@ export default function AssignmentGradingPage() {
             <thead className="text-[11px] uppercase text-slate-400">
               <tr>
                 <th className="py-2 pr-4">{tr("Câu", "Q")}</th>
+                <th className="py-2 pr-4">{tr("Chủ đề", "Topic")}</th>
                 <th className="py-2 pr-4">{tr("Kỹ năng", "Skill")}</th>
                 <th className="py-2 pr-4">{tr("Tỉ lệ đúng", "Correct rate")}</th>
                 <th className="py-2">{tr("Đáp án sai phổ biến nhất", "Most common wrong answer")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {report.questionAnalytics.map((q) => (
+              {filteredQuestions.map((q) => (
                 <tr key={q.fieldId}>
                   <td className="py-2 pr-4 font-bold text-[#0B1C30]">{tr("Câu", "Q")} {q.label}</td>
+                  <td className="py-2 pr-4 text-slate-500">
+                    {q.topicTag ? <Badge variant="indigo">{q.topicTag}</Badge> : "—"}
+                  </td>
                   <td className="py-2 pr-4 text-slate-500">
                     {q.skillTag ? vi.skills[q.skillTag] : "—"}
                   </td>
@@ -1288,6 +1472,11 @@ export default function AssignmentGradingPage() {
                       {row.status === "GRADED" && <Badge variant="mint">{tr("Đã chấm", "Graded")}</Badge>}
                       {row.status === "SUBMITTED" && (
                         <Badge variant="orange">{tr("Chờ chấm tự luận", "Essay awaiting grading")}</Badge>
+                      )}
+                      {row.status === "RETURNED" && (
+                        <Badge variant="orange" data-testid={`status-returned-${row.studentId}`}>
+                          {tr("Đã trả làm lại", "Returned")}
+                        </Badge>
                       )}
                       {row.status === "IN_PROGRESS" && <Badge variant="sky">{tr("Đang làm", "In progress")}</Badge>}
                       {row.status === "NOT_STARTED" && (

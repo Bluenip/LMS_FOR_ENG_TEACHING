@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { resolveUserClassRole } from "@/lib/permissions";
 import { getClassDetail } from "@/server/classService";
 import { ClassDetailView, type ClassDetailData } from "@/components/classes/ClassDetailView";
 
@@ -13,8 +14,14 @@ export default async function TeacherClassDetailPage({
   const { id } = await params;
 
   try {
-    const cls = await getClassDetail(id);
-    if (session.user.role !== "ADMIN" && cls.teacherId !== session.user.id) {
+    const cls = await getClassDetail(id, { viewerId: session.user.id });
+    const classRole = await resolveUserClassRole(
+      cls.id,
+      session.user.id,
+      session.user.role,
+      cls.teacherId
+    );
+    if (!classRole) {
       redirect("/teacher");
     }
 
@@ -26,6 +33,12 @@ export default async function TeacherClassDetailPage({
       archived: cls.archived,
       requireApproval: cls.requireApproval,
       teacher: cls.teacher,
+      classTeachers: cls.classTeachers.map((ct) => ({
+        id: ct.id,
+        userId: ct.userId,
+        role: ct.role,
+        user: ct.user,
+      })),
       enrollments: cls.enrollments.map((e) => ({
         id: e.id,
         status: e.status,
@@ -38,18 +51,9 @@ export default async function TeacherClassDetailPage({
           parentLinksAsChild: e.student.parentLinksAsChild,
         },
       })),
-      posts: cls.posts.map((p) => ({
-        id: p.id,
-        content: p.content,
-        createdAt: p.createdAt.toISOString(),
-        author: p.author,
-        comments: p.comments.map((c) => ({
-          id: c.id,
-          content: c.content,
-          createdAt: c.createdAt.toISOString(),
-          author: c.author,
-        })),
-      })),
+      posts: cls.posts,
+      workbooks: cls.workbooks,
+      lessonActiveStudentCount: cls.lessonActiveStudentCount,
       lessons: cls.lessons.map((l) => ({
         id: l.id,
         title: l.title,
@@ -64,6 +68,8 @@ export default async function TeacherClassDetailPage({
           fileKey: it.fileKey,
           url: it.url,
           order: it.order,
+          completedCount: it.completedCount,
+          completedByMe: it.completedByMe,
         })),
       })),
       assignments: cls.assignments.map((a) => ({
@@ -73,8 +79,14 @@ export default async function TeacherClassDetailPage({
         timeLimitMin: a.timeLimitMin,
         proctorMode: a.proctorMode,
         requireCamera: a.requireCamera,
+        requireMicMonitor: a.requireMicMonitor,
         violationAction: a.violationAction,
         maxViolations: a.maxViolations,
+        workbookId: a.workbookId,
+        workbookOrder: a.workbookOrder,
+        unlockAfterAssignmentId: a.unlockAfterAssignmentId,
+        workbook: a.workbook,
+        isLockedByPrerequisite: a.isLockedByPrerequisite,
         worksheet: a.worksheet,
         _count: a._count,
       })),
@@ -86,6 +98,7 @@ export default async function TeacherClassDetailPage({
         isTeacher={true}
         currentUserId={session.user.id}
         isAdmin={session.user.role === "ADMIN"}
+        classRole={classRole}
       />
     );
   } catch {

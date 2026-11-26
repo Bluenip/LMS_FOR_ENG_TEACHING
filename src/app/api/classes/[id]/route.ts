@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import {
+  AppError,
   handleApiError,
+  hasMinClassRole,
   requireMemberOfClass,
   requireTeacherOfClass,
 } from "@/lib/permissions";
@@ -14,7 +16,7 @@ export async function GET(
 ) {
   try {
     const { id } = await context.params;
-    const { user, isTeacher } = await requireMemberOfClass(id);
+    const { user, isTeacher, classRole } = await requireMemberOfClass(id);
     const cls = await getClassDetail(id, isTeacher ? undefined : { studentId: user.id });
 
     // Strip pending enrollments & student emails for student viewers
@@ -32,7 +34,7 @@ export async function GET(
             })),
         };
 
-    return NextResponse.json({ class: response, isTeacher });
+    return NextResponse.json({ class: response, isTeacher, classRole });
   } catch (error) {
     return handleApiError(error);
   }
@@ -44,9 +46,16 @@ export async function PATCH(
 ) {
   try {
     const { id } = await context.params;
-    const { user } = await requireTeacherOfClass(id);
+    const { user, classRole } = await requireTeacherOfClass(id, "CO_TEACHER");
     const body = await req.json();
     const data = updateClassSchema.parse(body);
+    if (data.archived !== undefined && !hasMinClassRole(classRole, "OWNER")) {
+      throw new AppError(
+        "Chỉ chủ sở hữu lớp hoặc quản trị viên mới thực hiện được thao tác này.",
+        403,
+        "FORBIDDEN"
+      );
+    }
     const updated = await updateClass(id, data, user.id);
     return NextResponse.json({ class: updated });
   } catch (error) {
@@ -60,7 +69,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await context.params;
-    const { user } = await requireTeacherOfClass(id);
+    const { user } = await requireTeacherOfClass(id, "OWNER");
     // moves the class to the trash (restorable for 30 days from Library › Trash)
     await trashClass(user, id);
     return NextResponse.json({ ok: true });

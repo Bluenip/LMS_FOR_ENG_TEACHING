@@ -1261,13 +1261,21 @@ export async function authorizeDriveFileAccess(
         assignment: {
           select: {
             shareProctorWithParent: true,
+            classId: true,
             class: { select: { teacherId: true } },
           },
         },
       },
     });
     if (!sub) return false;
-    if (user.role === "TEACHER") return sub.assignment.class.teacherId === user.id;
+    if (user.role === "TEACHER") {
+      if (sub.assignment.class.teacherId === user.id) return true;
+      const ct = await prisma.classTeacher.findUnique({
+        where: { classId_userId: { classId: sub.assignment.classId, userId: user.id } },
+        select: { id: true },
+      });
+      return Boolean(ct);
+    }
     if (user.role === "STUDENT") return sub.studentId === user.id;
     if (user.role === "PARENT") {
       if (file.storageKey.startsWith("proctor/") && !sub.assignment.shareProctorWithParent) {

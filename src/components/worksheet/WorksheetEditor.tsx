@@ -658,6 +658,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
               prompt: f.prompt ?? null,
               explanation: f.explanation ?? null,
               skillTag: f.skillTag ?? null,
+              topicTag: f.topicTag ?? null,
               passageId: f.passageId ?? null,
               audioId: f.audioId ?? null,
               imageKey: f.imageKey ?? null,
@@ -1365,6 +1366,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
         label: f.label,
         prompt: f.prompt,
         skillTag: f.skillTag,
+        topicTag: f.topicTag,
         passageId: f.passageId,
         audioId: f.audioId,
         imageKey: f.imageKey ?? null,
@@ -3100,6 +3102,20 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                     </select>
                   </div>
                   )}
+                  <div className="space-y-1" data-testid="inspector-topic-tag">
+                    <Label className="text-xs">{tr("Chủ đề kiến thức", "Topic tag")}</Label>
+                    <Input
+                      value={selectedField.topicTag ?? ""}
+                      placeholder={tr("VD: Đạo hàm, Passive Voice, Este…", "e.g. Derivatives, Passive Voice…")}
+                      maxLength={80}
+                      onChange={(e) =>
+                        updateField(selectedField.id, {
+                          topicTag: e.target.value || null,
+                        })
+                      }
+                      className="h-9 text-xs"
+                    />
+                  </div>
                 </div>
 
                 {/* Optional Shared Passage link */}

@@ -130,7 +130,7 @@ interface StudentAssignmentPayload {
   submission: {
     id: string;
     attemptNo: number;
-    status: "IN_PROGRESS" | "SUBMITTED" | "GRADED";
+    status: "IN_PROGRESS" | "SUBMITTED" | "GRADED" | "RETURNED";
     startedAt: string;
     submittedAt: string | null;
     isLate: boolean;
@@ -140,6 +140,15 @@ interface StudentAssignmentPayload {
     autoScore: number | null;
     manualScore: number | null;
     teacherComment: string | null;
+    revisions?: Array<{
+      id: string;
+      revisionNo: number;
+      submittedAt: string;
+      returnedAt: string | null;
+      teacherComment: string | null;
+      totalScore: number | null;
+      maxScore: number;
+    }>;
     violationCount: number;
     lockedAt: string | null;
     attemptVersion: number;
@@ -193,6 +202,11 @@ export default function StudentDoAssignmentPage() {
   const [payload, setPayload] = useState<StudentAssignmentPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [prereqLock, setPrereqLock] = useState<{
+    assignmentId: string;
+    title?: string;
+    message: string;
+  } | null>(null);
 
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
   const [audioPlayCounts, setAudioPlayCounts] = useState<Record<string, number>>({});
@@ -240,10 +254,24 @@ export default function StudentDoAssignmentPage() {
   const fetchPayload = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setPrereqLock(null);
     try {
       const res = await fetch(`/api/assignments/${assignmentId}`, { cache: "no-store" });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? tr("Không tải được bài tập", "Could not load the assignment"));
+      if (!res.ok) {
+        if (res.status === 403 && json.code === "PREREQUISITE_NOT_SUBMITTED") {
+          setPrereqLock({
+            assignmentId: String(json.params?.prerequisiteAssignmentId ?? ""),
+            title:
+              typeof json.params?.prerequisiteTitle === "string"
+                ? json.params.prerequisiteTitle
+                : undefined,
+            message: json.error ?? tr("Bạn cần nộp bài trước đó để mở bài này.", "Complete previous assignment first."),
+          });
+          return;
+        }
+        throw new Error(json.error ?? tr("Không tải được bài tập", "Could not load the assignment"));
+      }
       const data = json as StudentAssignmentPayload;
 
       // Redirect to mandatory rules page if proctored, camera, or mic required and rules/consent not yet accepted
@@ -270,7 +298,7 @@ export default function StudentDoAssignmentPage() {
         for (const a of data.submission.answers) {
           map[a.fieldId] = a.value;
         }
-        if (data.submission.status === "IN_PROGRESS") {
+        if (data.submission.status === "IN_PROGRESS" || data.submission.status === "RETURNED") {
           const draft = loadOfflineDraft(data.submission.id, data.submission.attemptVersion);
           if (draft) {
             let restored = false;
@@ -314,7 +342,9 @@ export default function StudentDoAssignmentPage() {
 
   const submission = payload?.submission ?? null;
   const assignment = payload?.assignment ?? null;
-  const isInProgress = submission?.status === "IN_PROGRESS";
+  const isReturned = submission?.status === "RETURNED";
+  const isLiveAttempt = submission?.status === "IN_PROGRESS";
+  const isInProgress = isLiveAttempt || isReturned;
   const allFields = useMemo(
     () => assignment?.worksheet.fields ?? [],
     [assignment]
@@ -350,7 +380,13 @@ export default function StudentDoAssignmentPage() {
 
   // Flush dirty answers to server
   const flushAutosave = useCallback(async () => {
-    if (!submission || submission.status !== "IN_PROGRESS" || isLocked) return;
+    if (
+      !submission ||
+      (submission.status !== "IN_PROGRESS" && submission.status !== "RETURNED") ||
+      isLocked
+    ) {
+      return;
+    }
     const dirtyIds = Array.from(dirtyFieldIdsRef.current);
     if (dirtyIds.length === 0) return;
 
@@ -407,7 +443,7 @@ export default function StudentDoAssignmentPage() {
   useEffect(() => {
     if (
       pendingOfflineRestoreRef.current &&
-      submission?.status === "IN_PROGRESS" &&
+      (submission?.status === "IN_PROGRESS" || submission?.status === "RETURNED") &&
       navigator.onLine
     ) {
       pendingOfflineRestoreRef.current = false;
@@ -443,7 +479,13 @@ export default function StudentDoAssignmentPage() {
 
   // Submit handler
   const handleSubmit = useCallback(async () => {
-    if (!submission || submission.status !== "IN_PROGRESS" || submitting) return;
+    if (
+      !submission ||
+      (submission.status !== "IN_PROGRESS" && submission.status !== "RETURNED") ||
+      submitting
+    ) {
+      return;
+    }
     setSubmitting(true);
     try {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
@@ -479,7 +521,7 @@ export default function StudentDoAssignmentPage() {
 
   // Server-synced countdown timer (ticks 1s locally, auto-submits at 0)
   useEffect(() => {
-    if (!isInProgress || remainingSeconds === null) return;
+    if (!isLiveAttempt || remainingSeconds === null) return;
     if (remainingSeconds <= 0) {
       toast.warning(viRef.current.assignments.do.timeUp);
       void handleSubmit();
@@ -492,7 +534,7 @@ export default function StudentDoAssignmentPage() {
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [isInProgress, remainingSeconds, handleSubmit]);
+  }, [isLiveAttempt, remainingSeconds, handleSubmit]);
 
   // ===== ANTI-CHEAT PROCTORING ENGINE =====
   const sendProctorEvent = useCallback(
@@ -567,7 +609,7 @@ export default function StudentDoAssignmentPage() {
 
   // Flush queued offline proctor events when network comes back
   useEffect(() => {
-    if (!submission || !isInProgress) return;
+    if (!submission || !isLiveAttempt) return;
     const queueKey = `engclass_proctor_q_${submission.id}`;
     const onOnline = async () => {
       try {
@@ -593,7 +635,7 @@ export default function StudentDoAssignmentPage() {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
     };
-  }, [submission, isInProgress, sendProctorEvent]);
+  }, [submission, isLiveAttempt, sendProctorEvent]);
 
   const isLockdownMode =
     assignment?.proctorMode === "LOCKDOWN" || assignment?.proctorMode === "SEB";
@@ -603,7 +645,7 @@ export default function StudentDoAssignmentPage() {
   // Runs independently of proctorMode so homework with blockCopyPaste=true is also protected!
   useClipboardGuard({
     enabled: Boolean(
-      isInProgress &&
+      isLiveAttempt &&
         assignment &&
         (blockClipboardActive || assignment.proctorMode !== "OFF")
     ),
@@ -622,7 +664,7 @@ export default function StudentDoAssignmentPage() {
 
   // Layer 2: Webcam AI proctoring (MediaPipe FaceLandmarker + ObjectDetector, local in browser)
   const cameraProctor = useCameraProctor({
-    enabled: Boolean(isInProgress && assignment?.requireCamera && submission?.id),
+    enabled: Boolean(isLiveAttempt && assignment?.requireCamera && submission?.id),
     submissionId: submission?.id ?? null,
     captureSnapshots: Boolean(assignment?.cameraSnapshots),
     sensitivity: assignment?.cameraSensitivity ?? "MEDIUM",
@@ -645,7 +687,7 @@ export default function StudentDoAssignmentPage() {
     },
   });
   const micProctor = useMicProctor({
-    enabled: Boolean(isInProgress && assignment?.requireMicMonitor && submission?.id),
+    enabled: Boolean(isLiveAttempt && assignment?.requireMicMonitor && submission?.id),
     onVoiceEvent: async (ev) => {
       await sendProctorEvent({
         type: "MIC_VOICE",
@@ -671,7 +713,7 @@ export default function StudentDoAssignmentPage() {
 
   // Attach client lockdown listeners when exam is IN_PROGRESS and proctored
   useEffect(() => {
-    if (!isInProgress || !assignment || assignment.proctorMode === "OFF") return;
+    if (!isLiveAttempt || !assignment || assignment.proctorMode === "OFF") return;
 
     const isMobile = mobileMode || isMobileProctorEnvironment();
     const isLockdown = assignment.proctorMode === "LOCKDOWN" || assignment.proctorMode === "SEB";
@@ -837,12 +879,46 @@ export default function StudentDoAssignmentPage() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", onResize);
     };
-  }, [isInProgress, assignment, sendProctorEvent, mobileMode]);
+  }, [isLiveAttempt, assignment, sendProctorEvent, mobileMode]);
 
   if (loading) {
     return (
       <div className="stitch-card p-12 text-center text-sm text-slate-400">
         {vi.common.loading}
+      </div>
+    );
+  }
+
+  if (prereqLock) {
+    return (
+      <div
+        className="stitch-card mx-auto max-w-xl p-10 text-center space-y-4 border-amber-200 dark:border-amber-800"
+        data-testid="prerequisite-lock-card"
+      >
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-600">
+          <Lock className="h-6 w-6" />
+        </div>
+        <h1 className="text-lg font-bold text-[#0B1C30] dark:text-slate-100">
+          {tr("Bài tập đang bị khoá theo lộ trình Workbook", "Locked by Workbook progression")}
+        </h1>
+        <p className="text-sm text-[#464555] dark:text-slate-300">{prereqLock.message}</p>
+        {prereqLock.title && (
+          <p className="text-xs font-semibold text-[#3525CD]">
+            {tr("Cần hoàn thành trước:", "Required first:")} {prereqLock.title}
+          </p>
+        )}
+        <div className="flex flex-wrap justify-center gap-2 pt-2">
+          {prereqLock.assignmentId && (
+            <Button variant="accent" asChild>
+              <Link href={`/student/assignments/${prereqLock.assignmentId}/do`}>
+                {tr("Mở bài tập trước đó →", "Go to prerequisite assignment →")}
+              </Link>
+            </Button>
+          )}
+          <Button variant="outline" asChild>
+            <Link href="/student">{tr("Quay lại trang học sinh", "Back to student home")}</Link>
+          </Button>
+        </div>
       </div>
     );
   }
@@ -913,11 +989,11 @@ export default function StudentDoAssignmentPage() {
     ])
   );
   const remainingViolations = Math.max(0, assignment.maxViolations - violationCount);
-  const cameraBlocked = isInProgress && assignment.requireCamera && cameraProctor.cameraOff;
+  const cameraBlocked = isLiveAttempt && assignment.requireCamera && cameraProctor.cameraOff;
   const blurContent =
     isLocked ||
     Boolean(leftOverlay?.visible) ||
-    (isInProgress && needsFullscreen) ||
+    (isLiveAttempt && needsFullscreen) ||
     cameraBlocked;
   const worksheetAudios = assignment.worksheet.audios ?? [];
   const boundAudioIds = new Set(
@@ -933,8 +1009,34 @@ export default function StudentDoAssignmentPage() {
 
   return (
     <div className="space-y-4 pb-20 lg:pb-8">
+      {/* Teacher Returned for Revision Banner */}
+      {isReturned && (
+        <div
+          data-testid="returned-revision-banner"
+          className="rounded-2xl border-2 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-5 py-4 space-y-1.5"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="flex items-center gap-2 text-sm font-bold text-amber-900 dark:text-amber-200">
+              <RotateCcw className="h-4 w-4 text-amber-600 shrink-0" />
+              {tr("Giáo viên đã trả bài để bạn chỉnh sửa và nộp lại", "Teacher returned this submission for revision")}
+            </p>
+            {submission.revisions && submission.revisions.length > 0 && (
+              <Badge variant="orange">
+                {tr("Số lần đã trả:", "Revisions:")} {submission.revisions.length}
+              </Badge>
+            )}
+          </div>
+          {submission.teacherComment && (
+            <p className="text-xs text-amber-800 dark:text-amber-300">
+              <strong>{tr("Nhận xét giáo viên:", "Teacher feedback:")}</strong>{" "}
+              {submission.teacherComment}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Proctoring Fixed Rule Banner (when proctored & in progress) */}
-      {isInProgress && assignment.proctorMode !== "OFF" && (
+      {isLiveAttempt && assignment.proctorMode !== "OFF" && (
         <div
           data-testid="proctor-banner"
           className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-red-200 bg-[#FEF2F2] px-4 py-2.5 text-xs font-semibold text-[#93000A]"
@@ -978,7 +1080,7 @@ export default function StudentDoAssignmentPage() {
       )}
 
       {/* Mobile Proctoring Mode Banner */}
-      {isInProgress && mobileMode && assignment.proctorMode !== "OFF" && (
+      {isLiveAttempt && mobileMode && assignment.proctorMode !== "OFF" && (
         <div
           data-testid="mobile-proctor-banner"
           className="flex items-start gap-2.5 rounded-2xl border border-indigo-200 bg-indigo-50/90 px-4 py-2.5 text-xs text-[#0B1C30]"
@@ -1063,7 +1165,7 @@ export default function StudentDoAssignmentPage() {
           </div>
 
           {/* Server Countdown Timer Pill */}
-          {isInProgress && remainingSeconds !== null && (
+          {isLiveAttempt && remainingSeconds !== null && (
             <div
               data-testid="exam-timer"
               className={cn(
@@ -1090,7 +1192,7 @@ export default function StudentDoAssignmentPage() {
               onClick={() => setConfirmSubmitOpen(true)}
             >
               <Send className="h-4 w-4" />
-              {vi.assignments.do.submit}
+              {isReturned ? tr("Nộp lại bài", "Resubmit") : vi.assignments.do.submit}
             </Button>
           ) : (
             <div className="flex items-center gap-2">
@@ -1350,7 +1452,7 @@ export default function StudentDoAssignmentPage() {
       </div>
 
       {/* Floating Camera AI Preview Badge (Bottom-Left) */}
-      {isInProgress && assignment.requireCamera && (
+      {isLiveAttempt && assignment.requireCamera && (
         <div
           data-testid="camera-proctor-preview"
           className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-3 z-40 w-32 overflow-hidden rounded-2xl border-2 border-slate-200 bg-slate-950 shadow-xl sm:w-44 lg:bottom-4 lg:left-4"
@@ -1408,7 +1510,7 @@ export default function StudentDoAssignmentPage() {
       )}
 
       {/* Floating Mic AI Status Pill */}
-      {isInProgress && assignment.requireMicMonitor && (
+      {isLiveAttempt && assignment.requireMicMonitor && (
         <div
           data-testid="mic-proctor-badge"
           className={cn(
@@ -1477,7 +1579,7 @@ export default function StudentDoAssignmentPage() {
       )}
 
       {/* Fullscreen required gate (no violation recorded: shown when not yet in fullscreen) */}
-      {isInProgress && !isLocked && needsFullscreen && !leftOverlay?.visible && (
+      {isLiveAttempt && !isLocked && needsFullscreen && !leftOverlay?.visible && (
         <div
           data-testid="fullscreen-gate"
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/75 p-4 backdrop-blur-md"
@@ -1506,7 +1608,7 @@ export default function StudentDoAssignmentPage() {
       )}
 
       {/* STITCH OVERLAY 1: Left Tab / Exited Fullscreen Shield */}
-      {isInProgress && !isLocked && leftOverlay?.visible && (
+      {isLiveAttempt && !isLocked && leftOverlay?.visible && (
         <div
           data-testid="left-exam-overlay"
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/75 p-4 backdrop-blur-md"
@@ -1588,7 +1690,7 @@ export default function StudentDoAssignmentPage() {
       )}
 
       {/* STITCH OVERLAY 2: Locked Submission Shield (LOCK Action) */}
-      {isInProgress && isLocked && (
+      {isLiveAttempt && isLocked && (
         <div
           data-testid="locked-exam-overlay"
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 p-4 backdrop-blur-md"

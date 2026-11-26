@@ -82,7 +82,18 @@ export async function createAssignmentsForClasses(
     where: {
       id: { in: input.classIds },
       deletedAt: null,
-      ...(isAdmin ? {} : { teacherId }),
+      ...(isAdmin
+        ? {}
+        : {
+            OR: [
+              { teacherId },
+              {
+                classTeachers: {
+                  some: { userId: teacherId, role: { in: ["OWNER", "CO_TEACHER"] } },
+                },
+              },
+            ],
+          }),
     },
     include: {
       enrollments: {
@@ -426,6 +437,7 @@ export async function listStudentAssignments(studentId: string) {
     },
     include: {
       class: { select: { id: true, name: true, teacher: { select: { name: true } } } },
+      workbook: { select: { id: true, title: true } },
       worksheet: {
         select: {
           id: true,
@@ -458,15 +470,25 @@ export async function listStudentAssignments(studentId: string) {
     orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }],
   });
 
+  const completedAssignmentIds = new Set(
+    assignments
+      .filter((a) => a.submissions.some((s) => s.status === "SUBMITTED" || s.status === "GRADED"))
+      .map((a) => a.id)
+  );
+
   const now = new Date();
   return assignments.map((a) => {
     const effective = resolveEffectiveAssignment(a, a.overrides[0] ?? null);
+    const isLockedByPrerequisite = Boolean(
+      a.unlockAfterAssignmentId && !completedAssignmentIds.has(a.unlockAfterAssignmentId)
+    );
     return {
       ...a,
       dueAt: effective.dueAt,
       timeLimitMin: effective.timeLimitMin,
       maxAttempts: effective.maxAttempts,
       hasOverride: effective.hasOverride,
+      isLockedByPrerequisite,
       submissions: a.submissions.map((s) => ({
         ...s,
         totalScore: canRevealResult(a, s.status, now) ? s.totalScore : null,
@@ -475,10 +497,20 @@ export async function listStudentAssignments(studentId: string) {
   });
 }
 
-/** A teacher's own assignments; an admin (`allClasses`) sees every assignment in the system. */
+/** A teacher's own + co-taught assignments; an admin (`allClasses`) sees every assignment. */
 export async function listTeacherAssignments(teacherId: string, opts?: { allClasses?: boolean }) {
   return prisma.assignment.findMany({
-    where: opts?.allClasses ? { class: { deletedAt: null } } : { class: { teacherId, deletedAt: null } },
+    where: opts?.allClasses
+      ? { class: { deletedAt: null } }
+      : {
+          class: {
+            deletedAt: null,
+            OR: [
+              { teacherId },
+              { classTeachers: { some: { userId: teacherId } } },
+            ],
+          },
+        },
     include: {
       class: {
         select: {

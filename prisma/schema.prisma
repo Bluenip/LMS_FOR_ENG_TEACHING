@@ -135,15 +135,23 @@ enum ProctorEventType {
   MOBILE_APP_SWITCH
 }
 
+enum ClassRole {
+  OWNER
+  CO_TEACHER
+  ASSISTANT
+}
+
 enum SubmissionStatus {
   IN_PROGRESS
   SUBMITTED
   GRADED
+  RETURNED
 }
 
 enum NotificationType {
   ASSIGNMENT_CREATED
   SUBMISSION_GRADED
+  SUBMISSION_RETURNED
   ENROLLMENT_REQUEST
   ENROLLMENT_APPROVED
   POST_CREATED
@@ -233,6 +241,11 @@ model User {
   assignmentTargets      AssignmentTarget[]       @relation("AssignmentTargetStudent")
   assignmentReminders    AssignmentReminderSent[] @relation("AssignmentReminderStudent")
   teacherCommentPresets  TeacherCommentPreset[]   @relation("TeacherCommentPresets")
+  workbooksOwned         Workbook[]               @relation("WorkbookOwner")
+  classTeacherRoles      ClassTeacher[]           @relation("ClassTeacherAssignments")
+  lessonItemProgress     LessonItemProgress[]     @relation("StudentLessonProgress")
+  pollVotes              PostPollVote[]           @relation("UserPollVotes")
+  postReactions          PostReaction[]           @relation("UserPostReactions")
 
   @@index([deletedAt])
 }
@@ -283,9 +296,10 @@ model Class {
   posts        Post[]
   lessons      Lesson[]
   classLessons ClassLesson[]
-  assignments  Assignment[]
-  driveFiles   DriveFile[]
-  driveUploads DriveUpload[]
+  assignments   Assignment[]
+  classTeachers ClassTeacher[]
+  driveFiles    DriveFile[]
+  driveUploads  DriveUpload[]
 
   @@index([teacherId])
 }
@@ -305,16 +319,21 @@ model Enrollment {
 }
 
 model Post {
-  id        String   @id @default(cuid())
-  classId   String
-  authorId  String
-  content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(cuid())
+  classId        String
+  authorId       String
+  content        String
+  pinned         Boolean  @default(false)
+  commentsLocked Boolean  @default(false)
+  attachments    Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  class    Class     @relation(fields: [classId], references: [id], onDelete: Cascade)
-  author   User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  comments Comment[]
+  class     Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  author    User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments  Comment[]
+  poll      PostPoll?
+  reactions PostReaction[]
 
   @@index([classId, createdAt])
 }
@@ -387,7 +406,8 @@ model LessonItem {
   order         Int
   createdAt     DateTime       @default(now())
 
-  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lesson   Lesson               @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  progress LessonItemProgress[]
 
   @@index([lessonId, order])
 }
@@ -414,8 +434,9 @@ model Worksheet {
   pages       WorksheetPage[]
   fields      Field[]
   audios      WorksheetAudio[]
-  assignments Assignment[]
-  driveFiles  DriveFile[]
+  assignments   Assignment[]
+  workbookItems WorkbookItem[]
+  driveFiles    DriveFile[]
 
   @@index([ownerId])
   @@index([subject])
@@ -443,6 +464,7 @@ model Field {
   prompt      String?
   explanation String?
   skillTag    SkillTag?
+  topicTag    String?
   passageId   String?
   imageKey    String?
   order       Int
@@ -521,18 +543,27 @@ model Assignment {
   scoreScale      ScoreScale @default(SCALE_10)
   weight          Float      @default(1)
 
+  // Phase 20: Workbook & sequential unlock
+  workbookId              String?
+  workbookOrder           Int?
+  unlockAfterAssignmentId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  class       Class                    @relation(fields: [classId], references: [id], onDelete: Cascade)
-  worksheet   Worksheet                @relation(fields: [worksheetId], references: [id], onDelete: Cascade)
-  submissions Submission[]
-  overrides   AssignmentOverride[]
-  targets     AssignmentTarget[]
-  reminders   AssignmentReminderSent[]
+  class                 Class                    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  worksheet             Worksheet                @relation(fields: [worksheetId], references: [id], onDelete: Cascade)
+  workbook              Workbook?                @relation(fields: [workbookId], references: [id], onDelete: SetNull)
+  unlockAfterAssignment Assignment?              @relation("AssignmentUnlockChain", fields: [unlockAfterAssignmentId], references: [id], onDelete: SetNull)
+  unlockedAssignments   Assignment[]             @relation("AssignmentUnlockChain")
+  submissions           Submission[]
+  overrides             AssignmentOverride[]
+  targets               AssignmentTarget[]
+  reminders             AssignmentReminderSent[]
 
   @@index([classId])
   @@index([worksheetId])
+  @@index([workbookId])
 }
 
 model Submission {
@@ -571,6 +602,7 @@ model Submission {
   proctorEvents ProctorEvent[]
   audioPlays    AudioPlay[]
   driveFiles    DriveFile[]
+  revisions     SubmissionRevision[]
 
   @@unique([assignmentId, studentId, attemptNo])
   @@index([studentId])
@@ -872,4 +904,133 @@ model TeacherCommentPreset {
   teacher User @relation("TeacherCommentPresets", fields: [teacherId], references: [id], onDelete: Cascade)
 
   @@index([teacherId, order])
+}
+
+/// Phase 20: Teacher workbook grouping ordered worksheets for multi-session assignment & matrix tracking.
+model Workbook {
+  id          String    @id @default(cuid())
+  ownerId     String
+  title       String
+  description String?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  owner       User           @relation("WorkbookOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  items       WorkbookItem[]
+  assignments Assignment[]
+
+  @@index([ownerId])
+}
+
+model WorkbookItem {
+  id          String @id @default(cuid())
+  workbookId  String
+  worksheetId String
+  order       Int    @default(0)
+
+  workbook  Workbook  @relation(fields: [workbookId], references: [id], onDelete: Cascade)
+  worksheet Worksheet @relation(fields: [worksheetId], references: [id], onDelete: Cascade)
+
+  @@unique([workbookId, worksheetId])
+  @@index([workbookId, order])
+}
+
+/// Phase 20: Snapshot of student submission saved when returned by teacher for revision.
+model SubmissionRevision {
+  id              String    @id @default(cuid())
+  submissionId    String
+  revisionNo      Int
+  submittedAt     DateTime
+  returnedAt      DateTime?
+  teacherComment  String?
+  answersSnapshot Json
+  totalScore      Float?
+  maxScore        Float
+  createdAt       DateTime  @default(now())
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId, revisionNo])
+}
+
+/// Phase 20: Co-teachers & teaching assistants invited to a class.
+model ClassTeacher {
+  id        String    @id @default(cuid())
+  classId   String
+  userId    String
+  role      ClassRole @default(CO_TEACHER)
+  createdAt DateTime  @default(now())
+
+  class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  user  User  @relation("ClassTeacherAssignments", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, userId])
+  @@index([userId])
+}
+
+/// Phase 20: Tracks student completion / view counts for individual lesson materials.
+model LessonItemProgress {
+  id           String   @id @default(cuid())
+  lessonItemId String
+  studentId    String
+  completedAt  DateTime @default(now())
+  viewCount    Int      @default(1)
+
+  lessonItem LessonItem @relation(fields: [lessonItemId], references: [id], onDelete: Cascade)
+  student    User       @relation("StudentLessonProgress", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonItemId, studentId])
+  @@index([studentId])
+}
+
+/// Phase 20: Classroom feed polls & reactions.
+model PostPoll {
+  id            String    @id @default(cuid())
+  postId        String    @unique
+  question      String
+  allowMultiple Boolean   @default(false)
+  closesAt      DateTime?
+
+  post    Post             @relation(fields: [postId], references: [id], onDelete: Cascade)
+  options PostPollOption[]
+}
+
+model PostPollOption {
+  id     String @id @default(cuid())
+  pollId String
+  text   String
+  order  Int    @default(0)
+
+  poll  PostPoll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes PostPollVote[]
+
+  @@index([pollId, order])
+}
+
+model PostPollVote {
+  id        String   @id @default(cuid())
+  optionId  String
+  userId    String
+  createdAt DateTime @default(now())
+
+  option PostPollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user   User           @relation("UserPollVotes", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([optionId, userId])
+  @@index([userId])
+}
+
+model PostReaction {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation("UserPostReactions", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId, emoji])
+  @@index([postId])
 }

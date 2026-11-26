@@ -79,6 +79,7 @@ export default function AdminAuditPage() {
       CLASS_ARCHIVED: ["Lưu trữ lớp", "Class archived"],
       CLASS_UNARCHIVED: ["Mở lại lớp", "Class restored"],
       CLASS_DELETED: ["Xoá lớp", "Class deleted"],
+      CLASS_CLONED: ["Nhân bản lớp", "Class cloned"],
       WORKSHEET_DELETED: ["Xoá worksheet", "Worksheet deleted"],
       CONTENT_TRASHED: ["Chuyển vào thùng rác", "Moved to trash"],
       CONTENT_RESTORED: ["Khôi phục từ thùng rác", "Restored from trash"],

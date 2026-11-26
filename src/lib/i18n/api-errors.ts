@@ -34,6 +34,9 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
   "Bạn không có quyền truy cập bài làm này.": "You do not have permission to access this submission.",
   "Chỉ giáo viên mới được xem trang chấm bài chi tiết.": "Only teachers can view detailed grading.",
   "Chỉ giáo viên mới có quyền chấm điểm.": "Only teachers can grade submissions.",
+  "Chỉ giáo viên mới có quyền trả bài làm lại.":
+    "Only teachers can return submissions for revision.",
+  "Vui lòng chọn file để tải lên.": "Please select a file to upload.",
   "Bạn không sở hữu phiếu bài tập này.": "You do not own this worksheet.",
   "Phiếu bài tập này chưa được giáo viên chia sẻ.": "This worksheet has not been shared by its author.",
   "Một hoặc nhiều lớp học không hợp lệ hoặc không thuộc quyền quản lý của bạn.":
@@ -128,6 +131,35 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
   "Bạn không có quyền xoá bài đăng này.": "You do not have permission to delete this post.",
   "Không tìm thấy chương bài giảng.": "Lesson chapter not found.",
   "Không tìm thấy tài liệu.": "Material not found.",
+  "Bạn cần nộp bài tập trước đó trong Workbook trước khi mở bài này.":
+    "You must submit the previous assignment in this workbook before opening this one.",
+  "Không tìm thấy workbook.": "Workbook not found.",
+  "Bạn không có quyền chỉnh sửa workbook này.": "You do not have permission to edit this workbook.",
+  "Workbook chưa có phiếu bài tập nào.": "This workbook has no worksheets yet.",
+  "Chỉ trả lại được bài đã nộp hoặc đã chấm điểm.":
+    "Only submitted or graded submissions can be returned for revision.",
+  "Không thể gỡ chủ sở hữu gốc khỏi danh sách giáo viên lớp.":
+    "Cannot remove the original owner from the class teacher list.",
+  "Tài khoản này không phải giáo viên hoặc quản trị viên.":
+    "This account is not a teacher or administrator.",
+  "Chủ sở hữu lớp đã là giáo viên chính rồi.":
+    "The class owner is already the primary teacher.",
+  "Chỉ chủ sở hữu lớp hoặc quản trị viên mới thực hiện được thao tác này.":
+    "Only the class owner or an administrator can perform this action.",
+  "Bài đăng này đã khoá bình luận.": "Comments are locked on this post.",
+  "Bài đăng này không có bình chọn.": "This post does not have a poll.",
+  "Cuộc bình chọn đã đóng.": "This poll is closed.",
+  "Bình chọn này chỉ cho phép chọn 1 phương án.":
+    "This poll only allows choosing a single option.",
+  "Vui lòng chọn ít nhất 1 phương án bình chọn.": "Please select at least 1 poll option.",
+  "Lựa chọn bình chọn không hợp lệ.": "Invalid poll option.",
+  "Biểu tượng cảm xúc không hợp lệ.": "Invalid reaction emoji.",
+  "Chỉ hỗ trợ ảnh (PNG, JPG, WebP), PDF hoặc file Word (.docx).":
+    "Only PNG, JPG, WebP images, PDF, or Word (.docx) files are supported.",
+  "Tên workbook tối thiểu 2 ký tự": "Workbook title must be at least 2 characters",
+  "Tên lớp mới tối thiểu 2 ký tự": "New class name must be at least 2 characters",
+  "Câu hỏi bình chọn không được để trống": "Poll question cannot be empty",
+  "Cần ít nhất 2 lựa chọn": "At least 2 options are required",
 
   // Parent & admin
   "Chỉ học sinh xem được danh sách mã liên kết của mình.":
@@ -475,6 +507,15 @@ const NOTIFICATION_PATTERNS: Array<[RegExp, (...args: string[]) => string]> = [
     (_m, hours, cls) => `About ${hours} hour(s) left to submit for ${cls}.`,
   ],
   [/^Ngoại lệ mới cho bài (.+)$/, (_m, title) => `Assignment exception granted: ${title}`],
+  [/^Bài "(.+)" cần sửa lại$/, (_m, title) => `Revision requested: ${title}`],
+  [
+    /^Giáo viên đã trả bài kèm nhận xét: (.+)$/,
+    (_m, comment) => `Teacher returned your work with feedback: ${comment}`,
+  ],
+  [
+    /^Giáo viên đã trả bài để bạn chỉnh sửa và nộp lại\.$/,
+    () => "Your teacher returned this submission for revision and resubmission.",
+  ],
 ];
 
 function localizeLine(text: string, locale: Locale): string {

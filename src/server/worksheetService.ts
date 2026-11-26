@@ -27,6 +27,7 @@ export const STUDENT_FIELD_SELECT = {
   label: true,
   prompt: true,
   skillTag: true,
+  topicTag: true,
   passageId: true,
   audioId: true,
   imageKey: true,
@@ -474,6 +475,7 @@ export interface SaveFieldPayload {
   prompt?: string | null;
   explanation?: string | null;
   skillTag?: "GRAMMAR" | "VOCABULARY" | "READING" | "LISTENING" | "WRITING" | "SPEAKING" | null;
+  topicTag?: string | null;
   passageId?: string | null;
   audioId?: string | null;
   imageKey?: string | null;
@@ -560,6 +562,7 @@ export async function saveWorksheetFields(worksheetId: string, fields: SaveField
         prompt: f.prompt ?? null,
         explanation: f.explanation ?? null,
         skillTag: f.skillTag ?? null,
+        topicTag: f.topicTag?.trim() ? f.topicTag.trim() : null,
         passageId: f.passageId ?? null,
         audioId: safeAudioId,
         imageKey: safeImageKey,
@@ -625,7 +628,20 @@ export async function authorizeFileDownload(
     select: { id: true, ownerId: true },
   });
   if (worksheet) {
-    if (role === "TEACHER" && worksheet.ownerId === userId) return true;
+    if (role === "TEACHER") {
+      if (worksheet.ownerId === userId) return true;
+      const taught = await prisma.assignment.findFirst({
+        where: {
+          worksheetId: worksheet.id,
+          class: {
+            deletedAt: null,
+            OR: [{ teacherId: userId }, { classTeachers: { some: { userId } } }],
+          },
+        },
+        select: { id: true },
+      });
+      if (taught) return true;
+    }
     if (role === "STUDENT") {
       // Only after the student has started an attempt (prevents reading the exam PDF
       // before openAt / before the timer starts).
@@ -693,7 +709,20 @@ export async function authorizeFileDownload(
     });
     if (!isReferenced) return false;
 
-    if (role === "TEACHER") return Boolean(ws.isShared);
+    if (role === "TEACHER") {
+      if (ws.isShared) return true;
+      const taught = await prisma.assignment.findFirst({
+        where: {
+          worksheetId: wsId,
+          class: {
+            deletedAt: null,
+            OR: [{ teacherId: userId }, { classTeachers: { some: { userId } } }],
+          },
+        },
+        select: { id: true },
+      });
+      return Boolean(taught);
+    }
     if (role === "STUDENT") {
       const assigned = await prisma.assignment.findFirst({
         where: {
@@ -743,6 +772,32 @@ export async function authorizeFileDownload(
     return false;
   }
 
+  // Class feed post attachments (classes/{classId}/posts/{file})
+  const postMatch = /^classes\/([A-Za-z0-9_-]+)\/posts\/[A-Za-z0-9_.-]+$/.exec(fileKey);
+  if (postMatch) {
+    const classId = postMatch[1]!;
+    const cls = await prisma.class.findUnique({
+      where: { id: classId },
+      select: {
+        deletedAt: true,
+        teacherId: true,
+        classTeachers: { where: { userId }, select: { id: true } },
+      },
+    });
+    if (!cls || cls.deletedAt) return false;
+    if (role === "TEACHER") {
+      return cls.teacherId === userId || cls.classTeachers.length > 0;
+    }
+    if (role === "STUDENT") {
+      const enrolled = await prisma.enrollment.findUnique({
+        where: { classId_studentId: { classId, studentId: userId } },
+        select: { status: true },
+      });
+      return enrolled?.status === "ACTIVE";
+    }
+    return false;
+  }
+
   // Check if camera proctor snapshot (proctor/{submissionId}/{filename}.jpg)
   if (fileKey.startsWith("proctor/")) {
     const parts = fileKey.split("/");
@@ -755,13 +810,24 @@ export async function authorizeFileDownload(
         assignment: {
           select: {
             shareProctorWithParent: true,
-            class: { select: { teacherId: true } },
+            class: {
+              select: {
+                teacherId: true,
+                classTeachers: { where: { userId }, select: { id: true } },
+              },
+            },
           },
         },
       },
     });
     if (!sub) return false;
-    if (role === "TEACHER" && sub.assignment.class.teacherId === userId) return true;
+    if (
+      role === "TEACHER" &&
+      (sub.assignment.class.teacherId === userId ||
+        sub.assignment.class.classTeachers.length > 0)
+    ) {
+      return true;
+    }
     if (role === "PARENT" && sub.assignment.shareProctorWithParent) {
       const linked = await prisma.parentLink.findFirst({
         where: { parentId: userId, studentId: sub.studentId, verifiedAt: { not: null } },
@@ -783,14 +849,25 @@ export async function authorizeFileDownload(
         studentId: true,
         assignment: {
           select: {
-            class: { select: { teacherId: true, deletedAt: true } },
+            class: {
+              select: {
+                teacherId: true,
+                deletedAt: true,
+                classTeachers: { where: { userId }, select: { id: true } },
+              },
+            },
           },
         },
       },
     });
     if (!sub) return false;
     if (role === "STUDENT") return sub.studentId === userId;
-    if (role === "TEACHER") return sub.assignment.class.teacherId === userId;
+    if (role === "TEACHER") {
+      return (
+        sub.assignment.class.teacherId === userId ||
+        sub.assignment.class.classTeachers.length > 0
+      );
+    }
     if (role === "PARENT") {
       const linked = await prisma.parentLink.findFirst({
         where: { parentId: userId, studentId: sub.studentId, verifiedAt: { not: null } },
@@ -801,7 +878,7 @@ export async function authorizeFileDownload(
     return false;
   }
 
-  // Lesson material: owner, teachers of any class showing the lesson, and students enrolled there
+  // Lesson material: owner, teachers/co-teachers of any class showing the lesson, and students enrolled there
   const lessonItem = await prisma.lessonItem.findFirst({
     where: { fileKey, deletedAt: null, lesson: { deletedAt: null } },
     select: {
@@ -810,7 +887,15 @@ export async function authorizeFileDownload(
           ownerId: true,
           classLinks: {
             where: { class: { deletedAt: null } },
-            select: { classId: true, class: { select: { teacherId: true } } },
+            select: {
+              classId: true,
+              class: {
+                select: {
+                  teacherId: true,
+                  classTeachers: { where: { userId }, select: { id: true } },
+                },
+              },
+            },
           },
         },
       },
@@ -819,7 +904,12 @@ export async function authorizeFileDownload(
   if (lessonItem) {
     const { ownerId, classLinks } = lessonItem.lesson;
     if (role === "TEACHER") {
-      return ownerId === userId || classLinks.some((l) => l.class.teacherId === userId);
+      return (
+        ownerId === userId ||
+        classLinks.some(
+          (l) => l.class.teacherId === userId || l.class.classTeachers.length > 0
+        )
+      );
     }
     if (role === "STUDENT" && classLinks.length > 0) {
       const enrolled = await prisma.enrollment.findFirst({
