@@ -368,8 +368,11 @@ export const en: Messages = {
       CAMERA_NO_FACE: "Camera: no face detected",
       CAMERA_MULTI_FACE: "Camera: multiple faces detected",
       CAMERA_LOOK_AWAY: "Camera: prolonged looking away / looking down",
+      CAMERA_GAZE_AWAY: "Camera: prolonged eye gaze away",
       CAMERA_PHONE: "Camera: phone detected",
       CAMERA_OFF: "Camera turned off or disconnected",
+      MIC_VOICE: "Microphone: sustained voice detected",
+      MOBILE_APP_SWITCH: "Mobile app switch / backgrounded browser",
     },
   },
   lessons: {

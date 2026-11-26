@@ -94,6 +94,12 @@ enum ViolationAction {
   AUTO_SUBMIT
 }
 
+enum CameraSensitivity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 enum ProctorEventType {
   TAB_HIDDEN
   WINDOW_BLUR
@@ -115,6 +121,9 @@ enum ProctorEventType {
   CAMERA_LOOK_AWAY
   CAMERA_PHONE
   CAMERA_OFF
+  CAMERA_GAZE_AWAY
+  MIC_VOICE
+  MOBILE_APP_SWITCH
 }
 
 enum SubmissionStatus {
@@ -482,10 +491,13 @@ model Assignment {
   sebConfigKeyHash       String?
   shareProctorWithParent Boolean         @default(false)
 
-  // Camera (AI) proctoring
-  requireCamera   Boolean @default(false)
-  cameraEnforce   Boolean @default(false) // false = AI events are "suspected" only
-  cameraSnapshots Boolean @default(true)
+  // Camera (AI) & Mic proctoring
+  requireCamera       Boolean           @default(false)
+  cameraEnforce       Boolean           @default(false) // false = AI events are "suspected" only
+  cameraSnapshots     Boolean           @default(true)
+  cameraSensitivity   CameraSensitivity @default(MEDIUM)
+  cameraCountLookAway Boolean           @default(false)
+  requireMicMonitor   Boolean           @default(false)
 
   // Listening audio rules (per assignment, so one worksheet can be practice or test)
   audioMaxPlays   Int? // null = unlimited plays per track

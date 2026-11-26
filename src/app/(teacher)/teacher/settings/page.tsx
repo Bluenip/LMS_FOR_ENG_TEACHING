@@ -1,13 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Archive,
+  Camera,
   CheckCircle2,
   Cloud,
+  Mic,
   HardDrive,
   Link2,
   Settings,
@@ -314,6 +317,32 @@ function TeacherSettingsContent() {
             </Button>
           </div>
         )}
+      </section>
+
+      {/* Camera & Mic AI Sandbox */}
+      <section className="stitch-card p-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-[#4F46E5]">
+            <Camera className="h-5 w-5" />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-base font-bold text-[#0B1C30]">
+              {tr("Thử Camera & Micro AI", "AI Camera & Mic Sandbox")}
+            </h2>
+            <p className="text-xs text-[#464555] max-w-xl">
+              {tr(
+                "Kiểm tra trực tiếp các ngưỡng độ nhạy Nhẹ / Vừa / Chặt, góc đầu, hướng mắt và mức giọng nói (300–3400Hz) ngay trên máy mà không tạo lượt thi.",
+                "Live-test Low / Medium / High presets, head pose, iris gaze, and voice band dB (300–3400Hz) locally without creating a submission."
+              )}
+            </p>
+          </div>
+        </div>
+        <Button size="sm" variant="secondary" asChild className="min-h-[40px]">
+          <Link href="/teacher/settings/camera-test" data-testid="open-camera-test-link">
+            <Mic className="h-4 w-4 text-[#4F46E5]" />
+            {tr("Mở phòng thử AI", "Open AI test sandbox")}
+          </Link>
+        </Button>
       </section>
 
       <Dialog open={disconnectOpen} onOpenChange={setDisconnectOpen}>

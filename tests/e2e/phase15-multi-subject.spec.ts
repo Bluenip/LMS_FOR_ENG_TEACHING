@@ -42,7 +42,7 @@ test.describe("Phase 15: Multi-Subject Worksheets & Dedicated Class Trash", () =
 
       await page.getByTestId(`class-trash-restore-${classId}`).click();
       await expect(page.getByTestId("classes-tab-active")).toHaveAttribute("aria-selected", "true");
-      await expect(page.getByText(className)).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole("heading", { name: className })).toBeVisible({ timeout: 10000 });
     } finally {
       if (classId) {
         await prisma.class.delete({ where: { id: classId } }).catch(() => {});

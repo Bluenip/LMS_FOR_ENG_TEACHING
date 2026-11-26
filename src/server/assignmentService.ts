@@ -1,4 +1,5 @@
 import type {
+  CameraSensitivity,
   LeaderboardMode,
   ProctorMode,
   ScoreScale,
@@ -40,6 +41,9 @@ export interface CreateAssignmentInput {
   requireCamera: boolean;
   cameraEnforce: boolean;
   cameraSnapshots: boolean;
+  cameraSensitivity?: CameraSensitivity;
+  cameraCountLookAway?: boolean;
+  requireMicMonitor?: boolean;
   audioMaxPlays?: number | null;
   audioBlockPause: boolean;
   audioBlockSeek: boolean;
@@ -144,6 +148,10 @@ export async function createAssignmentsForClasses(
         requireCamera: input.requireCamera,
         cameraEnforce: input.requireCamera ? input.cameraEnforce : false,
         cameraSnapshots: input.requireCamera ? input.cameraSnapshots : false,
+        cameraSensitivity: input.cameraSensitivity ?? "MEDIUM",
+        cameraCountLookAway:
+          input.requireCamera && input.cameraEnforce ? Boolean(input.cameraCountLookAway) : false,
+        requireMicMonitor: Boolean(input.requireMicMonitor),
         audioMaxPlays: input.audioMaxPlays ?? null,
         audioBlockPause: input.audioBlockPause,
         audioBlockSeek: input.audioBlockSeek,
@@ -178,7 +186,9 @@ export async function createAssignmentsForClasses(
         title: `Bài tập mới: ${assignment.title}`,
         body: `Lớp ${cls.name}${dueLabel}`,
         link:
-          assignment.proctorMode !== "OFF" || assignment.requireCamera
+          assignment.proctorMode !== "OFF" ||
+          assignment.requireCamera ||
+          assignment.requireMicMonitor
             ? `/student/assignments/${assignment.id}/rules`
             : `/student/assignments/${assignment.id}/do`,
       });
@@ -231,11 +241,23 @@ export async function getAssignmentSettings(id: string) {
  */
 export async function updateAssignment(
   id: string,
-  input: Omit<UpdateAssignmentInput, "remindBeforeDue" | "scoreScale" | "weight" | "shuffleOptions"> & {
+  input: Omit<
+    UpdateAssignmentInput,
+    | "remindBeforeDue"
+    | "scoreScale"
+    | "weight"
+    | "shuffleOptions"
+    | "cameraSensitivity"
+    | "cameraCountLookAway"
+    | "requireMicMonitor"
+  > & {
     remindBeforeDue?: boolean;
     scoreScale?: ScoreScale;
     weight?: number;
     shuffleOptions?: boolean;
+    cameraSensitivity?: CameraSensitivity;
+    cameraCountLookAway?: boolean;
+    requireMicMonitor?: boolean;
   },
   actorId?: string
 ) {
@@ -277,6 +299,22 @@ export async function updateAssignment(
       requireCamera: input.requireCamera,
       cameraEnforce: input.requireCamera ? input.cameraEnforce : false,
       cameraSnapshots: input.requireCamera ? input.cameraSnapshots : false,
+      ...(input.cameraSensitivity !== undefined
+        ? { cameraSensitivity: input.cameraSensitivity }
+        : {}),
+      ...(input.cameraCountLookAway !== undefined
+        ? {
+            cameraCountLookAway:
+              input.requireCamera && input.cameraEnforce
+                ? Boolean(input.cameraCountLookAway)
+                : false,
+          }
+        : input.requireCamera && input.cameraEnforce
+          ? {}
+          : { cameraCountLookAway: false }),
+      ...(input.requireMicMonitor !== undefined
+        ? { requireMicMonitor: Boolean(input.requireMicMonitor) }
+        : {}),
       audioMaxPlays: input.audioMaxPlays ?? null,
       audioBlockPause: input.audioBlockPause,
       audioBlockSeek: input.audioBlockSeek,
@@ -342,7 +380,7 @@ export async function updateAssignment(
         title: `Bài tập được cập nhật: ${updated.title}`,
         body: parts.join(" • "),
         link:
-          updated.proctorMode !== "OFF" || updated.requireCamera
+          updated.proctorMode !== "OFF" || updated.requireCamera || updated.requireMicMonitor
             ? `/student/assignments/${updated.id}/rules`
             : `/student/assignments/${updated.id}/do`,
       }))

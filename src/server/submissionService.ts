@@ -215,7 +215,10 @@ export async function startOrResumeSubmission(
     );
   }
 
-  const requiresRules = assignment.proctorMode !== "OFF" || assignment.requireCamera;
+  const requiresRules =
+    assignment.proctorMode !== "OFF" ||
+    assignment.requireCamera ||
+    assignment.requireMicMonitor;
   if (requiresRules && !opts?.rulesAccepted) {
     throw new AppError(
       "Bạn cần đọc và đồng ý nội quy phòng thi trước khi bắt đầu.",
@@ -341,6 +344,9 @@ export async function getStudentAssignmentPayload(
       requireCamera: true,
       cameraEnforce: true,
       cameraSnapshots: true,
+      cameraSensitivity: true,
+      cameraCountLookAway: true,
+      requireMicMonitor: true,
       audioMaxPlays: true,
       audioBlockPause: true,
       audioBlockSeek: true,

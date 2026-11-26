@@ -17,7 +17,9 @@ const ALWAYS_HEURISTIC_EVENTS = new Set<ProctorEventType>([
   "DEVTOOLS_SUSPECTED",
   "NETWORK_OFFLINE",
   "PASTE_SUSPECTED",
-  "CAMERA_LOOK_AWAY",
+  "CAMERA_GAZE_AWAY",
+  "MIC_VOICE",
+  "MOBILE_APP_SWITCH",
 ]);
 
 const CAMERA_AI_EVENTS = new Set<ProctorEventType>([
@@ -28,9 +30,17 @@ const CAMERA_AI_EVENTS = new Set<ProctorEventType>([
 
 export function isHeuristicProctorEvent(
   type: ProctorEventType,
-  assignment: { proctorMode: string; requireCamera: boolean; cameraEnforce: boolean }
+  assignment: {
+    proctorMode: string;
+    requireCamera: boolean;
+    cameraEnforce: boolean;
+    cameraCountLookAway?: boolean;
+  }
 ): boolean {
   if (ALWAYS_HEURISTIC_EVENTS.has(type)) return true;
+  if (type === "CAMERA_LOOK_AWAY") {
+    return !(assignment.cameraEnforce && Boolean(assignment.cameraCountLookAway));
+  }
   if (CAMERA_AI_EVENTS.has(type)) {
     return !assignment.cameraEnforce;
   }
@@ -89,6 +99,8 @@ export async function recordProctorEvent(
           maxViolations: true,
           requireCamera: true,
           cameraEnforce: true,
+          cameraCountLookAway: true,
+          requireMicMonitor: true,
         },
       },
     },
@@ -117,7 +129,9 @@ export async function recordProctorEvent(
   const isHeuristicOnly = isHeuristicProctorEvent(input.type, submission.assignment);
   const enforceAction =
     !isHeuristicOnly &&
-    (submission.assignment.proctorMode !== "OFF" || submission.assignment.requireCamera);
+    (submission.assignment.proctorMode !== "OFF" ||
+      submission.assignment.requireCamera ||
+      submission.assignment.requireMicMonitor);
 
   let shouldAutoSubmit = false;
   let clearedAnswersCount = 0;
@@ -453,7 +467,8 @@ export async function getLiveProctoringSnapshot(assignmentId: string) {
       latestEvent &&
       (latestEvent.type === "TAB_HIDDEN" ||
         latestEvent.type === "FULLSCREEN_EXIT" ||
-        latestEvent.type === "WINDOW_BLUR") &&
+        latestEvent.type === "WINDOW_BLUR" ||
+        latestEvent.type === "MOBILE_APP_SWITCH") &&
       now.getTime() - latestEvent.at.getTime() < 30_000 &&
       sub?.status === "IN_PROGRESS" &&
       !sub?.lockedAt;
@@ -541,6 +556,9 @@ export async function getLiveProctoringSnapshot(assignmentId: string) {
       maxViolations: assignment.maxViolations,
       requireCamera: assignment.requireCamera,
       cameraEnforce: assignment.cameraEnforce,
+      cameraSensitivity: assignment.cameraSensitivity,
+      cameraCountLookAway: assignment.cameraCountLookAway,
+      requireMicMonitor: assignment.requireMicMonitor,
       audioMaxPlays: assignment.audioMaxPlays,
       audios: assignment.worksheet.audios,
       timeLimitMin: assignment.timeLimitMin,

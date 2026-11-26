@@ -984,6 +984,98 @@ async function main() {
     },
   });
 
+  // Phase 18 seed: Camera AI (HIGH sensitivity) + Mic monitor + student2 timeline events + snapshot
+  const asgCameraMic = await prisma.assignment.create({
+    data: {
+      classId: class1.id,
+      worksheetId: wsUnit7.id,
+      title: "Đề kiểm tra Camera AI & Micro (Phase 18)",
+      openAt: new Date(Date.now() - 60 * 60 * 1000),
+      dueAt: nextWeek,
+      timeLimitMin: 35,
+      maxAttempts: 5,
+      showResult: "AFTER_SUBMIT",
+      showAnswerKey: false,
+      showLeaderboard: "AFTER_DUE",
+      proctorMode: "MONITOR",
+      violationAction: "WARN",
+      maxViolations: 3,
+      requireCamera: true,
+      cameraSnapshots: true,
+      cameraEnforce: false,
+      cameraSensitivity: "HIGH",
+      cameraCountLookAway: false,
+      requireMicMonitor: true,
+    },
+  });
+
+  const subCameraMic = await prisma.submission.create({
+    data: {
+      assignmentId: asgCameraMic.id,
+      studentId: students[1]!.id,
+      attemptNo: 1,
+      status: "SUBMITTED",
+      startedAt: new Date(Date.now() - 40 * 60 * 1000),
+      submittedAt: new Date(Date.now() - 12 * 60 * 1000),
+      rulesAcceptedAt: new Date(Date.now() - 40 * 60 * 1000),
+      cameraConsentAt: new Date(Date.now() - 40 * 60 * 1000),
+      autoScore: 8,
+      manualScore: null,
+      totalScore: 8,
+      maxScore: 10,
+      violationCount: 1,
+      flagged: true,
+      answers: {
+        create: [
+          { fieldId: wsUnit7.fields[0]!.id, value: "has lived", isCorrect: true, score: 1 },
+          { fieldId: wsUnit7.fields[1]!.id, value: "so", isCorrect: true, score: 1 },
+          { fieldId: wsUnit7.fields[2]!.id, value: false, isCorrect: true, score: 1 },
+          {
+            fieldId: wsUnit7.fields[3]!.id,
+            value: "Teamwork helps solve problems faster.",
+            isCorrect: null,
+            score: null,
+          },
+          { fieldId: wsUnit7.fields[4]!.id, value: "75", isCorrect: true, score: 1 },
+          { fieldId: wsUnit7.fields[5]!.id, value: "B", isCorrect: true, score: 1 },
+          { fieldId: wsUnit7.fields[6]!.id, value: "A", isCorrect: true, score: 1 },
+          { fieldId: wsUnit7.fields[7]!.id, value: "C", isCorrect: true, score: 1 },
+          { fieldId: wsUnit7.fields[8]!.id, value: true, isCorrect: true, score: 1 },
+        ],
+      },
+    },
+  });
+
+  const seedSnapKey = `proctor/${subCameraMic.id}/seed-gaze.png`;
+  const seedSnapBuf = generateSolidPngBuffer(320, 240, [63, 72, 204]);
+  await storage.put(seedSnapKey, seedSnapBuf, "image/png");
+
+  await prisma.proctorEvent.createMany({
+    data: [
+      {
+        submissionId: subCameraMic.id,
+        type: "CAMERA_GAZE_AWAY",
+        at: new Date(Date.now() - 30 * 60 * 1000),
+        durationMs: 3200,
+        meta: { snapshotKey: seedSnapKey, gazeXOffset: 0.31 },
+      },
+      {
+        submissionId: subCameraMic.id,
+        type: "MIC_VOICE",
+        at: new Date(Date.now() - 25 * 60 * 1000),
+        durationMs: 2800,
+        meta: { peakRms: 0.24 },
+      },
+      {
+        submissionId: subCameraMic.id,
+        type: "TAB_HIDDEN",
+        at: new Date(Date.now() - 20 * 60 * 1000),
+        durationMs: 4000,
+        meta: { seeded: true },
+      },
+    ],
+  });
+
   // Worksheet 3: Dictation & Listening Demo (with sample WAV audio + DICTATION fields)
   const wsDictation = await prisma.worksheet.create({
     data: {

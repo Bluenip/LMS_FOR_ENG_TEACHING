@@ -71,6 +71,7 @@ export default async function StudentClassDetailPage({
         timeLimitMin: a.timeLimitMin,
         proctorMode: a.proctorMode,
         requireCamera: a.requireCamera,
+        requireMicMonitor: a.requireMicMonitor,
         violationAction: a.violationAction,
         maxViolations: a.maxViolations,
         worksheet: a.worksheet,

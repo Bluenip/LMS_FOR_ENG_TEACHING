@@ -14,16 +14,19 @@ import {
   Headphones,
   Lock,
   Maximize2,
+  Mic,
   RefreshCcw,
   RotateCcw,
   Send,
   ShieldAlert,
+  Smartphone,
   Trophy,
   WifiOff,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
 import type {
+  CameraSensitivity,
   ProctorEventType,
   ProctorMode,
   ScoreScale,
@@ -52,6 +55,8 @@ import {
 import { useI18n } from "@/lib/i18n/client";
 import { useClipboardGuard } from "@/hooks/useClipboardGuard";
 import { useCameraProctor } from "@/hooks/useCameraProctor";
+import { useMicProctor } from "@/hooks/useMicProctor";
+import { isMobileProctorEnvironment } from "@/lib/proctor/mobile-detect";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -96,6 +101,9 @@ interface StudentAssignmentPayload {
     requireCamera: boolean;
     cameraEnforce: boolean;
     cameraSnapshots: boolean;
+    cameraSensitivity?: CameraSensitivity;
+    cameraCountLookAway?: boolean;
+    requireMicMonitor?: boolean;
     audioMaxPlays: number | null;
     audioBlockPause: boolean;
     audioBlockSeek: boolean;
@@ -196,6 +204,13 @@ export default function StudentDoAssignmentPage() {
   // Exam requires fullscreen but the page is not in fullscreen (e.g. the browser refused the
   // request on start, or the page was reloaded): block the content until the student enters it.
   const [needsFullscreen, setNeedsFullscreen] = useState(false);
+  const [mobileMode, setMobileMode] = useState(false);
+  useEffect(() => {
+    const syncMobile = () => setMobileMode(isMobileProctorEnvironment());
+    syncMobile();
+    window.addEventListener("resize", syncMobile);
+    return () => window.removeEventListener("resize", syncMobile);
+  }, []);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
 
   const [zoom, setZoom] = useState(1.0);
@@ -219,6 +234,7 @@ export default function StudentDoAssignmentPage() {
   const attemptVersionRef = useRef(attemptVersion);
   attemptVersionRef.current = attemptVersion;
   const lastBlurReportRef = useRef<number>(0);
+  const lastMobileSwitchRef = useRef<number>(0);
   const hiddenStartedAtRef = useRef<number | null>(null);
 
   const fetchPayload = useCallback(async () => {
@@ -230,9 +246,11 @@ export default function StudentDoAssignmentPage() {
       if (!res.ok) throw new Error(json.error ?? tr("Không tải được bài tập", "Could not load the assignment"));
       const data = json as StudentAssignmentPayload;
 
-      // Redirect to mandatory rules page if proctored or camera-required and rules/consent not yet accepted
+      // Redirect to mandatory rules page if proctored, camera, or mic required and rules/consent not yet accepted
       const requiresRules =
-        data.assignment.proctorMode !== "OFF" || data.assignment.requireCamera;
+        data.assignment.proctorMode !== "OFF" ||
+        data.assignment.requireCamera ||
+        Boolean(data.assignment.requireMicMonitor);
       if (
         requiresRules &&
         (!data.submission ||
@@ -302,10 +320,14 @@ export default function StudentDoAssignmentPage() {
     [assignment]
   );
 
-  // Start new attempt (non-proctored direct start, or redirect to rules if proctored/camera required)
+  // Start new attempt (non-proctored direct start, or redirect to rules if proctored/camera/mic required)
   const handleStartAttempt = async () => {
     if (!assignment) return;
-    if (assignment.proctorMode !== "OFF" || assignment.requireCamera) {
+    if (
+      assignment.proctorMode !== "OFF" ||
+      assignment.requireCamera ||
+      assignment.requireMicMonitor
+    ) {
       router.push(`/student/assignments/${assignmentId}/rules`);
       return;
     }
@@ -479,7 +501,8 @@ export default function StudentDoAssignmentPage() {
       if (
         assignment.proctorMode === "OFF" &&
         !assignment.blockCopyPaste &&
-        !assignment.requireCamera
+        !assignment.requireCamera &&
+        !assignment.requireMicMonitor
       ) {
         return;
       }
@@ -602,6 +625,7 @@ export default function StudentDoAssignmentPage() {
     enabled: Boolean(isInProgress && assignment?.requireCamera && submission?.id),
     submissionId: submission?.id ?? null,
     captureSnapshots: Boolean(assignment?.cameraSnapshots),
+    sensitivity: assignment?.cameraSensitivity ?? "MEDIUM",
     onProctorEvent: sendProctorEvent,
     onWarning: (type) => {
       const msg =
@@ -611,11 +635,33 @@ export default function StudentDoAssignmentPage() {
             ? tr("Camera phát hiện có nhiều người.", "More than one person detected on camera.")
             : type === "CAMERA_LOOK_AWAY"
               ? tr("Bạn đang quay mặt khỏi màn hình.", "You are looking away from the screen.")
-              : tr("Camera phát hiện điện thoại.", "A phone was detected on camera.");
+              : type === "CAMERA_GAZE_AWAY"
+                ? tr("Bạn đang nhìn lệch khỏi màn hình quá lâu.", "Your gaze drifted away from the screen.")
+                : tr("Camera phát hiện điện thoại.", "A phone was detected on camera.");
       toast.warning(msg, {
         description: tr("Đã ghi lại cho giáo viên.", "This was recorded for your teacher."),
         duration: 5000,
       });
+    },
+  });
+  const micProctor = useMicProctor({
+    enabled: Boolean(isInProgress && assignment?.requireMicMonitor && submission?.id),
+    onVoiceEvent: async (ev) => {
+      await sendProctorEvent({
+        type: "MIC_VOICE",
+        durationMs: ev.durationMs,
+        clientAt: ev.clientAt,
+        meta: { peakRms: Number(ev.peakRms.toFixed(3)) },
+      });
+    },
+    onWarning: () => {
+      toast.warning(
+        trRef.current("Phát hiện tiếng nói kéo dài qua micro.", "Sustained speech detected on microphone."),
+        {
+          description: trRef.current("Đã ghi lại cho giáo viên.", "This was recorded for your teacher."),
+          duration: 5000,
+        }
+      );
     },
   });
   const [cameraDebug, setCameraDebug] = useState(false);
@@ -627,18 +673,45 @@ export default function StudentDoAssignmentPage() {
   useEffect(() => {
     if (!isInProgress || !assignment || assignment.proctorMode === "OFF") return;
 
+    const isMobile = mobileMode || isMobileProctorEnvironment();
     const isLockdown = assignment.proctorMode === "LOCKDOWN" || assignment.proctorMode === "SEB";
     const fullscreenRequired =
-      (assignment.requireFullscreen || isLockdown) && Boolean(document.fullscreenEnabled);
+      !isMobile &&
+      (assignment.requireFullscreen || isLockdown) &&
+      Boolean(document.fullscreenEnabled);
     if (fullscreenRequired && !document.fullscreenElement) {
       setNeedsFullscreen(true);
+    } else if (!fullscreenRequired) {
+      setNeedsFullscreen(false);
     }
     // Hide the app navbar during a proctored exam so students cannot navigate away silently
     document.body.dataset.examMode = "1";
 
+    const reportMobileSwitch = (reason: "visibilitychange" | "pagehide") => {
+      const now = Date.now();
+      if (now - lastMobileSwitchRef.current < 1500) return;
+      lastMobileSwitchRef.current = now;
+      lastBlurReportRef.current = now;
+      if (isLockdown) {
+        setLeftOverlay({
+          visible: true,
+          at: new Date().toLocaleTimeString("vi-VN"),
+        });
+      }
+      void sendProctorEvent({
+        type: "MOBILE_APP_SWITCH",
+        clientAt: new Date().toISOString(),
+        meta: { reason },
+      });
+    };
+
     const onVisibilityChange = () => {
       if (document.hidden) {
         hiddenStartedAtRef.current = Date.now();
+        if (isMobile) {
+          reportMobileSwitch("visibilitychange");
+          return;
+        }
         lastBlurReportRef.current = Date.now();
         if (isLockdown) {
           setLeftOverlay({
@@ -656,6 +729,12 @@ export default function StudentDoAssignmentPage() {
         if (elapsed >= 2000 && !isLockdown) {
           toast.warning(trRef.current(`Bạn vừa rời tab ${Math.round(elapsed / 1000)} giây.`, `You left the tab for ${Math.round(elapsed / 1000)} seconds.`));
         }
+      }
+    };
+
+    const onPageHide = () => {
+      if (isMobile) {
+        reportMobileSwitch("pagehide");
       }
     };
 
@@ -743,6 +822,7 @@ export default function StudentDoAssignmentPage() {
     }
 
     document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pagehide", onPageHide);
     window.addEventListener("blur", onWindowBlur);
     document.addEventListener("fullscreenchange", onFullscreenChange);
     window.addEventListener("keydown", onKeyDown);
@@ -751,12 +831,13 @@ export default function StudentDoAssignmentPage() {
     return () => {
       delete document.body.dataset.examMode;
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pagehide", onPageHide);
       window.removeEventListener("blur", onWindowBlur);
       document.removeEventListener("fullscreenchange", onFullscreenChange);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", onResize);
     };
-  }, [isInProgress, assignment, sendProctorEvent]);
+  }, [isInProgress, assignment, sendProctorEvent, mobileMode]);
 
   if (loading) {
     return (
@@ -893,6 +974,22 @@ export default function StudentDoAssignmentPage() {
           >
             {tr("Đã hiểu", "Got it")}
           </button>
+        </div>
+      )}
+
+      {/* Mobile Proctoring Mode Banner */}
+      {isInProgress && mobileMode && assignment.proctorMode !== "OFF" && (
+        <div
+          data-testid="mobile-proctor-banner"
+          className="flex items-start gap-2.5 rounded-2xl border border-indigo-200 bg-indigo-50/90 px-4 py-2.5 text-xs text-[#0B1C30]"
+        >
+          <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-[#4F46E5]" />
+          <span>
+            {tr(
+              "Chế độ giám sát Mobile: không ép toàn màn hình, mọi lần chuyển app/ẩn trình duyệt đều được ghi nhận.",
+              "Mobile proctoring active: fullscreen lock disabled; switching apps or hiding this tab is logged."
+            )}
+          </span>
         </div>
       )}
 
@@ -1301,9 +1398,46 @@ export default function StudentDoAssignmentPage() {
           {cameraDebug && cameraProctor.reading && (
             <div className="space-y-0.5 bg-black px-2.5 py-1 font-mono text-[10px] text-lime-300">
               <div>yaw {cameraProctor.reading.yawDeg ?? "–"}° / pitch {cameraProctor.reading.pitchDeg ?? "–"}°</div>
-              <div>phone {cameraProctor.reading.phoneScore.toFixed(2)}</div>
+              <div>
+                gaze {cameraProctor.reading.gazeXOffset !== null ? cameraProctor.reading.gazeXOffset.toFixed(2) : "–"} • phone{" "}
+                {cameraProctor.reading.phoneScore.toFixed(2)}
+              </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Floating Mic AI Status Pill */}
+      {isInProgress && assignment.requireMicMonitor && (
+        <div
+          data-testid="mic-proctor-badge"
+          className={cn(
+            "fixed left-3 z-40 inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-900/95 px-3 py-1.5 text-[11px] font-semibold text-white shadow-lg lg:left-4",
+            assignment.requireCamera
+              ? "bottom-[calc(12.25rem+env(safe-area-inset-bottom))] lg:bottom-48"
+              : "bottom-[calc(4.5rem+env(safe-area-inset-bottom))] lg:bottom-4"
+          )}
+        >
+          <Mic
+            className={cn(
+              "h-3.5 w-3.5",
+              micProctor.speaking
+                ? "animate-pulse text-amber-400"
+                : micProctor.active
+                  ? "text-emerald-400"
+                  : "text-slate-400"
+            )}
+          />
+          <span>
+            {micProctor.error
+              ? tr("Micro tắt", "Mic off")
+              : micProctor.speaking
+                ? tr("Đang nói", "Speaking")
+                : tr("Mic AI", "AI Mic")}
+          </span>
+          <span className="font-mono text-[10px] text-slate-300 tabular-nums">
+            {micProctor.dbLevel} dB
+          </span>
         </div>
       )}
 

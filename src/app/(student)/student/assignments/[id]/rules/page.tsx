@@ -16,10 +16,14 @@ import {
   FileQuestion,
   Headphones,
   Maximize2,
+  Mic,
   MonitorOff,
   Radio,
   ShieldCheck,
+  Smartphone,
 } from "lucide-react";
+import { computeVoiceBandRms, rmsToApproxDb } from "@/lib/proctor/mic-monitor";
+import { isMobileProctorEnvironment } from "@/lib/proctor/mobile-detect";
 import { formatAttemptsLimit } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
@@ -39,6 +43,9 @@ interface RulesPayload {
     requireCamera: boolean;
     cameraEnforce: boolean;
     cameraSnapshots: boolean;
+    cameraSensitivity?: "LOW" | "MEDIUM" | "HIGH";
+    cameraCountLookAway?: boolean;
+    requireMicMonitor?: boolean;
     audioMaxPlays: number | null;
     audioBlockPause: boolean;
     audioBlockSeek: boolean;
@@ -64,10 +71,19 @@ export default function StudentAssignmentRulesPage() {
   const [cameraChecked, setCameraChecked] = useState(false);
   const [checkingCamera, setCheckingCamera] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [micConsent, setMicConsent] = useState(false);
+  const [micChecked, setMicChecked] = useState(false);
+  const [checkingMic, setCheckingMic] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
+  const [micPreviewDb, setMicPreviewDb] = useState<number>(-60);
+  const [mobileMode, setMobileMode] = useState(false);
   const [starting, setStarting] = useState(false);
 
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
   const previewStreamRef = useRef<MediaStream | null>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const micCtxRef = useRef<AudioContext | null>(null);
+  const micTimerRef = useRef<number | null>(null);
 
   const stopPreviewCamera = () => {
     if (previewStreamRef.current) {
@@ -79,8 +95,30 @@ export default function StudentAssignmentRulesPage() {
     }
   };
 
+  const stopPreviewMic = () => {
+    if (micTimerRef.current !== null) {
+      window.clearTimeout(micTimerRef.current);
+      micTimerRef.current = null;
+    }
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach((t) => t.stop());
+      micStreamRef.current = null;
+    }
+    if (micCtxRef.current && micCtxRef.current.state !== "closed") {
+      void micCtxRef.current.close().catch(() => undefined);
+    }
+    micCtxRef.current = null;
+  };
+
   useEffect(() => {
-    return () => stopPreviewCamera();
+    const syncMobile = () => setMobileMode(isMobileProctorEnvironment());
+    syncMobile();
+    window.addEventListener("resize", syncMobile);
+    return () => {
+      window.removeEventListener("resize", syncMobile);
+      stopPreviewCamera();
+      stopPreviewMic();
+    };
   }, []);
 
   const handleCheckCamera = async () => {
@@ -88,6 +126,11 @@ export default function StudentAssignmentRulesPage() {
     setCheckingCamera(true);
     stopPreviewCamera();
     try {
+      const win = window as unknown as { __engclassCameraMock?: unknown };
+      if (win.__engclassCameraMock) {
+        setCameraChecked(true);
+        return;
+      }
       if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error(
           tr(
@@ -115,6 +158,58 @@ export default function StudentAssignmentRulesPage() {
       );
     } finally {
       setCheckingCamera(false);
+    }
+  };
+
+  const handleCheckMic = async () => {
+    setMicError(null);
+    setCheckingMic(true);
+    stopPreviewMic();
+    try {
+      const win = window as unknown as { __engclassMicMock?: { rmsVoiceBand?: number } };
+      if (win.__engclassMicMock) {
+        setMicPreviewDb(rmsToApproxDb(win.__engclassMicMock.rmsVoiceBand ?? 0.12));
+        setMicChecked(true);
+        return;
+      }
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error(
+          tr(
+            "Trình duyệt không hỗ trợ micro hoặc trang chưa chạy trên HTTPS.",
+            "Microphone is not supported in this browser or requires HTTPS."
+          )
+        );
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      micStreamRef.current = stream;
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new AudioCtx();
+      micCtxRef.current = ctx;
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      source.connect(analyser);
+      const buf = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
+      const sample = () => {
+        if (!micCtxRef.current) return;
+        analyser.getByteFrequencyData(buf);
+        const rms = computeVoiceBandRms(buf, ctx.sampleRate, analyser.fftSize);
+        setMicPreviewDb(rmsToApproxDb(rms));
+        micTimerRef.current = window.setTimeout(sample, 200);
+      };
+      sample();
+      setMicChecked(true);
+    } catch (err) {
+      setMicChecked(false);
+      setMicError(
+        err instanceof Error
+          ? err.message
+          : tr("Không thể mở micro. Vui lòng cấp quyền micro.", "Could not access microphone. Please allow mic permission.")
+      );
+    } finally {
+      setCheckingMic(false);
     }
   };
 
@@ -156,13 +251,16 @@ export default function StudentAssignmentRulesPage() {
     assignment.violationAction === "AUTO_SUBMIT";
 
   const canStart =
-    agreed && (!assignment.requireCamera || (cameraChecked && cameraConsent));
+    agreed &&
+    (!assignment.requireCamera || (cameraChecked && cameraConsent)) &&
+    (!assignment.requireMicMonitor || (micChecked && micConsent));
 
   const handleStartExam = async () => {
     if (!canStart) return;
     setStarting(true);
     try {
       stopPreviewCamera();
+      stopPreviewMic();
       const attemptToken =
         typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
@@ -172,8 +270,9 @@ export default function StudentAssignmentRulesPage() {
         sessionStorage.setItem(`engclass_token_${assignmentId}`, attemptToken);
       }
 
-      // Request fullscreen on user gesture if required
+      // Request fullscreen on user gesture if required on desktop (skipped on mobile)
       if (
+        !mobileMode &&
         (assignment.requireFullscreen || assignment.proctorMode === "LOCKDOWN") &&
         document.documentElement.requestFullscreen
       ) {
@@ -232,7 +331,9 @@ export default function StudentAssignmentRulesPage() {
                 • {vi.proctor.badge} (
                 {assignment.proctorMode !== "OFF"
                   ? vi.proctor.modes[assignment.proctorMode]
-                  : tr("Camera AI", "AI Camera")}
+                  : assignment.requireCamera
+                    ? tr("Camera AI", "AI Camera")
+                    : tr("Micro AI", "AI Mic")}
                 )
               </Badge>
               {assignment.requireCamera && (
@@ -240,9 +341,34 @@ export default function StudentAssignmentRulesPage() {
                   <Camera className="h-3 w-3" /> {tr("Bắt buộc Camera AI", "AI Camera required")}
                 </Badge>
               )}
+              {assignment.requireMicMonitor && (
+                <Badge variant="indigo">
+                  <Mic className="h-3 w-3" /> {tr("Giám sát Micro (RAM)", "AI Mic Monitor (RAM)")}
+                </Badge>
+              )}
               <Badge variant="neutral">{formatAttemptsLimit(assignment.maxAttempts, tr)}</Badge>
             </div>
           </div>
+
+          {mobileMode && (assignment.proctorMode !== "OFF" || assignment.requireFullscreen) && (
+            <div
+              data-testid="mobile-proctor-rules-banner"
+              className="flex items-start gap-3 rounded-2xl border border-indigo-200 bg-indigo-50/80 p-3.5 text-xs text-[#0B1C30]"
+            >
+              <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-[#4F46E5]" />
+              <div className="space-y-0.5">
+                <p className="font-bold">
+                  {tr("Chế độ giám sát Mobile đang bật", "Mobile proctoring mode enabled")}
+                </p>
+                <p className="text-[#464555]">
+                  {tr(
+                    "Thiết bị di động không yêu cầu khoá toàn màn hình. Khi bạn chuyển sang ứng dụng khác hoặc ẩn trình duyệt, hệ thống sẽ ghi nhận sự kiện chuyển app (MOBILE_APP_SWITCH).",
+                    "Mobile browsers skip fullscreen lock. Switching to another app or hiding this tab logs a MOBILE_APP_SWITCH event."
+                  )}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Rules List */}
           <div className="space-y-2.5">
@@ -469,6 +595,83 @@ export default function StudentAssignmentRulesPage() {
             </div>
           )}
 
+          {/* Mic Check & RAM-only Privacy Consent Step (when requireMicMonitor = true) */}
+          {assignment.requireMicMonitor && (
+            <div
+              data-testid="mic-check-box"
+              className="rounded-2xl border-2 border-indigo-200 bg-[#F8F9FF] p-4 space-y-3"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Mic className="h-4 w-4 text-[#4F46E5]" />
+                  <p className="text-sm font-bold text-[#0B1C30]">
+                    {tr("Kiểm tra Micro trước khi vào thi", "Microphone check before starting")}
+                  </p>
+                </div>
+                {micChecked && (
+                  <Badge variant="mint" data-testid="mic-ready-badge">
+                    <CheckCircle2 className="h-3 w-3" /> {tr("Micro sẵn sàng", "Mic ready")} ({micPreviewDb} dB)
+                  </Badge>
+                )}
+              </div>
+
+              <p className="text-xs text-[#464555]">
+                {tr(
+                  "Trình duyệt chỉ đo mức năng lượng âm lượng dải tiếng nói (300–3400Hz) trong RAM để phát hiện trao đổi liên tục. Tuyệt đối KHÔNG ghi âm, KHÔNG lưu file và KHÔNG gửi âm thanh lên máy chủ.",
+                  "Your browser analyzes 300–3400Hz energy strictly in RAM to flag sustained talking. Zero audio is ever recorded, saved, or uploaded."
+                )}
+              </p>
+
+              {micError && (
+                <p className="text-xs font-semibold text-[#BA1A1A]">{micError}</p>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={micChecked ? "secondary" : "default"}
+                  disabled={checkingMic}
+                  data-testid="check-mic-btn"
+                  onClick={() => void handleCheckMic()}
+                >
+                  <Mic className="h-3.5 w-3.5" />
+                  {checkingMic
+                    ? tr("Đang mở micro…", "Opening mic…")
+                    : micChecked
+                      ? tr("Kiểm tra lại micro", "Recheck mic")
+                      : tr("Bật & kiểm tra micro", "Enable & test mic")}
+                </Button>
+                {micChecked && (
+                  <div className="h-2.5 flex-1 min-w-[120px] overflow-hidden rounded-full bg-slate-200">
+                    <div
+                      className="h-full bg-emerald-500 transition-all duration-150"
+                      style={{
+                        width: `${Math.max(8, Math.min(100, Math.round(((micPreviewDb + 60) / 60) * 100)))}%`,
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200 bg-white p-3">
+                <input
+                  type="checkbox"
+                  data-testid="mic-consent-checkbox"
+                  checked={micConsent}
+                  onChange={(e) => setMicConsent(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-[#4F46E5]"
+                />
+                <span className="text-xs font-semibold text-[#0B1C30]">
+                  {tr(
+                    "Tôi đồng ý cho phép trình duyệt phân tích mức âm lượng giọng nói trong RAM (không ghi âm, không lưu trữ âm thanh).",
+                    "I consent to in-RAM speech-level detection (zero audio recording or server upload)."
+                  )}
+                </span>
+              </label>
+            </div>
+          )}
+
           {/* Agreement Checkbox */}
           <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white p-3.5 hover:border-indigo-300">
             <input
@@ -496,7 +699,8 @@ export default function StudentAssignmentRulesPage() {
               <Maximize2 className="h-4 w-4" />
               {starting
                 ? tr("Đang khởi tạo ca thi…", "Starting the exam session…")
-                : assignment.requireFullscreen || assignment.proctorMode === "LOCKDOWN"
+                : !mobileMode &&
+                    (assignment.requireFullscreen || assignment.proctorMode === "LOCKDOWN")
                   ? vi.proctor.startFullscreen
                   : vi.proctor.startExam}
             </Button>

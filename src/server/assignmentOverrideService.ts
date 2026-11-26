@@ -35,6 +35,7 @@ export async function upsertAssignmentOverride(
       classId: true,
       proctorMode: true,
       requireCamera: true,
+      requireMicMonitor: true,
     },
   });
   if (!assignment) {
@@ -98,7 +99,9 @@ export async function upsertAssignmentOverride(
       title: `Ngoại lệ mới cho bài ${assignment.title}`,
       body: parts.join(" • ") || "Giáo viên đã điều chỉnh cài đặt bài tập cho riêng bạn.",
       link:
-        assignment.proctorMode !== "OFF" || assignment.requireCamera
+        assignment.proctorMode !== "OFF" ||
+        assignment.requireCamera ||
+        assignment.requireMicMonitor
           ? `/student/assignments/${assignment.id}/rules`
           : `/student/assignments/${assignment.id}/do`,
     });

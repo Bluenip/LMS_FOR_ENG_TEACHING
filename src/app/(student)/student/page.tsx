@@ -41,6 +41,7 @@ export default async function StudentDashboardPage() {
       questionCount: a.worksheet._count.fields,
       proctorMode: a.proctorMode,
       requireCamera: a.requireCamera,
+      requireMicMonitor: a.requireMicMonitor,
       proctorSummary: describeProctorRuleSummary(a, tr),
       scoreScale: a.scoreScale,
       weight: a.weight,

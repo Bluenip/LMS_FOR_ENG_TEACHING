@@ -3,6 +3,7 @@
 import type { FaceLandmarker, ObjectDetector } from "@mediapipe/tasks-vision";
 import {
   estimateHeadPoseFromLandmarks,
+  estimateIrisGazeFromLandmarks,
   extractYawPitchFromMatrix,
   type CameraFrameObservation,
 } from "./camera-rules";
@@ -14,6 +15,7 @@ export interface MockCameraObservation {
   faces: number;
   yawDeg?: number | null;
   pitchDeg?: number | null;
+  gazeXOffset?: number | null;
   phoneScore?: number;
   objectChecked?: boolean;
 }
@@ -119,6 +121,7 @@ export class BrowserCameraDetector {
         faces: obs.faces,
         yawDeg: obs.yawDeg ?? 0,
         pitchDeg: obs.pitchDeg ?? 0,
+        gazeXOffset: obs.gazeXOffset ?? null,
         phoneScore: obs.phoneScore ?? 0,
         objectChecked: obs.objectChecked ?? obs.phoneScore !== undefined,
       };
@@ -134,6 +137,7 @@ export class BrowserCameraDetector {
 
     let yawDeg: number | null = null;
     let pitchDeg: number | null = null;
+    let gazeXOffset: number | null = null;
     if (faces === 1) {
       // the 3D transform matrix is the accurate signal; 2D landmark geometry is only a fallback
       // (it overshoots badly when the face is near the edge of the frame)
@@ -144,6 +148,7 @@ export class BrowserCameraDetector {
         yawDeg = angles.yawDeg;
         pitchDeg = angles.pitchDeg;
       }
+      gazeXOffset = estimateIrisGazeFromLandmarks(faceRes.faceLandmarks?.[0])?.gazeXOffset ?? null;
     }
 
     // Run the object detector at a lower cadence to limit CPU/GPU usage
@@ -171,6 +176,7 @@ export class BrowserCameraDetector {
       faces,
       yawDeg,
       pitchDeg,
+      gazeXOffset,
       phoneScore,
       objectChecked,
     };

@@ -64,7 +64,7 @@ export function PhotoLightboxModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col bg-slate-950/90 backdrop-blur-sm text-white"
+      className="fixed inset-0 z-[70] pointer-events-auto flex flex-col bg-slate-950/90 backdrop-blur-sm text-white"
       role="dialog"
       aria-modal="true"
       aria-label={current.name}

@@ -360,8 +360,11 @@ export const vi = {
       CAMERA_NO_FACE: "Camera không thấy khuôn mặt",
       CAMERA_MULTI_FACE: "Camera phát hiện từ 2 người trở lên",
       CAMERA_LOOK_AWAY: "Camera phát hiện nhìn ra ngoài / cúi đầu lâu",
+      CAMERA_GAZE_AWAY: "Camera phát hiện đảo mắt / liếc ra ngoài lâu",
       CAMERA_PHONE: "Camera phát hiện điện thoại",
       CAMERA_OFF: "Camera bị tắt hoặc mất tín hiệu",
+      MIC_VOICE: "Micro phát hiện tiếng nói kéo dài",
+      MOBILE_APP_SWITCH: "Chuyển ứng dụng / ẩn trình duyệt trên điện thoại",
     },
   },
   lessons: {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  CameraSensitivity,
   FieldPlacement,
   FieldType,
   LeaderboardMode,
@@ -287,6 +288,9 @@ export const createAssignmentSchema = z.object({
   requireCamera: z.boolean().default(false),
   cameraEnforce: z.boolean().default(false),
   cameraSnapshots: z.boolean().default(true),
+  cameraSensitivity: z.nativeEnum(CameraSensitivity).default("MEDIUM"),
+  cameraCountLookAway: z.boolean().default(false),
+  requireMicMonitor: z.boolean().default(false),
   audioMaxPlays: z.number().int().min(1).max(20).optional().nullable(),
   audioBlockPause: z.boolean().default(false),
   audioBlockSeek: z.boolean().default(false),

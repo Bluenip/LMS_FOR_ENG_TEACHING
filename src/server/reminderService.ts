@@ -105,7 +105,7 @@ export async function sendDueSoonReminders(now = new Date()): Promise<ReminderRu
           title: `Sắp hết hạn nộp: ${asg.title}`,
           body: `Còn khoảng ${item.hoursLeft} giờ để nộp bài cho lớp ${asg.class.name}.`,
           link:
-            asg.proctorMode !== "OFF" || asg.requireCamera
+            asg.proctorMode !== "OFF" || asg.requireCamera || asg.requireMicMonitor
               ? `/student/assignments/${asg.id}/rules`
               : `/student/assignments/${asg.id}/do`,
         });

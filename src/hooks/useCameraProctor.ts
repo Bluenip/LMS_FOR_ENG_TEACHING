@@ -1,9 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ProctorEventType } from "@prisma/client";
+import type { CameraSensitivity, ProctorEventType } from "@prisma/client";
 import { BrowserCameraDetector } from "@/lib/proctor/camera-detector";
-import { CameraRulesEngine } from "@/lib/proctor/camera-rules";
+import {
+  CameraRulesEngine,
+  getCameraConfigForSensitivity,
+} from "@/lib/proctor/camera-rules";
 
 export type CameraHealthStatus = "initializing" | "ok" | "warning" | "off";
 
@@ -11,16 +14,24 @@ export type CameraHealthStatus = "initializing" | "ok" | "warning" | "off";
 export interface CameraLiveReading {
   yawDeg: number | null;
   pitchDeg: number | null;
+  gazeXOffset: number | null;
   phoneScore: number;
   calibrated: boolean;
 }
 
-export type CameraWarningType = "CAMERA_NO_FACE" | "CAMERA_MULTI_FACE" | "CAMERA_LOOK_AWAY" | "CAMERA_PHONE";
+export type CameraWarningType =
+  | "CAMERA_NO_FACE"
+  | "CAMERA_MULTI_FACE"
+  | "CAMERA_LOOK_AWAY"
+  | "CAMERA_GAZE_AWAY"
+  | "CAMERA_PHONE";
 
 interface UseCameraProctorOptions {
   enabled: boolean;
   submissionId: string | null;
   captureSnapshots: boolean;
+  sensitivity?: CameraSensitivity;
+  dryRun?: boolean;
   onProctorEvent: (ev: {
     type: ProctorEventType;
     durationMs?: number;
@@ -35,6 +46,8 @@ export function useCameraProctor({
   enabled,
   submissionId,
   captureSnapshots,
+  sensitivity = "MEDIUM",
+  dryRun = false,
   onProctorEvent,
   onWarning,
 }: UseCameraProctorOptions) {
@@ -73,16 +86,18 @@ export function useCameraProctor({
   }, []);
 
   useEffect(() => {
-    if (!enabled || !submissionId) {
+    if (!enabled || (!submissionId && !dryRun)) {
       setStatus("initializing");
       setCameraOff(false);
+      setModelReady(false);
+      setReading(null);
       return;
     }
 
     let cancelled = false;
     let timerId: number | null = null;
     const detector = new BrowserCameraDetector();
-    const engine = new CameraRulesEngine();
+    const engine = new CameraRulesEngine(getCameraConfigForSensitivity(sensitivity));
     let lastCameraOffReportedAt = 0;
 
     const reportCameraOff = (reason: string) => {
@@ -101,7 +116,7 @@ export function useCameraProctor({
     };
 
     const captureAndUploadSnapshot = async (): Promise<string | undefined> => {
-      if (!captureSnapshots || !submissionId) return undefined;
+      if (dryRun || !captureSnapshots || !submissionId) return undefined;
       const video = videoElRef.current;
       if (!video || video.videoWidth === 0 || video.videoHeight === 0) return undefined;
       try {
@@ -131,29 +146,35 @@ export function useCameraProctor({
     };
 
     const start = async () => {
-      if (!navigator.mediaDevices?.getUserMedia) {
+      const hasCameraMock = typeof window !== "undefined" && Boolean(window.__engclassCameraMock);
+      if (!hasCameraMock && !navigator.mediaDevices?.getUserMedia) {
         setError("Trình duyệt không hỗ trợ camera hoặc không chạy trên HTTPS.");
         reportCameraOff("UNSUPPORTED_BROWSER");
         return;
       }
 
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
-          audio: false,
-        });
+        const stream = navigator.mediaDevices?.getUserMedia
+          ? await navigator.mediaDevices.getUserMedia({
+              video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+              audio: false,
+            }).catch((err) => {
+              if (hasCameraMock) return null;
+              throw err;
+            })
+          : null;
         if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
+          stream?.getTracks().forEach((t) => t.stop());
           return;
         }
 
         streamRef.current = stream;
-        if (videoElRef.current) {
+        if (stream && videoElRef.current) {
           videoElRef.current.srcObject = stream;
           await videoElRef.current.play().catch(() => undefined);
         }
 
-        const track = stream.getVideoTracks()[0];
+        const track = stream?.getVideoTracks()[0];
         if (track) {
           track.onended = () => reportCameraOff("TRACK_ENDED");
           track.onmute = () => reportCameraOff("TRACK_MUTED");
@@ -172,16 +193,18 @@ export function useCameraProctor({
         if (cancelled) return;
         setModelReady(true);
 
+        const dummyVideo = typeof document !== "undefined" ? document.createElement("video") : null;
         const tick = async () => {
           if (cancelled) return;
           // Pause AI detection when tab is hidden (Layer 1 already logs TAB_HIDDEN)
-          if (!document.hidden && videoElRef.current) {
+          if (!document.hidden) {
             const activeTrack = streamRef.current?.getVideoTracks()[0];
-            if (!activeTrack || activeTrack.readyState !== "live" || !activeTrack.enabled) {
+            if (!hasCameraMock && (!activeTrack || activeTrack.readyState !== "live" || !activeTrack.enabled)) {
               reportCameraOff("TRACK_INACTIVE");
             } else {
+              const targetVideo = videoElRef.current ?? dummyVideo;
               const nowMs = performance.now();
-              const obs = detector.detect(videoElRef.current, nowMs);
+              const obs = targetVideo ? detector.detect(targetVideo, nowMs) : null;
               if (obs) {
                 setFaceCount(obs.faces);
                 const fired = engine.update(obs);
@@ -190,6 +213,7 @@ export function useCameraProctor({
                 setReading((prev) => ({
                   yawDeg: dev.yawDeg,
                   pitchDeg: dev.pitchDeg,
+                  gazeXOffset: obs.gazeXOffset ?? null,
                   // keep the last phone score between object-detector frames
                   phoneScore: obs.objectChecked ? obs.phoneScore ?? 0 : prev?.phoneScore ?? 0,
                   calibrated: engine.calibrated,
@@ -247,7 +271,7 @@ export function useCameraProctor({
         videoElRef.current.srcObject = null;
       }
     };
-  }, [enabled, submissionId, captureSnapshots, retrySeq]);
+  }, [enabled, submissionId, captureSnapshots, sensitivity, dryRun, retrySeq]);
 
   return {
     attachVideoRef,

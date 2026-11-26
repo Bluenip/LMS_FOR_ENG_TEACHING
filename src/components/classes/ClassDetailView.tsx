@@ -124,6 +124,7 @@ export interface ClassDetailData {
     timeLimitMin: number | null;
     proctorMode: ProctorMode;
     requireCamera?: boolean;
+    requireMicMonitor?: boolean;
     violationAction: ViolationAction;
     maxViolations: number;
     worksheet: { id: string; title: string; _count: { fields: number } };
@@ -763,7 +764,10 @@ export function ClassDetailView({
           ) : (
             cls.assignments.map((asg) => {
               const proctorSummary = describeProctorRuleSummary(asg, tr);
-              const needsRules = asg.proctorMode !== "OFF" || Boolean(asg.requireCamera);
+              const needsRules =
+                asg.proctorMode !== "OFF" ||
+                Boolean(asg.requireCamera) ||
+                Boolean(asg.requireMicMonitor);
               const studentTarget = needsRules
                 ? `/student/assignments/${asg.id}/rules`
                 : `/student/assignments/${asg.id}/do`;
@@ -829,7 +833,9 @@ export function ClassDetailView({
                     </Button>
                     {isTeacher ? (
                       <>
-                        {(asg.proctorMode !== "OFF" || asg.requireCamera) && (
+                        {(asg.proctorMode !== "OFF" ||
+                          asg.requireCamera ||
+                          asg.requireMicMonitor) && (
                           <Button variant="secondary" size="sm" asChild>
                             <Link href={`/teacher/assignments/${asg.id}/live`}>
                               <Radio className="h-3.5 w-3.5 text-red-500" />

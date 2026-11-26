@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetchJson } from "@/lib/api-client";
@@ -19,6 +20,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import type {
+  CameraSensitivity,
   LeaderboardMode,
   ProctorMode,
   ScoreScale,
@@ -82,6 +84,9 @@ interface EditableAssignment {
   requireCamera: boolean;
   cameraEnforce: boolean;
   cameraSnapshots: boolean;
+  cameraSensitivity?: CameraSensitivity;
+  cameraCountLookAway?: boolean;
+  requireMicMonitor?: boolean;
   audioMaxPlays: number | null;
   audioBlockPause: boolean;
   audioBlockSeek: boolean;
@@ -244,10 +249,13 @@ function NewAssignmentForm() {
   const [sebConfigKeyHash, setSebConfigKeyHash] = useState("");
   const [shareProctorWithParent, setShareProctorWithParent] = useState(false);
 
-  // Camera AI proctoring (Layer 2)
+  // Camera & Mic AI proctoring (Layer 2)
   const [requireCamera, setRequireCamera] = useState(false);
   const [cameraEnforce, setCameraEnforce] = useState(false);
   const [cameraSnapshots, setCameraSnapshots] = useState(true);
+  const [cameraSensitivity, setCameraSensitivity] = useState<CameraSensitivity>("MEDIUM");
+  const [cameraCountLookAway, setCameraCountLookAway] = useState(false);
+  const [requireMicMonitor, setRequireMicMonitor] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -342,6 +350,9 @@ function NewAssignmentForm() {
     setRequireCamera(editing.requireCamera);
     setCameraEnforce(editing.cameraEnforce);
     setCameraSnapshots(editing.cameraSnapshots);
+    setCameraSensitivity(editing.cameraSensitivity ?? "MEDIUM");
+    setCameraCountLookAway(Boolean(editing.cameraCountLookAway));
+    setRequireMicMonitor(Boolean(editing.requireMicMonitor));
   }, [editing, prefilled]);
 
   // Auto-select default worksheet & title when loaded
@@ -449,6 +460,9 @@ function NewAssignmentForm() {
           requireCamera,
           cameraEnforce: requireCamera ? cameraEnforce : false,
           cameraSnapshots: requireCamera ? cameraSnapshots : false,
+          cameraSensitivity: requireCamera ? cameraSensitivity : "MEDIUM",
+          cameraCountLookAway: requireCamera && cameraEnforce ? cameraCountLookAway : false,
+          requireMicMonitor,
           audioMaxPlays: limitAudioPlays ? audioMaxPlays : null,
           audioBlockPause,
           audioBlockSeek,
@@ -1134,7 +1148,7 @@ function NewAssignmentForm() {
                   testId="require-camera-switch"
                 />
                 {requireCamera && (
-                  <div className="mt-2 space-y-2">
+                  <div className="mt-2 space-y-2.5">
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       <ToggleRow
                         label={tr("Chụp ảnh khi có sự kiện", "Snapshot on events")}
@@ -1147,17 +1161,76 @@ function NewAssignmentForm() {
                         hint={tr("Nên tắt: chỉ gắn cờ nghi vấn", "Recommended off: flag only")}
                         checked={cameraEnforce}
                         onChange={setCameraEnforce}
+                        testId="camera-enforce-switch"
                       />
                     </div>
-                    <p className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                      {tr(
-                        "AI có thể báo nhầm khi phòng tối hoặc học sinh cúi viết nháp. Tắt/chặn camera luôn bị ghi nhận.",
-                        "AI may misfire in dim light or when students take notes. Turning the camera off is always recorded."
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5">
+                        <Label
+                          htmlFor="camera-sensitivity-select"
+                          className="text-xs font-semibold text-[#0B1C30]"
+                        >
+                          {tr("Độ nhạy Camera AI", "AI camera sensitivity")}
+                        </Label>
+                        <select
+                          id="camera-sensitivity-select"
+                          data-testid="camera-sensitivity-select"
+                          value={cameraSensitivity}
+                          onChange={(e) => setCameraSensitivity(e.target.value as CameraSensitivity)}
+                          className="mt-1.5 h-9 w-full rounded-lg border border-slate-200 bg-[#F8F9FF] px-2.5 text-xs font-medium text-[#0B1C30]"
+                        >
+                          <option value="LOW">
+                            {tr("Nhẹ (35° — ít báo nhầm khi viết nháp)", "Low (35° — lenient for notes)")}
+                          </option>
+                          <option value="MEDIUM">
+                            {tr("Vừa (25° — khuyên dùng mặc định)", "Medium (25° — balanced default)")}
+                          </option>
+                          <option value="HIGH">
+                            {tr("Chặt (18° — thi thật, nhạy liếc mắt)", "High (18° — strict exam & iris gaze)")}
+                          </option>
+                        </select>
+                      </div>
+                      {cameraEnforce && (
+                        <ToggleRow
+                          label={tr("Tính quay đầu là vi phạm", "Count head look-away as violation")}
+                          hint={tr("Mặc định tắt tránh oan khi cúi nháp", "Off by default to avoid note-taking false positives")}
+                          checked={cameraCountLookAway}
+                          onChange={setCameraCountLookAway}
+                          testId="camera-count-lookaway-switch"
+                        />
                       )}
-                    </p>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                      <span className="flex items-start gap-2">
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        {tr(
+                          "AI có thể báo nhầm khi phòng tối hoặc học sinh cúi viết nháp. Tắt/chặn camera luôn bị ghi nhận.",
+                          "AI may misfire in dim light or when students take notes. Turning the camera off is always recorded."
+                        )}
+                      </span>
+                      <Link
+                        href="/teacher/settings/camera-test"
+                        target="_blank"
+                        className="font-bold text-[#4F46E5] underline-offset-2 hover:underline"
+                      >
+                        {tr("Thử độ nhạy camera →", "Test camera presets →")}
+                      </Link>
+                    </div>
                   </div>
                 )}
+              </FormRow>
+
+              <FormRow
+                title={tr("Micro AI (RAM)", "AI Mic Monitor (RAM)")}
+                hint={tr("Chỉ đo mức năng lượng 300–3400Hz trong trình duyệt, không ghi âm.", "Measures 300–3400Hz FFT energy in browser RAM only; zero recording.")}
+              >
+                <ToggleRow
+                  label={tr("Phát hiện tiếng nói qua micro", "Detect sustained speech via microphone")}
+                  hint={tr("Nói liên tục ≥ 2.5 giây sẽ gắn cờ sự kiện nghi vấn MIC_VOICE", "Sustained speech ≥ 2.5s flags a suspicious MIC_VOICE event")}
+                  checked={requireMicMonitor}
+                  onChange={setRequireMicMonitor}
+                  testId="require-mic-monitor-switch"
+                />
               </FormRow>
 
               <FormRow

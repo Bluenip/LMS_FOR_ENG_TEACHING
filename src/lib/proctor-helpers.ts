@@ -6,6 +6,7 @@ export function describeProctorRuleSummary(
     violationAction: ViolationAction;
     maxViolations: number;
     requireCamera?: boolean;
+    requireMicMonitor?: boolean;
   },
   tr: (viText: string, enText: string) => string = (v) => v
 ): string | null {
@@ -51,6 +52,9 @@ export function describeProctorRuleSummary(
   }
   if (assignment.requireCamera) {
     parts.push(tr("Bắt buộc bật camera AI", "AI camera required"));
+  }
+  if (assignment.requireMicMonitor) {
+    parts.push(tr("Giám sát tiếng nói (Mic RAM)", "Voice monitor (Mic RAM)"));
   }
   return parts.length > 0 ? parts.join(" • ") : null;
 }

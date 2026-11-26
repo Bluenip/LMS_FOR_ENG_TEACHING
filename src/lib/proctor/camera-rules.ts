@@ -1,4 +1,4 @@
-import type { ProctorEventType } from "@prisma/client";
+import type { CameraSensitivity, ProctorEventType } from "@prisma/client";
 
 export interface CameraFrameObservation {
   /** Timestamp in ms (monotonic or Date.now()). */
@@ -9,6 +9,8 @@ export interface CameraFrameObservation {
   yawDeg: number | null;
   /** Vertical head tilt in degrees (0 = level, >0 / <0 = looking down/up). */
   pitchDeg: number | null;
+  /** Normalized horizontal iris gaze deviation (-0.5..+0.5, 0 = centered). */
+  gazeXOffset?: number | null;
   /** Highest confidence score for `cell phone` in this frame (0 when not checked / not seen). */
   phoneScore?: number;
   /** Whether object detection actually ran on this frame (so phone streak only updates on OD frames). */
@@ -23,6 +25,8 @@ export interface CameraRuleConfig {
   maxPitchDeg: number;
   phoneScoreThreshold: number;
   phoneConsecutiveFrames: number;
+  gazeDeviationThreshold: number;
+  gazeDurationMs: number;
   cooldownMs: number;
   /**
    * How long (ms of single-face frames) to learn the student's own "looking at the screen" pose.
@@ -40,9 +44,51 @@ export const DEFAULT_CAMERA_RULE_CONFIG: CameraRuleConfig = {
   maxPitchDeg: 20,
   phoneScoreThreshold: 0.35,
   phoneConsecutiveFrames: 2,
+  gazeDeviationThreshold: 0.22,
+  gazeDurationMs: 3_000,
   cooldownMs: 15_000,
   calibrationMs: 3_000,
 };
+
+export const CAMERA_SENSITIVITY_PRESETS: Record<CameraSensitivity, Partial<CameraRuleConfig>> = {
+  LOW: {
+    noFaceDurationMs: 5_000,
+    multiFaceDurationMs: 2_500,
+    lookAwayDurationMs: 4_000,
+    maxYawDeg: 35,
+    maxPitchDeg: 28,
+    phoneScoreThreshold: 0.5,
+    gazeDeviationThreshold: 0.28,
+    gazeDurationMs: 4_000,
+  },
+  MEDIUM: {
+    noFaceDurationMs: 3_000,
+    multiFaceDurationMs: 1_500,
+    lookAwayDurationMs: 2_500,
+    maxYawDeg: 25,
+    maxPitchDeg: 20,
+    phoneScoreThreshold: 0.35,
+    gazeDeviationThreshold: 0.22,
+    gazeDurationMs: 3_000,
+  },
+  HIGH: {
+    noFaceDurationMs: 2_000,
+    multiFaceDurationMs: 1_000,
+    lookAwayDurationMs: 1_800,
+    maxYawDeg: 18,
+    maxPitchDeg: 15,
+    phoneScoreThreshold: 0.3,
+    gazeDeviationThreshold: 0.16,
+    gazeDurationMs: 2_000,
+  },
+};
+
+export function getCameraConfigForSensitivity(
+  sensitivity?: CameraSensitivity | null
+): CameraRuleConfig {
+  const preset = sensitivity ? CAMERA_SENSITIVITY_PRESETS[sensitivity] : undefined;
+  return { ...DEFAULT_CAMERA_RULE_CONFIG, ...(preset ?? {}) };
+}
 
 /** Calibration accepts poses up to this angle (webcams are often beside or above the screen). */
 const CALIBRATION_MAX_ABS_DEG = 45;
@@ -88,16 +134,47 @@ export function estimateHeadPoseFromLandmarks(
   return { yawDeg: yawDeg || 0, pitchDeg: pitchDeg || 0 };
 }
 
+/**
+ * Estimates normalized horizontal iris gaze offset (-0.5..+0.5, 0 = straight ahead)
+ * from MediaPipe 478-point face landmarks using left (33, 133, 468) and right (362, 263, 473) eyes.
+ */
+export function estimateIrisGazeFromLandmarks(
+  lm: ArrayLike<LandmarkPoint> | null | undefined
+): { gazeXOffset: number } | null {
+  if (!lm || lm.length < 474) return null;
+  const eyePairs: Array<[number, number, number]> = [
+    [33, 133, 468],
+    [362, 263, 473],
+  ];
+  const ratios: number[] = [];
+  for (const [c1Idx, c2Idx, irisIdx] of eyePairs) {
+    const c1 = lm[c1Idx];
+    const c2 = lm[c2Idx];
+    const iris = lm[irisIdx];
+    if (!c1 || !c2 || !iris) continue;
+    const minX = Math.min(c1.x, c2.x);
+    const span = Math.abs(c2.x - c1.x);
+    if (!Number.isFinite(span) || span < 1e-4 || !Number.isFinite(iris.x)) continue;
+    ratios.push((iris.x - minX) / span);
+  }
+  if (ratios.length === 0) return null;
+  const avg = ratios.reduce((s, r) => s + r, 0) / ratios.length;
+  const raw = Math.max(-0.5, Math.min(0.5, avg - 0.5));
+  const rounded = Math.round(raw * 1000) / 1000;
+  return { gazeXOffset: rounded || 0 };
+}
+
 export interface EmittedCameraEvent {
   type: Extract<
     ProctorEventType,
-    "CAMERA_NO_FACE" | "CAMERA_MULTI_FACE" | "CAMERA_LOOK_AWAY" | "CAMERA_PHONE"
+    "CAMERA_NO_FACE" | "CAMERA_MULTI_FACE" | "CAMERA_LOOK_AWAY" | "CAMERA_GAZE_AWAY" | "CAMERA_PHONE"
   >;
   durationMs: number;
   meta: {
     faces: number;
     yawDeg?: number | null;
     pitchDeg?: number | null;
+    gazeXOffset?: number | null;
     phoneScore?: number;
   };
 }
@@ -143,6 +220,7 @@ export class CameraRulesEngine {
   private noFaceSince: number | null = null;
   private multiFaceSince: number | null = null;
   private lookAwaySince: number | null = null;
+  private gazeAwaySince: number | null = null;
   private phoneStreak = 0;
   private phoneFirstSeenAt: number | null = null;
   private lastFired = new Map<EmittedCameraEvent["type"], number>();
@@ -159,6 +237,7 @@ export class CameraRulesEngine {
     this.noFaceSince = null;
     this.multiFaceSince = null;
     this.lookAwaySince = null;
+    this.gazeAwaySince = null;
     this.phoneStreak = 0;
     this.phoneFirstSeenAt = null;
   }
@@ -181,7 +260,13 @@ export class CameraRulesEngine {
   public isSuspicious(obs: CameraFrameObservation): boolean {
     if (obs.faces !== 1) return true;
     if ((obs.phoneScore ?? 0) >= this.cfg.phoneScoreThreshold) return true;
-    return this.calibrated && this.isHeadTurned(obs.yawDeg, obs.pitchDeg);
+    if (!this.calibrated) return false;
+    if (this.isHeadTurned(obs.yawDeg, obs.pitchDeg)) return true;
+    return (
+      obs.gazeXOffset !== null &&
+      obs.gazeXOffset !== undefined &&
+      Math.abs(obs.gazeXOffset) > this.cfg.gazeDeviationThreshold
+    );
   }
 
   private isHeadTurned(yawDeg: number | null, pitchDeg: number | null): boolean {
@@ -268,6 +353,30 @@ export class CameraRulesEngine {
       }
     } else {
       this.lookAwaySince = null;
+    }
+
+    // 3b. Iris gaze away while head stays facing forward (avoid duplicating CAMERA_LOOK_AWAY)
+    const isGazeAway =
+      faces === 1 &&
+      this.calibrated &&
+      !isLookingAway &&
+      obs.gazeXOffset !== null &&
+      obs.gazeXOffset !== undefined &&
+      Math.abs(obs.gazeXOffset) > this.cfg.gazeDeviationThreshold;
+
+    if (isGazeAway) {
+      if (this.gazeAwaySince === null) this.gazeAwaySince = t;
+      const dur = t - this.gazeAwaySince;
+      if (dur >= this.cfg.gazeDurationMs && this.canFire("CAMERA_GAZE_AWAY", t)) {
+        this.lastFired.set("CAMERA_GAZE_AWAY", t);
+        events.push({
+          type: "CAMERA_GAZE_AWAY",
+          durationMs: Math.round(dur),
+          meta: { faces, gazeXOffset: obs.gazeXOffset ?? null },
+        });
+      }
+    } else {
+      this.gazeAwaySince = null;
     }
 
     // 4. Cell phone detection (requires consecutive object-detection hits)

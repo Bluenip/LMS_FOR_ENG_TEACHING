@@ -69,6 +69,8 @@ interface LiveSnapshot {
     maxViolations: number;
     requireCamera?: boolean;
     cameraEnforce?: boolean;
+    cameraCountLookAway?: boolean;
+    requireMicMonitor?: boolean;
     audioMaxPlays?: number | null;
     audios?: Array<{ id: string; title: string }>;
     timeLimitMin: number | null;
@@ -108,9 +110,12 @@ const SUSPECTED_TYPES = new Set<ProctorEventType>([
   "DEVTOOLS_SUSPECTED",
   "PASTE_SUSPECTED",
   "CAMERA_LOOK_AWAY",
+  "CAMERA_GAZE_AWAY",
   "CAMERA_NO_FACE",
   "CAMERA_MULTI_FACE",
   "CAMERA_PHONE",
+  "MIC_VOICE",
+  "MOBILE_APP_SWITCH",
 ]);
 
 function playAlertChime() {
@@ -541,7 +546,9 @@ export default function TeacherLiveProctorPage() {
                     snapshot.assignment.cameraEnforce &&
                     (ev.type === "CAMERA_NO_FACE" ||
                       ev.type === "CAMERA_MULTI_FACE" ||
-                      ev.type === "CAMERA_PHONE")
+                      ev.type === "CAMERA_PHONE" ||
+                      (snapshot.assignment.cameraCountLookAway &&
+                        ev.type === "CAMERA_LOOK_AWAY"))
                   );
                 return (
                   <div

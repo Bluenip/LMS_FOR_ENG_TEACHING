@@ -52,6 +52,7 @@ interface StudentDashboardProps {
     questionCount: number;
     proctorMode: string;
     requireCamera?: boolean;
+    requireMicMonitor?: boolean;
     proctorSummary: string | null;
     scoreScale?: ScoreScale;
     weight?: number;
@@ -180,7 +181,10 @@ export function StudentDashboardClient({
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {pendingAssignments.map((a) => {
-              const needsRules = a.proctorMode !== "OFF" || Boolean(a.requireCamera);
+              const needsRules =
+                a.proctorMode !== "OFF" ||
+                Boolean(a.requireCamera) ||
+                Boolean(a.requireMicMonitor);
               const targetHref =
                 needsRules && !a.latestSubmission
                   ? `/student/assignments/${a.id}/rules`

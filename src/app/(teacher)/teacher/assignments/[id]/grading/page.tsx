@@ -19,6 +19,7 @@ import {
   Flag,
   Headphones,
   ListChecks,
+  Mic,
   Radio,
   Scale,
   ShieldAlert,
@@ -45,6 +46,7 @@ import { OverlayFieldInput } from "@/components/worksheet/OverlayFieldInput";
 import { DictationDiffView } from "@/components/worksheet/DictationDiffView";
 import { PromptText } from "@/components/worksheet/PromptText";
 import { PhotoAnnotatorModal } from "@/components/worksheet/PhotoAnnotatorModal";
+import { PhotoLightboxModal } from "@/components/worksheet/PhotoLightboxModal";
 import { CommentPresetBar } from "@/components/grading/CommentPresetBar";
 import { OverrideDialog, type StudentOverrideInfo } from "@/components/grading/OverrideDialog";
 import { GradeByQuestionPanel } from "@/components/grading/GradeByQuestionPanel";
@@ -241,6 +243,11 @@ function SubmissionReviewModal({
     index: number;
     annotations: PhotoAnnotationMap | null;
   } | null>(null);
+  const [proctorFilter, setProctorFilter] = useState<"ALL" | "CAMERA" | "SCREEN" | "AUDIO">("ALL");
+  const [proctorLightbox, setProctorLightbox] = useState<{
+    files: UploadedAnswerFile[];
+    index: number;
+  } | null>(null);
 
   const handleSave = async () => {
     if (!sub) return;
@@ -379,52 +386,139 @@ function SubmissionReviewModal({
                 </div>
               )}
 
-              {/* Proctor Timeline beside submission (PLAN 6C) */}
-              {sub.proctorEvents.length > 0 && (
-                <div className="rounded-xl border border-red-200 bg-[#FEF2F2]/70 p-4 space-y-2">
-                  <p className="flex items-center gap-1.5 text-xs font-bold text-[#BA1A1A]">
-                    <ShieldAlert className="h-4 w-4" />
-                    {tr("Nhật ký giám sát thi (", "Proctoring log (")}{sub.violationCount} {tr("vi phạm)", "violations)")}
-                  </p>
-                  <div className="max-h-56 space-y-2 overflow-y-auto text-xs">
-                    {sub.proctorEvents.map((ev) => {
-                      const snapKey =
-                        ev.meta && typeof ev.meta === "object" && typeof ev.meta.snapshotKey === "string"
-                          ? ev.meta.snapshotKey
-                          : null;
-                      return (
-                        <div key={ev.id} className="space-y-1">
-                          <div className="flex justify-between text-[#93000A]">
-                            <span className="inline-flex items-center gap-1">
-                              {ev.type.startsWith("CAMERA_") && <Camera className="h-3 w-3" />}
-                              {vi.proctor.events[ev.type] ?? ev.type}
-                              {ev.durationMs ? ` (${Math.round(ev.durationMs / 1000)}s)` : ""}
-                            </span>
-                            <span className="tabular-nums text-[11px] opacity-80">
-                              {formatDateTime(ev.at, locale)}
-                            </span>
-                          </div>
-                          {snapKey && (
-                            <a
-                              href={`/api/files/${snapKey}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-block overflow-hidden rounded border border-red-200"
-                            >
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={`/api/files/${snapKey}`}
-                                alt={vi.proctor.events[ev.type] ?? ev.type}
-                                className="h-16 w-24 object-cover"
-                              />
-                            </a>
-                          )}
-                        </div>
-                      );
-                    })}
+              {/* Proctor Timeline beside submission (PLAN 6C + Phase 18 filters & PhotoLightboxModal) */}
+              {sub.proctorEvents.length > 0 && (() => {
+                const classifyEvent = (type: ProctorEventType): "CAMERA" | "AUDIO" | "SCREEN" => {
+                  if (type.startsWith("CAMERA_")) return "CAMERA";
+                  if (type === "MIC_VOICE") return "AUDIO";
+                  return "SCREEN";
+                };
+                const filteredEvents =
+                  proctorFilter === "ALL"
+                    ? sub.proctorEvents
+                    : sub.proctorEvents.filter((ev) => classifyEvent(ev.type) === proctorFilter);
+                const snapshotFiles: UploadedAnswerFile[] = sub.proctorEvents
+                  .map((ev) => {
+                    const key =
+                      ev.meta && typeof ev.meta === "object" && typeof ev.meta.snapshotKey === "string"
+                        ? ev.meta.snapshotKey
+                        : null;
+                    if (!key) return null;
+                    return {
+                      key,
+                      name: `${vi.proctor.events[ev.type] ?? ev.type} — ${formatDateTime(ev.at, locale)}`,
+                      mimeType: "image/jpeg",
+                    };
+                  })
+                  .filter((f): f is UploadedAnswerFile => f !== null);
+                const filterTabs: Array<{
+                  key: "ALL" | "CAMERA" | "SCREEN" | "AUDIO";
+                  label: string;
+                  count: number;
+                }> = [
+                  { key: "ALL", label: tr("Tất cả", "All"), count: sub.proctorEvents.length },
+                  {
+                    key: "CAMERA",
+                    label: tr("Camera", "Camera"),
+                    count: sub.proctorEvents.filter((e) => classifyEvent(e.type) === "CAMERA").length,
+                  },
+                  {
+                    key: "SCREEN",
+                    label: tr("Màn hình", "Screen"),
+                    count: sub.proctorEvents.filter((e) => classifyEvent(e.type) === "SCREEN").length,
+                  },
+                  {
+                    key: "AUDIO",
+                    label: tr("Âm thanh", "Audio"),
+                    count: sub.proctorEvents.filter((e) => classifyEvent(e.type) === "AUDIO").length,
+                  },
+                ];
+
+                return (
+                  <div className="rounded-xl border border-red-200 bg-[#FEF2F2]/70 p-4 space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="flex items-center gap-1.5 text-xs font-bold text-[#BA1A1A]">
+                        <ShieldAlert className="h-4 w-4" />
+                        {tr("Nhật ký giám sát thi (", "Proctoring log (")}{sub.violationCount} {tr("vi phạm)", "violations)")}
+                      </p>
+                      <div className="flex flex-wrap gap-1" role="group" aria-label={tr("Lọc sự kiện", "Filter events")}>
+                        {filterTabs.map((tab) => (
+                          <button
+                            key={tab.key}
+                            type="button"
+                            data-testid={`proctor-filter-${tab.key}`}
+                            onClick={() => setProctorFilter(tab.key)}
+                            className={cn(
+                              "rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition",
+                              proctorFilter === tab.key
+                                ? "bg-[#BA1A1A] text-white"
+                                : "bg-white/90 text-[#93000A] hover:bg-white border border-red-200"
+                            )}
+                          >
+                            {tab.label} ({tab.count})
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="max-h-56 space-y-2 overflow-y-auto text-xs" data-testid="proctor-timeline-list">
+                      {filteredEvents.length === 0 ? (
+                        <p className="py-3 text-center text-[11px] text-[#93000A]/70">
+                          {tr("Không có sự kiện trong nhóm này.", "No events in this category.")}
+                        </p>
+                      ) : (
+                        filteredEvents.map((ev) => {
+                          const snapKey =
+                            ev.meta && typeof ev.meta === "object" && typeof ev.meta.snapshotKey === "string"
+                              ? ev.meta.snapshotKey
+                              : null;
+                          const snapIndex = snapKey
+                            ? snapshotFiles.findIndex((f) => f.key === snapKey)
+                            : -1;
+                          return (
+                            <div key={ev.id} className="space-y-1">
+                              <div className="flex justify-between text-[#93000A]">
+                                <span className="inline-flex items-center gap-1">
+                                  {ev.type.startsWith("CAMERA_") && <Camera className="h-3 w-3" />}
+                                  {ev.type === "MIC_VOICE" && <Mic className="h-3 w-3" />}
+                                  {vi.proctor.events[ev.type] ?? ev.type}
+                                  {ev.durationMs ? ` (${Math.round(ev.durationMs / 1000)}s)` : ""}
+                                </span>
+                                <span className="tabular-nums text-[11px] opacity-80">
+                                  {formatDateTime(ev.at, locale)}
+                                </span>
+                              </div>
+                              {snapKey && (
+                                <button
+                                  type="button"
+                                  data-testid={`proctor-snapshot-${ev.id}`}
+                                  onClick={() =>
+                                    setProctorLightbox({
+                                      files: snapshotFiles,
+                                      index: Math.max(0, snapIndex),
+                                    })
+                                  }
+                                  className="group relative inline-block overflow-hidden rounded border border-red-200"
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={`/api/files/${snapKey}`}
+                                    alt={vi.proctor.events[ev.type] ?? ev.type}
+                                    className="h-16 w-24 object-cover transition group-hover:opacity-90"
+                                  />
+                                  <span className="absolute bottom-0.5 right-0.5 rounded bg-black/65 px-1 py-0.5 text-[9px] font-semibold text-white">
+                                    {tr("Phóng to", "Zoom")}
+                                  </span>
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
 
             {/* Right: Per-field score override + ESSAY grading + overall comment */}
@@ -764,6 +858,14 @@ function SubmissionReviewModal({
             });
             onSaved();
           }}
+        />
+      )}
+      {proctorLightbox && (
+        <PhotoLightboxModal
+          files={proctorLightbox.files}
+          initialIndex={proctorLightbox.index}
+          open={true}
+          onClose={() => setProctorLightbox(null)}
         />
       )}
     </Dialog>
