@@ -1285,8 +1285,8 @@ export function ClassDetailView({
                   <p className="text-sm font-semibold text-[#BA1A1A]">{tr("Xoá lớp học", "Delete class")}</p>
                   <p className="text-xs text-[#464555]">
                     {tr(
-                      `Lớp vào thùng rác ${TRASH_DAYS} ngày (khôi phục ở Kho lưu trữ › Thùng rác), sau đó xoá hẳn cùng bài đã giao, bài nộp, bảng tin và danh sách học sinh. Bài giảng vẫn ở trong kho.`,
-                      `The class goes to the trash for ${TRASH_DAYS} days (restore it from Library › Trash), then it is deleted with its assignments, submissions, posts and roster. Lessons stay in your library.`
+                      `Lớp vào thùng rác ${TRASH_DAYS} ngày (khôi phục ở Lớp học › Thùng rác lớp học hoặc Kho lưu trữ › Thùng rác), sau đó xoá hẳn cùng bài đã giao, bài nộp, bảng tin và danh sách học sinh. Bài giảng vẫn ở trong kho.`,
+                      `The class goes to the trash for ${TRASH_DAYS} days (restore it from Classes › Class trash or Library › Trash), then it is deleted with its assignments, submissions, posts and roster. Lessons stay in your library.`
                     )}
                   </p>
                 </div>
@@ -1378,8 +1378,8 @@ export function ClassDetailView({
           >
             <p className="text-sm text-[#464555]">
               {tr(
-                `Lớp sẽ biến mất với bạn, học sinh và phụ huynh. Trong ${TRASH_DAYS} ngày bạn có thể khôi phục nguyên vẹn ở Kho lưu trữ › Thùng rác; sau đó lớp bị xoá hẳn cùng bài đã giao, bài nộp, bảng tin và danh sách học sinh. Bài giảng của lớp vẫn nằm trong kho của bạn.`,
-                `The class disappears for you, students and parents. For ${TRASH_DAYS} days you can restore it intact from Library › Trash; after that it is deleted with its assignments, submissions, posts and roster. Its lessons stay in your library.`
+                `Lớp sẽ biến mất với bạn, học sinh và phụ huynh. Trong ${TRASH_DAYS} ngày bạn có thể khôi phục nguyên vẹn ở mục Lớp học › Thùng rác lớp học (hoặc Kho lưu trữ › Thùng rác); sau đó lớp bị xoá hẳn cùng bài đã giao, bài nộp, bảng tin và danh sách học sinh. Bài giảng của lớp vẫn nằm trong kho của bạn.`,
+                `The class disappears for you, students and parents. For ${TRASH_DAYS} days you can restore it intact from Classes › Class trash (or Library › Trash); after that it is deleted with its assignments, submissions, posts and roster. Its lessons stay in your library.`
               )}
             </p>
             <div className="space-y-1.5">

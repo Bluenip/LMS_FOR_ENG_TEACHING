@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import {
   gradeSubmission,
+  isManualFieldType,
+  isPhotoUploadAnswer,
   sanitizeDictationDetail,
   type AnswerValue,
   type GradingOptions,
@@ -13,6 +15,20 @@ import { createNotificationsBulk } from "./notificationService";
 import { invalidateLeaderboardCache } from "./leaderboardService";
 import { verifySebHeaderIfNeeded } from "./assignmentService";
 import { publishAssignmentLive } from "@/lib/proctor-bus";
+
+function sanitizeAnswerValueForSubmission(submissionId: string, value: AnswerValue): AnswerValue {
+  if (isPhotoUploadAnswer(value)) {
+    const prefix = `submissions/${submissionId}/`;
+    const safeFiles = value.files.filter(
+      (f) => typeof f.key === "string" && !f.key.includes("..") && f.key.startsWith(prefix)
+    );
+    return {
+      files: safeFiles,
+      ...(typeof value.note === "string" ? { note: value.note } : {}),
+    };
+  }
+  return value;
+}
 
 function shuffleArray<T>(items: T[]): T[] {
   const arr = [...items];
@@ -294,7 +310,9 @@ export async function getStudentAssignmentPayload(
         select: {
           id: true,
           title: true,
+          subject: true,
           instructions: true,
+          passages: true,
           pdfFileKey: true,
           pageCount: true,
           pages: {
@@ -470,6 +488,8 @@ export async function getStudentAssignmentPayload(
       dueAt: assignment.dueAt?.toISOString() ?? null,
       worksheet: {
         ...assignment.worksheet,
+        subject: assignment.worksheet.subject,
+        passages: contentUnlocked ? (assignment.worksheet.passages ?? []) : [],
         questionCount: assignment.worksheet.fields.length,
         audioCount: assignment.worksheet.audios.length,
         pdfFileKey: contentUnlocked ? assignment.worksheet.pdfFileKey : null,
@@ -574,7 +594,12 @@ export async function autosaveSubmissionAnswers(
   }
 
   const validFieldIds = new Set(submission.assignment.worksheet.fields.map((f) => f.id));
-  const validAnswers = input.answers.filter((a) => validFieldIds.has(a.fieldId));
+  const validAnswers = input.answers
+    .filter((a) => validFieldIds.has(a.fieldId))
+    .map((a) => ({
+      fieldId: a.fieldId,
+      value: sanitizeAnswerValueForSubmission(submission.id, a.value),
+    }));
 
   await prisma.$transaction(async (tx) => {
     for (const ans of validAnswers) {
@@ -683,7 +708,7 @@ export async function finalizeSubmissionInternal(
   if (finalAnswers) {
     for (const a of finalAnswers) {
       if (validFieldIds.has(a.fieldId)) {
-        answerMap[a.fieldId] = a.value;
+        answerMap[a.fieldId] = sanitizeAnswerValueForSubmission(submission.id, a.value);
       }
     }
   }
@@ -782,7 +807,7 @@ export async function finalizeSubmissionInternal(
       ? "Điểm sẽ được công bố theo cài đặt của giáo viên"
       : newStatus === "GRADED"
         ? `Điểm: ${totalScore}/${graded.maxScore}`
-        : "Đang chờ giáo viên chấm tự luận";
+        : "Đang chờ giáo viên chấm phần tự luận / nộp ảnh";
     await createNotificationsBulk(
       submission.student.parentLinksAsChild.map((pl) => ({
         userId: pl.parentId,
@@ -960,7 +985,7 @@ export async function saveTeacherManualGrading(
       maxScore += f.points;
       const ans = answerByField.get(f.id);
       const pts = ans?.score ?? 0;
-      if (f.type === "ESSAY") {
+      if (isManualFieldType(f.type)) {
         manualScore += pts;
       } else {
         autoScore += pts;

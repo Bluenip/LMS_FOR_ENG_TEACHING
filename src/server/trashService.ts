@@ -270,32 +270,41 @@ function daysLeft(deletedAt: Date, now = Date.now()) {
   return Math.max(0, Math.ceil((deletedAt.getTime() + CONTENT_TRASH_DAYS * DAY_MS - now) / DAY_MS));
 }
 
-export async function listTrash(actor: Actor): Promise<TrashEntry[]> {
+export async function listTrash(actor: Actor, kind?: TrashKind): Promise<TrashEntry[]> {
   const mine = actor.role === "ADMIN" ? {} : { ownerId: actor.id };
-  const classes = await prisma.class.findMany({
-    where: { ...(actor.role === "ADMIN" ? {} : { teacherId: actor.id }), deletedAt: { not: null } },
-    select: { id: true, name: true, deletedAt: true, teacher: { select: { name: true } } },
-  });
-  const [worksheets, lessons, items] = await Promise.all([
-    prisma.worksheet.findMany({
-      where: { ...mine, deletedAt: { not: null } },
-      select: { id: true, title: true, deletedAt: true, deletedSource: true, owner: { select: { name: true } } },
-    }),
-    prisma.lesson.findMany({
-      where: { ...mine, deletedAt: { not: null } },
-      select: { id: true, title: true, deletedAt: true, deletedSource: true, owner: { select: { name: true } } },
-    }),
+  const want = (k: TrashKind) => !kind || kind === k;
+  const [classes, worksheets, lessons, items] = await Promise.all([
+    want("CLASS")
+      ? prisma.class.findMany({
+          where: { ...(actor.role === "ADMIN" ? {} : { teacherId: actor.id }), deletedAt: { not: null } },
+          select: { id: true, name: true, deletedAt: true, teacher: { select: { name: true } } },
+        })
+      : Promise.resolve([]),
+    want("WORKSHEET")
+      ? prisma.worksheet.findMany({
+          where: { ...mine, deletedAt: { not: null } },
+          select: { id: true, title: true, deletedAt: true, deletedSource: true, owner: { select: { name: true } } },
+        })
+      : Promise.resolve([]),
+    want("LESSON")
+      ? prisma.lesson.findMany({
+          where: { ...mine, deletedAt: { not: null } },
+          select: { id: true, title: true, deletedAt: true, deletedSource: true, owner: { select: { name: true } } },
+        })
+      : Promise.resolve([]),
     // materials deleted on their own (their lesson is still in the library)
-    prisma.lessonItem.findMany({
-      where: { deletedAt: { not: null }, lesson: { ...mine, deletedAt: null } },
-      select: {
-        id: true,
-        title: true,
-        deletedAt: true,
-        deletedSource: true,
-        lesson: { select: { title: true, owner: { select: { name: true } } } },
-      },
-    }),
+    want("LESSON_ITEM")
+      ? prisma.lessonItem.findMany({
+          where: { deletedAt: { not: null }, lesson: { ...mine, deletedAt: null } },
+          select: {
+            id: true,
+            title: true,
+            deletedAt: true,
+            deletedSource: true,
+            lesson: { select: { title: true, owner: { select: { name: true } } } },
+          },
+        })
+      : Promise.resolve([]),
   ]);
   const src = (s: string | null): TrashSource => (s === "DRIVE" ? "DRIVE" : "USER");
   const rows: TrashEntry[] = [

@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { gradeField, type AnswerValue, type GradingOptions } from "@/lib/grading";
+import { gradeField, isManualFieldType, type AnswerValue, type GradingOptions } from "@/lib/grading";
 import { invalidateLeaderboardCache } from "./leaderboardService";
 
 function round2(n: number): number {
@@ -36,7 +36,7 @@ export async function regradeWorksheetSubmissions(worksheetId: string): Promise<
     for (const f of fields) {
       maxScore += f.points;
       const ans = answerByField.get(f.id);
-      if (f.type === "ESSAY") {
+      if (isManualFieldType(f.type)) {
         if (ans?.score === null || ans?.score === undefined) {
           hasUngradedEssay = true;
         } else {

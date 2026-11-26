@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   ClipboardEdit,
   Download,
+  FileText,
   Flag,
   Headphones,
   Radio,
@@ -38,11 +39,17 @@ import {
 import { PdfCanvasPage, usePdfDocument } from "@/components/worksheet/PdfCanvasPage";
 import { OverlayFieldInput } from "@/components/worksheet/OverlayFieldInput";
 import { DictationDiffView } from "@/components/worksheet/DictationDiffView";
-import type {
-  AnswerValue,
-  DictationGradeDetail,
-  FieldOption,
-  FieldStyle,
+import { PromptText } from "@/components/worksheet/PromptText";
+import { PhotoLightboxModal } from "@/components/worksheet/PhotoLightboxModal";
+import {
+  isManualFieldType,
+  isPhotoUploadAnswer,
+  isTrueFalseGroupAnswer,
+  type AnswerValue,
+  type DictationGradeDetail,
+  type FieldOption,
+  type FieldStyle,
+  type UploadedAnswerFile,
 } from "@/lib/grading/types";
 import type { StudentFieldDTO } from "@/components/worksheet/types";
 import type { FieldPlacement, FieldType, ProctorEventType, SkillTag } from "@prisma/client";
@@ -194,6 +201,9 @@ function SubmissionReviewModal({
   const [teacherComment, setTeacherComment] = useState<string | null>(null);
   const [flagged, setFlagged] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
+  const [lightbox, setLightbox] = useState<{ files: UploadedAnswerFile[]; index: number } | null>(
+    null
+  );
 
   const handleSave = async () => {
     if (!sub) return;
@@ -382,14 +392,14 @@ function SubmissionReviewModal({
                       key={f.id}
                       className={cn(
                         "rounded-xl border p-3 space-y-2 text-xs",
-                        f.type === "ESSAY"
+                        isManualFieldType(f.type)
                           ? "border-amber-300 bg-amber-50/40"
                           : "border-slate-200 bg-[#F8F9FF]"
                       )}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <Badge variant={f.type === "ESSAY" ? "orange" : "default"}>
+                          <Badge variant={isManualFieldType(f.type) ? "orange" : "default"}>
                             {tr("Câu", "Q")} {f.label}
                           </Badge>
                           <span className="font-semibold text-slate-600">
@@ -399,21 +409,137 @@ function SubmissionReviewModal({
                         <span className="font-bold text-slate-500">{tr("Tối đa", "Up to")} {f.points}{tr("đ", "pt")}</span>
                       </div>
 
-                      <div className="rounded-lg bg-white p-2 text-[#0B1C30] border border-slate-100">
+                      {f.prompt && (
+                        <p className="text-xs font-medium text-[#0B1C30]">
+                          <PromptText text={f.prompt} />
+                        </p>
+                      )}
+
+                      <div className="rounded-lg bg-white p-2 text-[#0B1C30] border border-slate-100 space-y-2">
                         <span className="text-[10px] font-bold uppercase text-slate-400">
                           {tr("Bài làm học sinh:", "Student's answer:")}
                         </span>
-                        <p className="mt-0.5 whitespace-pre-wrap font-medium">
-                          {ans?.value !== undefined && ans?.value !== null && ans?.value !== ""
-                            ? typeof ans.value === "boolean"
-                              ? ans.value
-                                ? tr("Đúng / Có", "True / Yes")
-                                : tr("Sai / Không", "False / No")
-                              : Array.isArray(ans.value)
-                                ? ans.value.join(", ")
-                                : String(ans.value)
-                            : tr("(Bỏ trống)", "(Blank)")}
-                        </p>
+                        {f.type === "PHOTO_UPLOAD" && isPhotoUploadAnswer(ans?.value) ? (
+                          (() => {
+                            const uploadedFiles = ans.value.files;
+                            const imgFiles = uploadedFiles.filter(
+                              (uf) => uf.mimeType !== "application/pdf"
+                            );
+                            if (uploadedFiles.length === 0 && !ans.value.note) {
+                              return (
+                                <p className="mt-0.5 font-medium text-slate-400">
+                                  {tr("(Chưa nộp ảnh)", "(No photos uploaded)")}
+                                </p>
+                              );
+                            }
+                            return (
+                              <div className="space-y-2">
+                                {uploadedFiles.length > 0 && (
+                                  <div className="grid grid-cols-3 gap-2">
+                                    {uploadedFiles.map((uf) => {
+                                      const isPdf = uf.mimeType === "application/pdf";
+                                      const imgIdx = imgFiles.findIndex((x) => x.key === uf.key);
+                                      return isPdf ? (
+                                        <a
+                                          key={uf.key}
+                                          href={`/api/files/${uf.key}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="flex h-20 flex-col items-center justify-center rounded-lg border border-slate-200 bg-[#EFF4FF] p-1 text-center text-[10px] font-semibold text-[#3525CD]"
+                                        >
+                                          <FileText className="h-5 w-5 mb-0.5" />
+                                          <span className="line-clamp-1">{uf.name}</span>
+                                        </a>
+                                      ) : (
+                                        <button
+                                          key={uf.key}
+                                          type="button"
+                                          onClick={() =>
+                                            setLightbox({ files: imgFiles, index: Math.max(0, imgIdx) })
+                                          }
+                                          className="group relative h-20 overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+                                          title={tr("Nhấn để phóng to / xoay ảnh", "Click to zoom / rotate")}
+                                          data-testid={`grading-photo-thumb-${f.id}`}
+                                        >
+                                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                                          <img
+                                            src={`/api/files/${uf.key}`}
+                                            alt={uf.name}
+                                            className="h-full w-full object-cover transition group-hover:scale-105"
+                                          />
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                                {ans.value.note && (
+                                  <p className="whitespace-pre-wrap text-xs text-[#464555]">
+                                    {ans.value.note}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })()
+                        ) : f.type === "TRUE_FALSE_GROUP" && isTrueFalseGroupAnswer(ans?.value) ? (
+                          (() => {
+                            const studentMap = ans.value;
+                            const correctMap =
+                              f.answerKey.correct &&
+                              typeof f.answerKey.correct === "object" &&
+                              !Array.isArray(f.answerKey.correct)
+                                ? (f.answerKey.correct as Record<string, boolean>)
+                                : {};
+                            const ids =
+                              f.options && f.options.length > 0
+                                ? f.options.map((o) => o.id)
+                                : Object.keys({ ...correctMap, ...studentMap }).sort();
+                            if (ids.length === 0) {
+                              return <p className="mt-0.5 font-medium">{tr("(Bỏ trống)", "(Blank)")}</p>;
+                            }
+                            return (
+                              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                {ids.map((id) => {
+                                  const picked = studentMap[id];
+                                  const expected = correctMap[id];
+                                  const hasPick = typeof picked === "boolean";
+                                  const isRight = hasPick && picked === expected;
+                                  return (
+                                    <span
+                                      key={id}
+                                      className={cn(
+                                        "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold",
+                                        !hasPick
+                                          ? "bg-slate-100 text-slate-500"
+                                          : isRight
+                                            ? "bg-[#DCFCE7] text-[#15803D]"
+                                            : "bg-red-50 text-[#BA1A1A]"
+                                      )}
+                                    >
+                                      {id}:{" "}
+                                      {hasPick
+                                        ? picked
+                                          ? tr("Đúng", "True")
+                                          : tr("Sai", "False")
+                                        : "—"}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()
+                        ) : (
+                          <p className="mt-0.5 whitespace-pre-wrap font-medium">
+                            {ans?.value !== undefined && ans?.value !== null && ans?.value !== ""
+                              ? typeof ans.value === "boolean"
+                                ? ans.value
+                                  ? tr("Đúng / Có", "True / Yes")
+                                  : tr("Sai / Không", "False / No")
+                                : Array.isArray(ans.value)
+                                  ? ans.value.join(", ")
+                                  : String(ans.value)
+                              : tr("(Bỏ trống)", "(Blank)")}
+                          </p>
+                        )}
                         {f.type === "DICTATION" && ans?.gradeDetail && (
                           <DictationDiffView detail={ans.gradeDetail} showExpected={true} />
                         )}
@@ -491,6 +617,15 @@ function SubmissionReviewModal({
           </div>
         )}
       </DialogContent>
+
+      {lightbox && (
+        <PhotoLightboxModal
+          files={lightbox.files}
+          initialIndex={lightbox.index}
+          open={true}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </Dialog>
   );
 }

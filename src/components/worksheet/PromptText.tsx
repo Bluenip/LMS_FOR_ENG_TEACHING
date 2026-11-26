@@ -1,8 +1,8 @@
-import { Fragment } from "react";
 import { cn } from "@/lib/utils";
+import { MathText } from "./MathText";
 
 /**
- * Renders a question prompt produced by the Word/text parser.
+ * Renders a question prompt produced by the Word/text parser or rich math text.
  * Internal markers (kept unchanged in the data because Focus Mode relies on them):
  *  - `____ [3a] ____` = the blank this question asks about  -> highlighted chip "3a"
  *  - `________`        = another blank of the same sentence -> neutral underline
@@ -36,7 +36,7 @@ export function PromptText({ text, className }: { text: string; className?: stri
             />
           );
         }
-        return <Fragment key={i}>{part}</Fragment>;
+        return <MathText key={i} text={part} />;
       })}
     </span>
   );

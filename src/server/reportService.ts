@@ -2,6 +2,7 @@ import ExcelJS from "exceljs";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import type { Locale } from "@/lib/i18n/config";
+import { isManualFieldType, isPhotoUploadAnswer, isTrueFalseGroupAnswer } from "@/lib/grading";
 import { compareQuestionLabels, formatDateTime } from "@/lib/utils";
 
 export type WrongAnswerCode = "BLANK" | "TRUE" | "FALSE";
@@ -14,11 +15,27 @@ export interface CommonWrongAnswer {
 
 const CODE_KEY_PREFIX = "__CODE__:";
 
-function formatWrongAnswerKey(value: unknown): string {
+function formatWrongAnswerKey(value: unknown, locale: Locale): string {
   if (value === null || value === undefined) return `${CODE_KEY_PREFIX}BLANK`;
   if (typeof value === "boolean") return `${CODE_KEY_PREFIX}${value ? "TRUE" : "FALSE"}`;
   if (Array.isArray(value)) {
     return value.length > 0 ? value.join(", ") : `${CODE_KEY_PREFIX}BLANK`;
+  }
+  if (isPhotoUploadAnswer(value)) {
+    return value.files.length > 0
+      ? locale === "en"
+        ? `${value.files.length} file(s)`
+        : `${value.files.length} file`
+      : `${CODE_KEY_PREFIX}BLANK`;
+  }
+  if (isTrueFalseGroupAnswer(value)) {
+    const entries = Object.entries(value)
+      .filter(([, v]) => typeof v === "boolean")
+      .sort(([a], [b]) => a.localeCompare(b));
+    if (entries.length === 0) return `${CODE_KEY_PREFIX}BLANK`;
+    return entries
+      .map(([k, v]) => `${k}:${v ? (locale === "en" ? "T" : "Đ") : locale === "en" ? "F" : "S"}`)
+      .join(" ");
   }
   const str = String(value).trim();
   return str.length > 0 ? str : `${CODE_KEY_PREFIX}BLANK`;
@@ -168,7 +185,7 @@ export async function getAssignmentReport(assignmentId: string, locale: Locale =
     for (const sub of analyzedSubs) {
       const ans = sub.answers.find((a) => a.fieldId === field.id);
       if (!ans) {
-        if (field.type !== "ESSAY") {
+        if (!isManualFieldType(field.type)) {
           graded++;
           const blankKey = `${CODE_KEY_PREFIX}BLANK`;
           wrongFreq.set(blankKey, (wrongFreq.get(blankKey) ?? 0) + 1);
@@ -180,7 +197,7 @@ export async function getAssignmentReport(assignmentId: string, locale: Locale =
         graded++;
       } else if (ans.isCorrect === false) {
         graded++;
-        const displayKey = formatWrongAnswerKey(ans.value);
+        const displayKey = formatWrongAnswerKey(ans.value, locale);
         wrongFreq.set(displayKey, (wrongFreq.get(displayKey) ?? 0) + 1);
       }
     }

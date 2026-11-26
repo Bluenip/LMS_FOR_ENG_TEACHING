@@ -379,3 +379,11 @@ html.dark .pivora-ink {
   color: #E6ECFF;
   --pivora-accent: #6B97FF;
 }
+
+.katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+  margin: 0.5rem 0;
+}

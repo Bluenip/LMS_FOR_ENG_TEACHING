@@ -43,12 +43,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import type { WorksheetSubject } from "@prisma/client";
 import type { ParsedFillBlankField } from "@/lib/worksheet/fill-blank-parser";
+import { getSubjectMeta, WORKSHEET_SUBJECTS } from "@/lib/subjects";
 import { PromptText } from "@/components/worksheet/PromptText";
+import { SubjectBadge, SubjectPicker } from "@/components/worksheet/SubjectPicker";
 
 interface WorksheetRow {
   id: string;
   title: string;
+  subject?: WorksheetSubject;
   instructions: string | null;
   pdfFileKey: string | null;
   pageCount: number;
@@ -62,14 +66,23 @@ interface WorksheetRow {
 type WorksheetSort = "updated_desc" | "updated_asc" | "title" | "most_assigned" | "most_questions";
 
 
-/** Client-side search + sort for the worksheet library (lists are small and already loaded). */
-function filterAndSortWorksheets(rows: WorksheetRow[], query: string, sort: WorksheetSort): WorksheetRow[] {
+/** Client-side search + subject filter + sort for the worksheet library. */
+function filterAndSortWorksheets(
+  rows: WorksheetRow[],
+  query: string,
+  sort: WorksheetSort,
+  subjectFilter: "ALL" | WorksheetSubject
+): WorksheetRow[] {
   const needle = foldText(query.trim());
+  const bySubject =
+    subjectFilter === "ALL"
+      ? rows
+      : rows.filter((ws) => (ws.subject ?? "GENERAL") === subjectFilter);
   const out = needle
-    ? rows.filter((ws) =>
+    ? bySubject.filter((ws) =>
         foldText(`${ws.title} ${ws.instructions ?? ""} ${ws.owner?.name ?? ""}`).includes(needle)
       )
-    : [...rows];
+    : [...bySubject];
   const time = (ws: WorksheetRow) => new Date(ws.updatedAt).getTime();
   out.sort((a, b) => {
     switch (sort) {
@@ -109,8 +122,10 @@ export default function TeacherWorksheetsPage() {
   };
   const [wsQuery, setWsQuery] = useState("");
   const [wsSort, setWsSort] = useState<WorksheetSort>("updated_desc");
+  const [wsSubjectFilter, setWsSubjectFilter] = useState<"ALL" | WorksheetSubject>("ALL");
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
+  const [wsSubject, setWsSubject] = useState<WorksheetSubject | null>(null);
   const [instructions, setInstructions] = useState("");
   const [creating, setCreating] = useState(false);
   // Backup: pick some or all worksheets and download one .zip
@@ -121,6 +136,7 @@ export default function TeacherWorksheetsPage() {
   // Word auto-create modal state
   const [wordOpen, setWordOpen] = useState(false);
   const [wordTitle, setWordTitle] = useState("");
+  const [wordSubject, setWordSubject] = useState<WorksheetSubject>("ENGLISH");
   const [wordText, setWordText] = useState("");
   const [wordPoints, setWordPoints] = useState(1);
   const [wordParsed, setWordParsed] = useState<ParsedFillBlankField[]>([]);
@@ -195,17 +211,26 @@ export default function TeacherWorksheetsPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!wsSubject) {
+      toast.error(tr("Vui lòng chọn môn học cho worksheet.", "Please select a subject for this worksheet."));
+      return;
+    }
     setCreating(true);
     try {
       const res = await fetch("/api/worksheets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, instructions: instructions || null }),
+        body: JSON.stringify({
+          title,
+          subject: wsSubject,
+          instructions: instructions || null,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? tr("Tạo thất bại", "Creation failed"));
       setOpen(false);
       setTitle("");
+      setWsSubject(null);
       setInstructions("");
       queryClient.invalidateQueries({ queryKey: ["teacher-worksheets"] });
       router.push(`/teacher/worksheets/${json.worksheet.id}/edit`);
@@ -322,6 +347,7 @@ export default function TeacherWorksheetsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: finalTitle,
+          subject: wordSubject,
           instructions: tr("Điền từ hoặc cụm từ thích hợp vào chỗ trống.", "Fill in each blank with the correct word or phrase."),
         }),
       });
@@ -398,12 +424,12 @@ export default function TeacherWorksheetsPage() {
   /** admin: the second tab lists every other teacher's worksheet, editable */
   const isAdmin = Boolean(data?.isAdmin);
   const visibleMine = useMemo(
-    () => filterAndSortWorksheets(data?.worksheets ?? [], wsQuery, wsSort),
-    [data?.worksheets, wsQuery, wsSort]
+    () => filterAndSortWorksheets(data?.worksheets ?? [], wsQuery, wsSort, wsSubjectFilter),
+    [data?.worksheets, wsQuery, wsSort, wsSubjectFilter]
   );
   const visibleShared = useMemo(
-    () => filterAndSortWorksheets(data?.sharedWorksheets ?? [], wsQuery, wsSort),
-    [data?.sharedWorksheets, wsQuery, wsSort]
+    () => filterAndSortWorksheets(data?.sharedWorksheets ?? [], wsQuery, wsSort, wsSubjectFilter),
+    [data?.sharedWorksheets, wsQuery, wsSort, wsSubjectFilter]
   );
   const currentTotal = tab === "mine" ? worksheets.length : sharedWorksheets.length;
   const currentShown = tab === "mine" ? visibleMine.length : visibleShared.length;
@@ -626,10 +652,27 @@ export default function TeacherWorksheetsPage() {
             />
           </label>
           <select
+            aria-label={tr("Lọc theo môn học", "Filter by subject")}
+            value={wsSubjectFilter}
+            onChange={(e) => setWsSubjectFilter(e.target.value as "ALL" | WorksheetSubject)}
+            data-testid="worksheet-subject-filter"
+            className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-[#0B1C30] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/30 sm:w-48"
+          >
+            <option value="ALL">{tr("Tất cả môn học", "All subjects")}</option>
+            {WORKSHEET_SUBJECTS.map((subj) => {
+              const m = getSubjectMeta(subj);
+              return (
+                <option key={subj} value={subj}>
+                  {locale === "en" ? m.labelEn : m.labelVi}
+                </option>
+              );
+            })}
+          </select>
+          <select
             aria-label={tr("Sắp xếp worksheet", "Sort worksheets")}
             value={wsSort}
             onChange={(e) => setWsSort(e.target.value as WorksheetSort)}
-            className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-[#0B1C30] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/30 sm:w-56"
+            className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-[#0B1C30] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/30 sm:w-52"
           >
             <option value="updated_desc">{tr("Cập nhật mới nhất", "Recently updated")}</option>
             <option value="updated_asc">{tr("Cập nhật cũ nhất", "Least recently updated")}</option>
@@ -637,7 +680,7 @@ export default function TeacherWorksheetsPage() {
             <option value="most_assigned">{tr("Giao nhiều nhất", "Most assigned")}</option>
             <option value="most_questions">{tr("Nhiều câu hỏi nhất", "Most questions")}</option>
           </select>
-          {wsQuery.trim() && (
+          {(wsQuery.trim() || wsSubjectFilter !== "ALL") && (
             <span className="text-xs text-[#464555] sm:whitespace-nowrap" aria-live="polite">
               {tr(`${currentShown}/${currentTotal} phiếu`, `${currentShown} of ${currentTotal}`)}
             </span>
@@ -746,6 +789,7 @@ export default function TeacherWorksheetsPage() {
                       </span>
                     )}
                     <div className="flex flex-wrap justify-end gap-1.5">
+                      <SubjectBadge subject={ws.subject} />
                       <Badge variant={ws.pdfFileKey ? "default" : "neutral"}>
                         {ws.pdfFileKey
                           ? `PDF • ${ws.pageCount} ${tr("trang", ws.pageCount === 1 ? "page" : "pages")}`
@@ -879,6 +923,7 @@ export default function TeacherWorksheetsPage() {
                     <Users className="h-3 w-3" /> {ws.owner?.name ?? tr("Giáo viên", "Teacher")}
                   </Badge>
                   <div className="flex flex-wrap justify-end gap-1">
+                    <SubjectBadge subject={ws.subject} />
                     {isAdmin && !ws.isShared && (
                       <Badge variant="neutral">{tr("Không chia sẻ", "Private")}</Badge>
                     )}
@@ -925,19 +970,33 @@ export default function TeacherWorksheetsPage() {
       )}
 
       {/* Modal 1: Create Blank Worksheet */}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+      <Dialog
+        open={open}
+        onOpenChange={(v) => {
+          setOpen(v);
+          if (!v) setWsSubject(null);
+        }}
+      >
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{vi.worksheets.createWorksheet}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>{tr("Môn học *", "Subject *")}</Label>
+              <SubjectPicker value={wsSubject} onChange={setWsSubject} />
+            </div>
             <div className="space-y-1.5">
               <Label>{vi.worksheets.worksheetTitle}</Label>
               <Input
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="VD: Unit 8 Grammar Worksheet"
+                placeholder={
+                  wsSubject === "MATH"
+                    ? "VD: Đề kiểm tra 15 phút Hàm số bậc hai"
+                    : "VD: Unit 8 Grammar Worksheet"
+                }
               />
             </div>
             <div className="space-y-1.5">
@@ -953,7 +1012,12 @@ export default function TeacherWorksheetsPage() {
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 {tr("Huỷ", "Cancel")}
               </Button>
-              <Button type="submit" variant="accent" disabled={creating}>
+              <Button
+                type="submit"
+                variant="accent"
+                disabled={creating || !wsSubject}
+                data-testid="confirm-create-worksheet-btn"
+              >
                 {tr("Tạo & Mở Editor", "Create & open editor")}
               </Button>
             </div>
@@ -1006,7 +1070,7 @@ export default function TeacherWorksheetsPage() {
               </ul>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
               <div className="sm:col-span-2 space-y-1">
                 <Label className="text-xs">{tr("Tên Worksheet mới", "New worksheet title")}</Label>
                 <Input
@@ -1017,7 +1081,24 @@ export default function TeacherWorksheetsPage() {
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">{tr("Điểm mặc định / câu", "Default points / Q")}</Label>
+                <Label className="text-xs">{tr("Môn học", "Subject")}</Label>
+                <select
+                  value={wordSubject}
+                  onChange={(e) => setWordSubject(e.target.value as WorksheetSubject)}
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-[#0B1C30] outline-none focus:border-[#4F46E5]"
+                >
+                  {WORKSHEET_SUBJECTS.map((subj) => {
+                    const m = getSubjectMeta(subj);
+                    return (
+                      <option key={subj} value={subj}>
+                        {locale === "en" ? m.shortEn : m.shortVi}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">{tr("Điểm / câu", "Points / Q")}</Label>
                 <Input
                   type="number"
                   step="0.5"

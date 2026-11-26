@@ -23,7 +23,9 @@ import type {
   ProctorMode,
   ShowResultMode,
   ViolationAction,
+  WorksheetSubject,
 } from "@prisma/client";
+import { getSubjectProfile } from "@/lib/subjects";
 import { cn, formatAttemptsLimit } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
@@ -38,6 +40,7 @@ import { ClassPicker } from "@/components/assignments/ClassPicker";
 interface WorksheetOption {
   id: string;
   title: string;
+  subject?: WorksheetSubject;
   updatedAt?: string;
   owner?: { name: string };
   _count: { fields: number; audios?: number };
@@ -80,7 +83,7 @@ interface EditableAssignment {
   audioBlockSeek: boolean;
   oneQuestionPerPage: boolean;
   class: { id: string; name: string };
-  worksheet?: { id: string; title: string; _count: { fields: number; audios?: number } };
+  worksheet?: { id: string; title: string; subject?: WorksheetSubject; _count: { fields: number; audios?: number } };
   _count: { submissions: number };
 }
 
@@ -765,10 +768,13 @@ function NewAssignmentForm() {
                   }))}
                 />
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  <ChipButton onClick={() => applyPreset("DICTATION")}>
-                    <ClipboardX className="mr-1 h-3.5 w-3.5" />
-                    {tr("Mẫu: Chép chính tả", "Preset: Dictation")}
-                  </ChipButton>
+                  {(getSubjectProfile(selectedWs?.subject ?? editing?.worksheet?.subject).showDictationPreset ||
+                    hasAudio) && (
+                    <ChipButton onClick={() => applyPreset("DICTATION")}>
+                      <ClipboardX className="mr-1 h-3.5 w-3.5" />
+                      {tr("Mẫu: Chép chính tả", "Preset: Dictation")}
+                    </ChipButton>
+                  )}
                   <ChipButton onClick={() => applyPreset("MEMORIZE")}>
                     <ShieldCheck className="mr-1 h-3.5 w-3.5" />
                     {tr("Mẫu: Học thuộc", "Preset: Memorization")}

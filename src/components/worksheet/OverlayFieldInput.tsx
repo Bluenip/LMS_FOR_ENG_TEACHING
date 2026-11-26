@@ -1,7 +1,11 @@
 "use client";
 
 import { CheckCircle2, XCircle } from "lucide-react";
-import type { AnswerValue } from "@/lib/grading/types";
+import {
+  isPhotoUploadAnswer,
+  isTrueFalseGroupAnswer,
+  type AnswerValue,
+} from "@/lib/grading/types";
 import { cn } from "@/lib/utils";
 import { formatRevealedAnswer, type StudentFieldDTO } from "./types";
 import { useI18n } from "@/lib/i18n/client";
@@ -195,6 +199,55 @@ export function OverlayFieldInput({
               {opt.label}
             </button>
           ))}
+        </div>
+      )}
+
+      {field.type === "TRUE_FALSE_GROUP" && (
+        <div className="flex h-full w-full flex-wrap items-center justify-around gap-0.5 overflow-auto p-0.5">
+          {(field.options && field.options.length > 0
+            ? field.options
+            : [
+                { id: "a", text: "a" },
+                { id: "b", text: "b" },
+                { id: "c", text: "c" },
+                { id: "d", text: "d" },
+              ]
+          ).map((stmt) => {
+            const cur = isTrueFalseGroupAnswer(value) ? value : {};
+            const picked = cur[stmt.id];
+            return (
+              <div key={stmt.id} className="inline-flex items-center gap-0.5 text-[0.72em]">
+                <span className="font-bold text-[#3525CD]">{stmt.id}:</span>
+                {[
+                  { v: true, label: tr("Đ", "T") },
+                  { v: false, label: tr("S", "F") },
+                ].map((c) => (
+                  <button
+                    key={String(c.v)}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onChange?.({ ...cur, [stmt.id]: c.v })}
+                    className={cn(
+                      "rounded px-1 py-0.2 font-bold",
+                      picked === c.v
+                        ? "bg-[#4F46E5] text-white"
+                        : "bg-slate-100 text-slate-700 hover:bg-indigo-100"
+                    )}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {field.type === "PHOTO_UPLOAD" && (
+        <div className="flex h-full w-full items-center justify-center px-1 text-center text-[0.75em] font-semibold text-[#3525CD]">
+          {isPhotoUploadAnswer(value) && value.files.length > 0
+            ? tr(`📷 ${value.files.length} ảnh`, `📷 ${value.files.length} file(s)`)
+            : tr("📷 Nộp ảnh (Phiếu)", "📷 Upload (Sheet)")}
         </div>
       )}
 

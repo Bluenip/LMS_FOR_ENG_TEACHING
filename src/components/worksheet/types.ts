@@ -1,10 +1,12 @@
 import type { FieldPlacement, FieldType, SkillTag } from "@prisma/client";
-import type {
-  AnswerValue,
-  DictationGradeDetail,
-  FieldOption,
-  FieldStyle,
-  GradingOptions,
+import {
+  isPhotoUploadAnswer,
+  isTrueFalseGroupAnswer,
+  type AnswerValue,
+  type DictationGradeDetail,
+  type FieldOption,
+  type FieldStyle,
+  type GradingOptions,
 } from "@/lib/grading/types";
 
 export interface WorksheetPageDTO {
@@ -24,6 +26,13 @@ export interface WorksheetAudioDTO {
   order: number;
 }
 
+export interface WorksheetPassageDTO {
+  id: string;
+  title: string;
+  content: string;
+  order: number;
+}
+
 export interface EditorFieldDTO {
   id: string; // client temp id or Prisma cuid
   isPersisted?: boolean;
@@ -33,6 +42,7 @@ export interface EditorFieldDTO {
   prompt?: string | null;
   explanation?: string | null;
   skillTag?: SkillTag | null;
+  passageId?: string | null;
   audioId?: string | null;
   order: number;
   points: number;
@@ -55,6 +65,7 @@ export interface StudentFieldDTO {
   label: string;
   prompt?: string | null;
   skillTag?: SkillTag | null;
+  passageId?: string | null;
   audioId?: string | null;
   order: number;
   points: number;
@@ -85,6 +96,12 @@ export function isAnswerFilled(value: AnswerValue): boolean {
   if (typeof value === "number") return Number.isFinite(value);
   if (typeof value === "string") return value.trim().length > 0;
   if (Array.isArray(value)) return value.length > 0;
+  if (isPhotoUploadAnswer(value)) {
+    return value.files.length > 0 || Boolean(value.note?.trim());
+  }
+  if (isTrueFalseGroupAnswer(value)) {
+    return Object.values(value).some((v) => typeof v === "boolean");
+  }
   return false;
 }
 
@@ -117,12 +134,28 @@ export function formatRevealedAnswer(
     }
     case "TRUE_FALSE":
       return revealedAnswer.correct === true ? tr("Đúng", "True") : tr("Sai", "False");
+    case "TRUE_FALSE_GROUP": {
+      const correctMap =
+        revealedAnswer.correct && typeof revealedAnswer.correct === "object"
+          ? (revealedAnswer.correct as Record<string, boolean>)
+          : {};
+      const ids =
+        options && options.length > 0
+          ? options.map((o) => o.id)
+          : Object.keys(correctMap).sort();
+      return ids
+        .filter((id) => typeof correctMap[id] === "boolean")
+        .map((id) => `${id}: ${correctMap[id] ? tr("Đúng", "True") : tr("Sai", "False")}`)
+        .join(" · ");
+    }
     case "CHECKBOX":
       return revealedAnswer.checked === true
         ? tr("Có đánh dấu (✓)", "Ticked (✓)")
         : tr("Không đánh dấu", "Not ticked");
     case "ESSAY":
       return String(revealedAnswer.rubric ?? tr("Chấm tự luận", "Essay (manual grading)"));
+    case "PHOTO_UPLOAD":
+      return String(revealedAnswer.rubric ?? "");
     case "DICTATION":
       return String(revealedAnswer.transcript ?? "");
     default:

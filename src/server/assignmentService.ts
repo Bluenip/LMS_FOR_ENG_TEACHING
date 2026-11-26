@@ -171,7 +171,7 @@ export async function getAssignmentSettings(id: string) {
     where: { id },
     include: {
       class: { select: { id: true, name: true, _count: { select: { enrollments: true } } } },
-      worksheet: { select: { id: true, title: true, _count: { select: { fields: true, audios: true } } } },
+      worksheet: { select: { id: true, title: true, subject: true, _count: { select: { fields: true, audios: true } } } },
       _count: { select: { submissions: true } },
     },
   });

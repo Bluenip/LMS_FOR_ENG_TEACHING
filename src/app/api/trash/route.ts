@@ -3,16 +3,20 @@ import { z } from "zod";
 import { handleApiError, requireRole } from "@/lib/permissions";
 import { CONTENT_TRASH_DAYS, deleteForever, listTrash, restoreFromTrash } from "@/server/trashService";
 
+const kindSchema = z.enum(["CLASS", "WORKSHEET", "LESSON", "LESSON_ITEM"]);
+
 const itemSchema = z.object({
-  kind: z.enum(["CLASS", "WORKSHEET", "LESSON", "LESSON_ITEM"]),
+  kind: kindSchema,
   id: z.string().trim().min(1).max(64),
 });
 
-/** Library trash of the signed-in teacher (admins: everyone's). */
-export async function GET() {
+/** Library trash of the signed-in teacher (admins: everyone's). Optional ?kind=CLASS filters by kind. */
+export async function GET(req: Request) {
   try {
     const user = await requireRole(["TEACHER", "ADMIN"]);
-    return NextResponse.json({ items: await listTrash(user), retentionDays: CONTENT_TRASH_DAYS });
+    const kindRaw = new URL(req.url).searchParams.get("kind");
+    const kind = kindRaw ? kindSchema.parse(kindRaw) : undefined;
+    return NextResponse.json({ items: await listTrash(user, kind), retentionDays: CONTENT_TRASH_DAYS });
   } catch (error) {
     return handleApiError(error);
   }

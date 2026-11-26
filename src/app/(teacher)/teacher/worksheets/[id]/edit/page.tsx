@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { getWorksheetForTeacher } from "@/server/worksheetService";
 import { WorksheetEditor } from "@/components/worksheet/WorksheetEditor";
-import type { EditorFieldDTO } from "@/components/worksheet/types";
+import type { EditorFieldDTO, WorksheetPassageDTO } from "@/components/worksheet/types";
 import type { FieldOption, FieldStyle, GradingOptions } from "@/lib/grading/types";
 
 export default async function WorksheetEditPage({
@@ -29,6 +29,7 @@ export default async function WorksheetEditPage({
       prompt: f.prompt,
       explanation: f.explanation,
       skillTag: f.skillTag,
+      passageId: f.passageId,
       audioId: f.audioId,
       order: f.order,
       points: f.points,
@@ -48,7 +49,9 @@ export default async function WorksheetEditPage({
         initialWorksheet={{
           id: ws.id,
           title: ws.title,
+          subject: ws.subject,
           instructions: ws.instructions,
+          passages: Array.isArray(ws.passages) ? (ws.passages as unknown as WorksheetPassageDTO[]) : [],
           pdfFileKey: ws.pdfFileKey,
           pageCount: ws.pageCount,
           isShared: ws.isShared,

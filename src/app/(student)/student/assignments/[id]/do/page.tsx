@@ -23,7 +23,12 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import type { ProctorEventType, ProctorMode, ViolationAction } from "@prisma/client";
+import type {
+  ProctorEventType,
+  ProctorMode,
+  ViolationAction,
+  WorksheetSubject,
+} from "@prisma/client";
 import type { AnswerValue, DictationGradeDetail } from "@/lib/grading/types";
 import {
   cn,
@@ -55,6 +60,7 @@ import {
   type StudentFieldDTO,
   type WorksheetAudioDTO,
   type WorksheetPageDTO,
+  type WorksheetPassageDTO,
 } from "@/components/worksheet/types";
 
 interface StudentAssignmentPayload {
@@ -86,7 +92,9 @@ interface StudentAssignmentPayload {
     worksheet: {
       id: string;
       title: string;
+      subject?: WorksheetSubject;
       instructions: string | null;
+      passages?: WorksheetPassageDTO[];
       pdfFileKey: string | null;
       pageCount: number;
       questionCount: number;
@@ -1040,6 +1048,7 @@ export default function StudentDoAssignmentPage() {
             )}
             <FocusQuestionRunner
               allFields={allFields}
+              passages={assignment.worksheet.passages ?? []}
               answers={answers}
               onChange={handleAnswerChange}
               onOpenSubmit={() => setConfirmSubmitOpen(true)}
@@ -1139,6 +1148,7 @@ export default function StudentDoAssignmentPage() {
             <AnswerSheetPanel
               wide={assignment.worksheet.pages.length === 0}
               allFields={allFields}
+              passages={assignment.worksheet.passages ?? []}
               answers={answers}
               onChange={handleAnswerChange}
               onJumpToField={(field) => {

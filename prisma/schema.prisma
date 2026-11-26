@@ -37,10 +37,26 @@ enum FieldType {
   MULTIPLE_CHOICE
   MULTI_SELECT
   TRUE_FALSE
+  TRUE_FALSE_GROUP
   DROPDOWN
   CHECKBOX
   ESSAY
   DICTATION
+  PHOTO_UPLOAD
+}
+
+enum WorksheetSubject {
+  ENGLISH
+  MATH
+  PHYSICS
+  CHEMISTRY
+  BIOLOGY
+  LITERATURE
+  HISTORY
+  GEOGRAPHY
+  CIVICS
+  INFORMATICS
+  GENERAL
 }
 
 enum SkillTag {
@@ -347,20 +363,22 @@ model LessonItem {
 }
 
 model Worksheet {
-  id                    String    @id @default(cuid())
+  id                    String           @id @default(cuid())
   ownerId               String
   title                 String
+  subject               WorksheetSubject @default(GENERAL)
   instructions          String?
+  passages              Json?
   pdfFileKey            String?
-  pageCount             Int       @default(0)
-  isShared              Boolean   @default(false) // shared with other teachers in the LMS
+  pageCount             Int              @default(0)
+  isShared              Boolean          @default(false) // shared with other teachers in the LMS
   lastDriveBackupAt     DateTime?
   lastDriveBackupFileId String?
   /// Trash (Phase 14): set when moved to the trash; purged after 30 days. Source: "USER" | "DRIVE"
   deletedAt             DateTime?
   deletedSource         String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
 
   owner       User             @relation("WorksheetOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   pages       WorksheetPage[]
@@ -370,6 +388,7 @@ model Worksheet {
   driveFiles  DriveFile[]
 
   @@index([ownerId])
+  @@index([subject])
 }
 
 model WorksheetPage {
@@ -393,6 +412,7 @@ model Field {
   prompt      String?
   explanation String?
   skillTag    SkillTag?
+  passageId   String?
   order       Int
   points      Float          @default(1)
 

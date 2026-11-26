@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { AppError, handleApiError, requireRole } from "@/lib/permissions";
+import { isValidSubject } from "@/lib/subjects";
 import { importWorksheetFile } from "@/server/worksheetTransferService";
 
 export async function POST(req: Request) {
@@ -17,6 +18,7 @@ export async function POST(req: Request) {
 
     const titleRaw = formData.get("title");
     const pointsRaw = formData.get("defaultPoints");
+    const subjectRaw = formData.get("subject");
     const defaultPoints =
       typeof pointsRaw === "string" && pointsRaw.trim() !== ""
         ? Number(pointsRaw)
@@ -26,6 +28,7 @@ export async function POST(req: Request) {
     const result = await importWorksheetFile(user.id, buffer, file.name, {
       title: typeof titleRaw === "string" ? titleRaw : undefined,
       defaultPoints: Number.isFinite(defaultPoints) ? defaultPoints : undefined,
+      subject: isValidSubject(subjectRaw) ? subjectRaw : undefined,
     });
     return NextResponse.json(result, { status: 201 });
   } catch (error) {

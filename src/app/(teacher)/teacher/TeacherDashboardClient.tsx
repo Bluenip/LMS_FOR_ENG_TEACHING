@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -16,9 +16,12 @@ import {
   PieChart,
   Plus,
   Radio,
+  RotateCcw,
+  Trash2,
   Users,
 } from "lucide-react";
-import { formatDateTime } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
+import { TRASH_DAYS } from "@/lib/trash";
 import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,12 +29,26 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import type { WorksheetSubject } from "@prisma/client";
+import { SubjectPicker } from "@/components/worksheet/SubjectPicker";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+interface TrashedClassItem {
+  id: string;
+  name: string;
+  description: string | null;
+  studentCount: number;
+  assignmentCount: number;
+  teacherName?: string | null;
+  deletedAt: string;
+  daysLeft: number;
+}
 
 interface TeacherDashboardClientProps {
   teacherName: string;
@@ -54,6 +71,7 @@ interface TeacherDashboardClientProps {
     /** set when the class belongs to another teacher (admin view) */
     teacherName?: string | null;
   }>;
+  trashedClasses: TrashedClassItem[];
   assignments: Array<{
     id: string;
     title: string;
@@ -79,12 +97,72 @@ export function TeacherDashboardClient({
   isAdmin = false,
   stats,
   classes,
+  trashedClasses,
   assignments,
 }: TeacherDashboardClientProps) {
-  const { m: vi, tr } = useI18n();
+  const { m: vi, tr, locale } = useI18n();
   const router = useRouter();
   const [createClassOpen, setCreateClassOpen] = useState(false);
   const [createWsOpen, setCreateWsOpen] = useState(false);
+  const [classTab, setClassTab] = useState<"active" | "trash">("active");
+  const [trashedList, setTrashedList] = useState<TrashedClassItem[]>(trashedClasses);
+  const [trashBusyId, setTrashBusyId] = useState<string | null>(null);
+  const [confirmPermanentDelete, setConfirmPermanentDelete] = useState<TrashedClassItem | null>(null);
+
+  useEffect(() => {
+    setTrashedList(trashedClasses);
+  }, [trashedClasses]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const tab = new URLSearchParams(window.location.search).get("tab");
+      if (tab === "trash") setClassTab("trash");
+    }
+  }, []);
+
+  const handleRestoreClass = async (cls: TrashedClassItem) => {
+    setTrashBusyId(cls.id);
+    try {
+      const res = await fetch("/api/trash", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "CLASS", id: cls.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? tr("Không khôi phục được lớp", "Could not restore class"));
+      setTrashedList((prev) => prev.filter((c) => c.id !== cls.id));
+      toast.success(tr(`Đã khôi phục lớp “${cls.name}”.`, `Restored class “${cls.name}”.`));
+      setClassTab("active");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : vi.common.errorGeneric);
+    } finally {
+      setTrashBusyId(null);
+    }
+  };
+
+  const handleDeleteClassForever = async () => {
+    if (!confirmPermanentDelete) return;
+    const cls = confirmPermanentDelete;
+    setTrashBusyId(cls.id);
+    try {
+      const res = await fetch("/api/trash", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "CLASS", id: cls.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? tr("Không xoá được lớp", "Could not delete class"));
+      setTrashedList((prev) => prev.filter((c) => c.id !== cls.id));
+      setConfirmPermanentDelete(null);
+      toast.success(tr(`Đã xoá vĩnh viễn lớp “${cls.name}”.`, `Deleted class “${cls.name}” forever.`));
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : vi.common.errorGeneric);
+    } finally {
+      setTrashBusyId(null);
+    }
+  };
 
   const [className, setClassName] = useState("");
   const [classDesc, setClassDesc] = useState("");
@@ -92,6 +170,7 @@ export function TeacherDashboardClient({
   const [submitting, setSubmitting] = useState(false);
 
   const [wsTitle, setWsTitle] = useState("");
+  const [wsSubject, setWsSubject] = useState<WorksheetSubject | null>(null);
   const [wsInstructions, setWsInstructions] = useState("");
 
   const handleCreateClass = async (e: React.FormEvent) => {
@@ -125,6 +204,10 @@ export function TeacherDashboardClient({
 
   const handleCreateWorksheet = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!wsSubject) {
+      toast.error(tr("Vui lòng chọn môn học cho worksheet.", "Please select a subject for this worksheet."));
+      return;
+    }
     setSubmitting(true);
     try {
       const res = await fetch("/api/worksheets", {
@@ -132,6 +215,7 @@ export function TeacherDashboardClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: wsTitle,
+          subject: wsSubject,
           instructions: wsInstructions || null,
         }),
       });
@@ -139,6 +223,9 @@ export function TeacherDashboardClient({
       if (!res.ok) throw new Error(json.error ?? tr("Tạo worksheet thất bại", "Could not create the worksheet"));
       toast.success(tr("Đã tạo Worksheet! Đang mở trình biên tập…", "Worksheet created! Opening the editor…"));
       setCreateWsOpen(false);
+      setWsTitle("");
+      setWsSubject(null);
+      setWsInstructions("");
       router.push(`/teacher/worksheets/${json.worksheet.id}/edit`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : vi.common.errorGeneric);
@@ -230,9 +317,9 @@ export function TeacherDashboardClient({
         </div>
       </div>
 
-      {/* My Classes Grid */}
+      {/* My Classes Grid & Class Trash */}
       <section className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <h2 className="text-xl font-bold text-[#0B1C30]">
               {isAdmin ? tr("Tất cả lớp học", "All classes") : vi.classes.title}
@@ -242,9 +329,127 @@ export function TeacherDashboardClient({
               {isAdmin && tr(" · toàn hệ thống", " · whole system")}
             </Badge>
           </div>
+
+          <div
+            role="tablist"
+            aria-label={tr("Chế độ xem lớp học", "Classes view")}
+            className="inline-flex items-center gap-1 rounded-xl border border-slate-200/80 bg-[#EFF4FF] p-1"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={classTab === "active"}
+              data-testid="classes-tab-active"
+              onClick={() => setClassTab("active")}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition",
+                classTab === "active"
+                  ? "bg-white text-[#3525CD] shadow-sm"
+                  : "text-[#464555] hover:text-[#0B1C30]"
+              )}
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              {tr("Lớp đang dạy", "Active classes")} ({classes.length})
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={classTab === "trash"}
+              data-testid="classes-tab-trash"
+              onClick={() => setClassTab("trash")}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition",
+                classTab === "trash"
+                  ? "bg-white text-[#BA1A1A] shadow-sm"
+                  : "text-[#464555] hover:text-[#0B1C30]"
+              )}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {tr("Thùng rác lớp học", "Class trash")}
+              {trashedList.length > 0 && (
+                <span className="rounded-full bg-[#FFEDD5] px-1.5 py-0.5 text-[10px] font-bold text-[#EA580C]">
+                  {trashedList.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
-        {classes.length === 0 ? (
+        {classTab === "trash" ? (
+          <div className="space-y-3" data-testid="class-trash-section">
+            <p className="text-xs text-[#464555]">
+              {tr(
+                `Các lớp đã xoá được giữ trong ${TRASH_DAYS} ngày rồi tự xoá hẳn. Khi khôi phục lớp, toàn bộ bài tập đã giao, bài nộp của học sinh và phiếu bài tập liên quan sẽ quay lại nguyên vẹn.`,
+                `Deleted classes are kept for ${TRASH_DAYS} days before permanent removal. Restoring brings back its assignments, student submissions, and linked worksheets intact.`
+              )}
+            </p>
+            {trashedList.length === 0 ? (
+              <div className="stitch-card space-y-2 p-10 text-center">
+                <Trash2 className="mx-auto h-9 w-9 text-indigo-300" />
+                <p className="text-sm text-slate-500">
+                  {tr("Thùng rác lớp học đang trống.", "No deleted classes in the trash.")}
+                </p>
+              </div>
+            ) : (
+              <ul className="stitch-card divide-y divide-slate-100" data-testid="class-trash-list">
+                {trashedList.map((cls) => (
+                  <li
+                    key={cls.id}
+                    className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-[#BA1A1A]">
+                        <Users className="h-5 w-5" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-[#0B1C30]">{cls.name}</p>
+                        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[#464555]">
+                          {isAdmin && cls.teacherName && <span>GV: {cls.teacherName} ·</span>}
+                          <span>
+                            {cls.studentCount} {tr("học sinh", "students")} · {cls.assignmentCount}{" "}
+                            {tr("bài tập", "assignments")}
+                          </span>
+                          <span>
+                            · {tr("Xoá lúc", "Deleted")} {formatDateTime(cls.deletedAt, locale)}
+                          </span>
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          <Badge variant={cls.daysLeft <= 3 ? "danger" : "neutral"}>
+                            {tr(`Còn ${cls.daysLeft} ngày`, `${cls.daysLeft} day(s) left`)}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex shrink-0 gap-2 sm:justify-end">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={trashBusyId === cls.id}
+                        onClick={() => void handleRestoreClass(cls)}
+                        data-testid={`class-trash-restore-${cls.id}`}
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                        {tr("Khôi phục lớp", "Restore class")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-[#BA1A1A] hover:bg-red-50"
+                        disabled={trashBusyId === cls.id}
+                        onClick={() => setConfirmPermanentDelete(cls)}
+                        data-testid={`class-trash-delete-${cls.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        {tr("Xoá vĩnh viễn", "Delete forever")}
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : classes.length === 0 ? (
           <div className="stitch-card p-10 text-center">
             <p className="text-sm text-slate-500">{tr("Bạn chưa có lớp học nào.", "You do not have any classes yet.")}</p>
             <Button className="mt-3" onClick={() => setCreateClassOpen(true)}>
@@ -458,19 +663,33 @@ export function TeacherDashboardClient({
       </Dialog>
 
       {/* Create Worksheet Dialog */}
-      <Dialog open={createWsOpen} onOpenChange={setCreateWsOpen}>
-        <DialogContent>
+      <Dialog
+        open={createWsOpen}
+        onOpenChange={(o) => {
+          setCreateWsOpen(o);
+          if (!o) setWsSubject(null);
+        }}
+      >
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{vi.worksheets.createWorksheet}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCreateWorksheet} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>{tr("Môn học *", "Subject *")}</Label>
+              <SubjectPicker value={wsSubject} onChange={setWsSubject} />
+            </div>
             <div className="space-y-1.5">
               <Label>{vi.worksheets.worksheetTitle}</Label>
               <Input
                 required
                 value={wsTitle}
                 onChange={(e) => setWsTitle(e.target.value)}
-                placeholder="VD: Unit 8: Wildlife Conservation - Practice Test"
+                placeholder={
+                  wsSubject === "MATH"
+                    ? "VD: Đề kiểm tra 15 phút Hàm số bậc hai"
+                    : "VD: Unit 8: Wildlife Conservation - Practice Test"
+                }
               />
             </div>
             <div className="space-y-1.5">
@@ -486,11 +705,41 @@ export function TeacherDashboardClient({
               <Button type="button" variant="outline" onClick={() => setCreateWsOpen(false)}>
                 {tr("Huỷ", "Cancel")}
               </Button>
-              <Button type="submit" variant="accent" disabled={submitting}>
+              <Button type="submit" variant="accent" disabled={submitting || !wsSubject}>
                 {tr("Tạo & Mở Editor", "Create & open editor")}
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Permanent Delete Class Dialog */}
+      <Dialog
+        open={Boolean(confirmPermanentDelete)}
+        onOpenChange={(o) => !o && setConfirmPermanentDelete(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{tr("Xoá vĩnh viễn lớp học?", "Delete class forever?")}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-[#464555]">
+            {tr(
+              `Lớp “${confirmPermanentDelete?.name ?? ""}” sẽ bị xoá vĩnh viễn cùng toàn bộ bài đã giao, bài nộp, bảng tin và danh sách ghi danh, không thể khôi phục lại. Phiếu bài tập và bài giảng trong kho của bạn vẫn được giữ nguyên.`,
+              `Class “${confirmPermanentDelete?.name ?? ""}” will be permanently removed along with all its assignments, submissions, posts and roster. Your library worksheets and lessons stay untouched.`
+            )}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmPermanentDelete(null)}>
+              {tr("Huỷ", "Cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={trashBusyId !== null}
+              onClick={() => void handleDeleteClassForever()}
+            >
+              {tr("Xoá vĩnh viễn", "Delete forever")}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

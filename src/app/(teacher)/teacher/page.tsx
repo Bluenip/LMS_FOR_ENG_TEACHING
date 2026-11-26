@@ -1,7 +1,10 @@
 import { requireLayoutUser } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
+import { TRASH_DAYS } from "@/lib/trash";
 import { TeacherDashboardClient } from "./TeacherDashboardClient";
 import { getI18n } from "@/lib/i18n/server";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export default async function TeacherDashboardPage() {
   const { tr } = await getI18n();
@@ -10,20 +13,38 @@ export default async function TeacherDashboardPage() {
   const isAdmin = user.role === "ADMIN";
   // classes in the trash are hidden everywhere until restored
   const classScope = isAdmin ? { deletedAt: null } : { teacherId: user.id, deletedAt: null };
+  const trashedScope = isAdmin
+    ? { deletedAt: { not: null } }
+    : { teacherId: user.id, deletedAt: { not: null } };
 
-  const classes = await prisma.class.findMany({
-    where: classScope,
-    include: {
-      teacher: { select: { id: true, name: true } },
-      _count: {
-        select: {
-          enrollments: { where: { status: "ACTIVE" } },
-          assignments: true,
+  const [classes, trashedClasses] = await Promise.all([
+    prisma.class.findMany({
+      where: classScope,
+      include: {
+        teacher: { select: { id: true, name: true } },
+        _count: {
+          select: {
+            enrollments: { where: { status: "ACTIVE" } },
+            assignments: true,
+          },
         },
       },
-    },
-    orderBy: [{ archived: "asc" }, { createdAt: "desc" }],
-  });
+      orderBy: [{ archived: "asc" }, { createdAt: "desc" }],
+    }),
+    prisma.class.findMany({
+      where: trashedScope,
+      include: {
+        teacher: { select: { id: true, name: true } },
+        _count: {
+          select: {
+            enrollments: { where: { status: "ACTIVE" } },
+            assignments: true,
+          },
+        },
+      },
+      orderBy: { deletedAt: "desc" },
+    }),
+  ]);
 
   const assignments = await prisma.assignment.findMany({
     where: { class: classScope },
@@ -84,6 +105,19 @@ export default async function TeacherDashboardPage() {
         studentCount: c._count.enrollments,
         assignmentCount: c._count.assignments,
         teacherName: c.teacherId !== user.id ? c.teacher.name : null,
+      }))}
+      trashedClasses={trashedClasses.map((c) => ({
+        id: c.id,
+        name: c.name,
+        description: c.description,
+        studentCount: c._count.enrollments,
+        assignmentCount: c._count.assignments,
+        teacherName: c.teacherId !== user.id ? c.teacher.name : null,
+        deletedAt: c.deletedAt!.toISOString(),
+        daysLeft: Math.max(
+          0,
+          Math.ceil((c.deletedAt!.getTime() + TRASH_DAYS * DAY_MS - Date.now()) / DAY_MS)
+        ),
       }))}
       assignments={assignments.map((a) => {
         const uniqueSubmitted = new Set(

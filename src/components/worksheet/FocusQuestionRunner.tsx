@@ -20,10 +20,15 @@ import {
   isAnswerFilled,
   type StudentFieldDTO,
   type WorksheetAudioDTO,
+  type WorksheetPassageDTO,
 } from "./types";
 import { LimitedAudioPlayer } from "./LimitedAudioPlayer";
 import { DictationDiffView } from "./DictationDiffView";
 import { PromptText } from "./PromptText";
+import { MathText } from "./MathText";
+import { PassageCard } from "./PassageCard";
+import { TrueFalseGroupInput } from "./TrueFalseGroupInput";
+import { PhotoUploadInput } from "./PhotoUploadInput";
 
 interface FocusQuestionGroup {
   key: string;
@@ -83,6 +88,7 @@ function buildQuestionGroups(fields: StudentFieldDTO[]): FocusQuestionGroup[] {
 
 interface FocusQuestionRunnerProps {
   allFields: StudentFieldDTO[];
+  passages?: WorksheetPassageDTO[];
   answers: Record<string, AnswerValue>;
   onChange?: (fieldId: string, value: AnswerValue) => void;
   onOpenSubmit?: () => void;
@@ -110,6 +116,7 @@ interface FocusQuestionRunnerProps {
 
 export function FocusQuestionRunner({
   allFields,
+  passages = [],
   answers,
   onChange,
   onOpenSubmit,
@@ -176,6 +183,9 @@ export function FocusQuestionRunner({
   const linkedAudio = singleField.audioId
     ? audios.find((a) => a.id === singleField.audioId) ?? null
     : null;
+  const linkedPassage = singleField.passageId
+    ? passages.find((p) => p.id === singleField.passageId) ?? null
+    : null;
 
   // Render inline blanks inside a sentence for single-blank or multi-blank TEXT questions
   const canRenderInlineSentence =
@@ -195,7 +205,7 @@ export function FocusQuestionRunner({
         {parts.map((part, idx) => {
           const isBlank = part === "________" || /^____ \[[^\]]+\] ____$/.test(part);
           if (!isBlank) {
-            return <span key={idx}>{part}</span>;
+            return <MathText key={idx} text={part} />;
           }
           const field = currentGroup.fields[blankIdx];
           const myBlankIdx = blankIdx;
@@ -356,6 +366,9 @@ export function FocusQuestionRunner({
           />
         )}
 
+        {/* Linked Shared Reading Passage if attached */}
+        {linkedPassage && <PassageCard passage={linkedPassage} />}
+
         {/* Question Body */}
         {canRenderInlineSentence ? (
           <div className="space-y-4">
@@ -399,7 +412,9 @@ export function FocusQuestionRunner({
                       >
                         {opt.id}
                       </span>
-                      <span>{opt.text && opt.text !== opt.id ? opt.text : opt.id}</span>
+                      <span>
+                        {opt.text && opt.text !== opt.id ? <MathText text={opt.text} /> : opt.id}
+                      </span>
                     </button>
                   );
                 })}
@@ -434,7 +449,14 @@ export function FocusQuestionRunner({
                       <input type="checkbox" readOnly checked={selected} className="accent-[#4F46E5]" />
                       <span>
                         {opt.id}
-                        {opt.text && opt.text !== opt.id ? `. ${opt.text}` : ""}
+                        {opt.text && opt.text !== opt.id ? (
+                          <>
+                            {". "}
+                            <MathText text={opt.text} />
+                          </>
+                        ) : (
+                          ""
+                        )}
                       </span>
                     </button>
                   );
@@ -464,6 +486,31 @@ export function FocusQuestionRunner({
                   </button>
                 ))}
               </div>
+            )}
+
+            {singleField.type === "TRUE_FALSE_GROUP" && (
+              <TrueFalseGroupInput
+                fieldId={singleField.id}
+                options={singleField.options}
+                value={answers[singleField.id]}
+                onChange={(next) => onChange?.(singleField.id, next)}
+                disabled={disabled}
+                revealResult={revealResult}
+                revealKey={revealKey}
+                revealedCorrect={
+                  (singleField.revealedAnswer?.correct as Record<string, boolean> | undefined) ?? null
+                }
+              />
+            )}
+
+            {singleField.type === "PHOTO_UPLOAD" && (
+              <PhotoUploadInput
+                submissionId={submissionId}
+                fieldId={singleField.id}
+                value={answers[singleField.id]}
+                onChange={(next) => onChange?.(singleField.id, next)}
+                disabled={disabled}
+              />
             )}
 
             {singleField.type === "DROPDOWN" && (
@@ -636,7 +683,11 @@ export function FocusQuestionRunner({
                       {tr("Transcript chuẩn:", "Expected transcript:")} {revealed}
                     </p>
                   )}
-                  {f.explanation && <p className="text-slate-600">{f.explanation}</p>}
+                  {f.explanation && (
+                    <p className="text-slate-600">
+                      <MathText text={f.explanation} />
+                    </p>
+                  )}
                   {g?.teacherNote && (
                     <p className="font-medium text-amber-700">
                       {vi.assignments.do.teacherNote}: {g.teacherNote}

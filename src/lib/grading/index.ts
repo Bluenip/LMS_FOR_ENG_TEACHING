@@ -11,7 +11,9 @@ import type {
   SubmissionGradeSummary,
   TextAnswerKey,
   TrueFalseAnswerKey,
+  TrueFalseGroupAnswerKey,
 } from "./types";
+import { isManualFieldType, isPhotoUploadAnswer } from "./types";
 import { gradeDictationText } from "./dictation";
 
 export * from "./types";
@@ -57,7 +59,7 @@ function roundScore(val: number): number {
 export function gradeField(field: FieldForGrading, value: AnswerValue): GradeResult {
   const maxPoints = Number.isFinite(field.points) && field.points >= 0 ? field.points : 0;
 
-  if (field.type === "ESSAY") {
+  if (isManualFieldType(field.type)) {
     return { isCorrect: null, score: null };
   }
 
@@ -189,6 +191,53 @@ export function gradeField(field: FieldForGrading, value: AnswerValue): GradeRes
       }
       const matched = parsed === tfKey.correct;
       return { isCorrect: matched, score: matched ? roundScore(maxPoints) : 0 };
+    }
+
+    case "TRUE_FALSE_GROUP": {
+      const tfgKey = key as unknown as TrueFalseGroupAnswerKey;
+      const correctMap =
+        tfgKey.correct && typeof tfgKey.correct === "object" && !Array.isArray(tfgKey.correct)
+          ? tfgKey.correct
+          : {};
+      const entries = Object.entries(correctMap).filter(([, v]) => typeof v === "boolean");
+      if (entries.length === 0) {
+        return { isCorrect: false, score: 0 };
+      }
+
+      const studentMap =
+        value && typeof value === "object" && !Array.isArray(value) && !isPhotoUploadAnswer(value)
+          ? (value as Record<string, unknown>)
+          : {};
+
+      let matched = 0;
+      for (const [stmtId, expected] of entries) {
+        if (studentMap[stmtId] === expected) matched++;
+      }
+
+      const total = entries.length;
+      const allCorrect = matched === total;
+      const mode = field.gradingOpts?.tfScoring ?? "THPT_2025";
+
+      let ratio = 0;
+      if (mode === "ALL_OR_NOTHING") {
+        ratio = allCorrect ? 1 : 0;
+      } else if (mode === "EQUAL") {
+        ratio = matched / total;
+      } else {
+        // THPT 2025 progressive scoring: only 4/4 earns full 100%; partial right earns 10%/25%/50%
+        if (total === 4) {
+          const table = [0, 0.1, 0.25, 0.5, 1] as const;
+          ratio = table[matched] ?? 0;
+        } else {
+          ratio = allCorrect
+            ? 1
+            : matched === 0
+              ? 0
+              : Math.min(0.5, Math.round((matched / total) * 50) / 100);
+        }
+      }
+
+      return { isCorrect: allCorrect, score: roundScore(maxPoints * ratio) };
     }
 
     case "CHECKBOX": {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { CheckCircle2, ChevronUp, ClipboardList, ClipboardX, Flag, XCircle } from "lucide-react";
 import type { AnswerValue, DictationGradeDetail } from "@/lib/grading/types";
 import { cn, compareQuestionLabels } from "@/lib/utils";
@@ -11,13 +11,19 @@ import {
   isAnswerFilled,
   type StudentFieldDTO,
   type WorksheetAudioDTO,
+  type WorksheetPassageDTO,
 } from "./types";
 import { LimitedAudioPlayer } from "./LimitedAudioPlayer";
 import { DictationDiffView } from "./DictationDiffView";
 import { PromptText } from "./PromptText";
+import { MathText } from "./MathText";
+import { PassageCard } from "./PassageCard";
+import { TrueFalseGroupInput } from "./TrueFalseGroupInput";
+import { PhotoUploadInput } from "./PhotoUploadInput";
 
 interface AnswerSheetPanelProps {
   allFields: StudentFieldDTO[];
+  passages?: WorksheetPassageDTO[];
   answers: Record<string, AnswerValue>;
   onChange?: (fieldId: string, value: AnswerValue) => void;
   onJumpToField?: (field: StudentFieldDTO) => void;
@@ -32,6 +38,7 @@ interface AnswerSheetPanelProps {
   audioBlockPause?: boolean;
   audioBlockSeek?: boolean;
   audioPreviewMode?: boolean;
+  previewOnly?: boolean;
   /** Worksheet without PDF: show the sheet inline at full width (no sidebar / bottom sheet). */
   wide?: boolean;
   onAudioPlayCountChange?: (audioId: string, nextPlaysUsed: number) => void;
@@ -48,6 +55,7 @@ interface AnswerSheetPanelProps {
 
 export function AnswerSheetPanel({
   allFields,
+  passages = [],
   answers,
   onChange,
   onJumpToField,
@@ -62,6 +70,7 @@ export function AnswerSheetPanel({
   audioBlockPause = false,
   audioBlockSeek = false,
   audioPreviewMode = false,
+  previewOnly = false,
   wide = false,
   onAudioPlayCountChange,
   gradeByFieldId = {},
@@ -196,7 +205,7 @@ export function AnswerSheetPanel({
             {tr("Tất cả câu hỏi nằm trực tiếp trên trang PDF. Nhấn vào số câu ở trên để cuộn nhanh tới ô điền.", "All questions are directly on the PDF page. Click a question number above to jump to its box.")}
           </p>
         ) : (
-          answerSheetFields.map((field) => {
+          answerSheetFields.map((field, idx) => {
             const val = answers[field.id];
             const grade = gradeByFieldId[field.id];
             const isFlagged = flaggedIds.has(field.id);
@@ -204,12 +213,18 @@ export function AnswerSheetPanel({
               revealKey && field.revealedAnswer
                 ? formatRevealedAnswer(field.type, field.revealedAnswer, field.options, tr)
                 : "";
+            const prevPassageId = idx > 0 ? answerSheetFields[idx - 1]?.passageId : null;
+            const matchedPassage =
+              field.passageId && field.passageId !== prevPassageId
+                ? passages.find((p) => p.id === field.passageId) ?? null
+                : null;
 
             return (
-              <div
-                key={field.id}
-                id={`sheet-field-${field.id}`}
-                data-sheet-field-id={field.id}
+              <Fragment key={field.id}>
+                {matchedPassage && <PassageCard passage={matchedPassage} />}
+                <div
+                  id={`sheet-field-${field.id}`}
+                  data-sheet-field-id={field.id}
                 className={cn(
                   "rounded-xl border p-3 transition",
                   revealResult && grade?.isCorrect === true
@@ -317,7 +332,9 @@ export function AnswerSheetPanel({
                               {opt.id}
                             </span>
                             {opt.text && opt.text !== opt.id && (
-                              <span className="truncate font-normal">{opt.text}</span>
+                              <span className="min-w-0 font-normal break-words">
+                                <MathText text={opt.text} />
+                              </span>
                             )}
                           </button>
                         );
@@ -356,7 +373,14 @@ export function AnswerSheetPanel({
                             />
                             <span>
                               {opt.id}
-                              {opt.text && opt.text !== opt.id ? `. ${opt.text}` : ""}
+                              {opt.text && opt.text !== opt.id ? (
+                                <>
+                                  {". "}
+                                  <MathText text={opt.text} />
+                                </>
+                              ) : (
+                                ""
+                              )}
                             </span>
                           </button>
                         );
@@ -386,6 +410,32 @@ export function AnswerSheetPanel({
                         </button>
                       ))}
                     </div>
+                  )}
+
+                  {field.type === "TRUE_FALSE_GROUP" && (
+                    <TrueFalseGroupInput
+                      fieldId={field.id}
+                      options={field.options}
+                      value={val}
+                      onChange={(next) => onChange?.(field.id, next)}
+                      disabled={disabled}
+                      revealResult={revealResult}
+                      revealKey={revealKey}
+                      revealedCorrect={
+                        (field.revealedAnswer?.correct as Record<string, boolean> | undefined) ?? null
+                      }
+                    />
+                  )}
+
+                  {field.type === "PHOTO_UPLOAD" && (
+                    <PhotoUploadInput
+                      submissionId={audioPreviewMode ? null : submissionId}
+                      fieldId={field.id}
+                      value={val}
+                      onChange={(next) => onChange?.(field.id, next)}
+                      disabled={disabled}
+                      previewOnly={previewOnly || audioPreviewMode}
+                    />
                   )}
 
                   {field.type === "DROPDOWN" && (
@@ -527,7 +577,9 @@ export function AnswerSheetPanel({
                       </p>
                     )}
                     {field.explanation && (
-                      <p className="text-slate-600">{tr("Giải thích:", "Explanation:")} {field.explanation}</p>
+                      <p className="text-slate-600">
+                        {tr("Giải thích:", "Explanation:")} <MathText text={field.explanation} />
+                      </p>
                     )}
                     {grade?.teacherNote && (
                       <p className="font-medium text-amber-700">
@@ -536,7 +588,8 @@ export function AnswerSheetPanel({
                     )}
                   </div>
                 )}
-              </div>
+                </div>
+              </Fragment>
             );
           })
         )}

@@ -10,6 +10,7 @@ import {
   ShowResultMode,
   SkillTag,
   ViolationAction,
+  WorksheetSubject,
 } from "@prisma/client";
 
 // ===== Auth =====
@@ -146,14 +147,24 @@ export const createCommentSchema = z.object({
 });
 
 // ===== Worksheet & Fields =====
+export const worksheetPassageSchema = z.object({
+  id: z.string().trim().min(1).max(64),
+  title: z.string().trim().max(200),
+  content: z.string().max(30000),
+  order: z.number().int().min(0).max(500).default(0),
+});
+
 export const createWorksheetSchema = z.object({
   title: z.string().trim().min(2, "Tiêu đề tối thiểu 2 ký tự").max(200),
+  subject: z.nativeEnum(WorksheetSubject).default("GENERAL"),
   instructions: z.string().trim().max(3000).optional().nullable(),
 });
 
 export const updateWorksheetSchema = z.object({
   title: z.string().trim().min(2).max(200).optional(),
+  subject: z.nativeEnum(WorksheetSubject).optional(),
   instructions: z.string().trim().max(3000).optional().nullable(),
+  passages: z.array(worksheetPassageSchema).max(30).optional().nullable(),
   isShared: z.boolean().optional(),
 });
 
@@ -179,6 +190,7 @@ export const gradingOptsSchema = z
     ignoreExtraSpaces: z.boolean().optional(),
     partialCredit: z.boolean().optional(),
     scoring: z.enum(["WORD_ACCURACY", "ALL_OR_NOTHING"]).optional(),
+    tfScoring: z.enum(["THPT_2025", "ALL_OR_NOTHING", "EQUAL"]).optional(),
   })
   .optional()
   .nullable();
@@ -192,6 +204,7 @@ export const fieldItemSchema = z
     prompt: z.string().trim().max(2000).optional().nullable(),
     explanation: z.string().trim().max(2000).optional().nullable(),
     skillTag: z.nativeEnum(SkillTag).optional().nullable(),
+    passageId: z.string().trim().min(1).max(64).optional().nullable(),
     audioId: z.string().trim().min(1).max(64).optional().nullable(),
     order: z.number().int().min(0),
     points: z.number().min(0).max(1000).default(1),
@@ -280,13 +293,39 @@ export const startSubmissionSchema = z.object({
   attemptToken: z.string().max(128).optional(),
 });
 
+const uploadedAnswerFileSchema = z.object({
+  key: z.string().trim().min(1).max(300),
+  name: z.string().trim().min(1).max(200),
+  mimeType: z.string().trim().min(1).max(100),
+  sizeBytes: z.number().int().min(0).max(20 * 1024 * 1024).optional(),
+});
+
+const photoUploadAnswerSchema = z
+  .object({
+    files: z.array(uploadedAnswerFileSchema).max(15),
+    note: z.string().max(5000).optional(),
+  })
+  .strict();
+
+const trueFalseGroupAnswerSchema = z.record(z.string().min(1).max(32), z.boolean().nullable());
+
+export const answerValueSchema = z.union([
+  z.string(),
+  z.array(z.string()),
+  z.boolean(),
+  z.number(),
+  photoUploadAnswerSchema,
+  trueFalseGroupAnswerSchema,
+  z.null(),
+]);
+
 export const autosaveAnswersSchema = z.object({
   attemptVersion: z.number().int().min(0),
   attemptToken: z.string().max(128).optional(),
   answers: z.array(
     z.object({
       fieldId: z.string().min(1),
-      value: z.union([z.string(), z.array(z.string()), z.boolean(), z.number(), z.null()]),
+      value: answerValueSchema,
     })
   ),
 });
@@ -298,7 +337,7 @@ export const submitSubmissionSchema = z.object({
     .array(
       z.object({
         fieldId: z.string().min(1),
-        value: z.union([z.string(), z.array(z.string()), z.boolean(), z.number(), z.null()]),
+        value: answerValueSchema,
       })
     )
     .optional(),

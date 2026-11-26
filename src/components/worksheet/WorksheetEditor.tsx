@@ -11,6 +11,8 @@ import {
   AlignRight,
   AlignStartHorizontal,
   AlignStartVertical,
+  BookOpen,
+  Camera,
   CheckCircle2,
   CheckSquare,
   ChevronDownSquare,
@@ -31,6 +33,7 @@ import {
   Save,
   Send,
   Share2,
+  Sigma,
   Sparkles,
   Trash2,
   Type,
@@ -39,8 +42,14 @@ import {
   ZoomOut,
   Columns2,
 } from "lucide-react";
-import type { FieldType, SkillTag } from "@prisma/client";
+import type { FieldType, SkillTag, WorksheetSubject } from "@prisma/client";
 import { gradeSubmission, parseBulkAnswerString, type AnswerValue } from "@/lib/grading";
+import {
+  getSubjectMeta,
+  getSubjectProfile,
+  normalizeSubject,
+  WORKSHEET_SUBJECTS,
+} from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
@@ -53,18 +62,25 @@ import { PdfCanvasPage, usePdfDocument } from "./PdfCanvasPage";
 import { OverlayFieldInput } from "./OverlayFieldInput";
 import { AnswerSheetPanel } from "./AnswerSheetPanel";
 import { LimitedAudioPlayer } from "./LimitedAudioPlayer";
+import { MathText, hasMathSyntax } from "./MathText";
+import { PromptText } from "./PromptText";
+import { PassagesEditorPanel } from "./PassagesEditorPanel";
+import { TrueFalseGroupEditor } from "./TrueFalseGroupEditor";
 import type {
   EditorFieldDTO,
   StudentFieldDTO,
   WorksheetAudioDTO,
   WorksheetPageDTO,
+  WorksheetPassageDTO,
 } from "./types";
 
 interface WorksheetEditorProps {
   initialWorksheet: {
     id: string;
     title: string;
+    subject?: WorksheetSubject;
     instructions: string | null;
+    passages?: WorksheetPassageDTO[];
     pdfFileKey: string | null;
     pageCount: number;
     isShared?: boolean;
@@ -85,8 +101,10 @@ const TOOL_COLORS: Record<FieldType, { border: string; bg: string; badge: string
   MULTIPLE_CHOICE: { border: "border-orange-500", bg: "bg-orange-50/75", badge: "bg-orange-600" },
   MULTI_SELECT: { border: "border-amber-500", bg: "bg-amber-50/75", badge: "bg-amber-600" },
   TRUE_FALSE: { border: "border-teal-500", bg: "bg-teal-50/75", badge: "bg-teal-600" },
+  TRUE_FALSE_GROUP: { border: "border-cyan-500", bg: "bg-cyan-50/75", badge: "bg-cyan-600" },
   ESSAY: { border: "border-rose-500", bg: "bg-rose-50/75", badge: "bg-rose-600" },
   DICTATION: { border: "border-purple-500", bg: "bg-purple-50/75", badge: "bg-purple-600" },
+  PHOTO_UPLOAD: { border: "border-lime-500", bg: "bg-lime-50/75", badge: "bg-lime-600" },
 };
 
 const SKILL_VALUES: SkillTag[] = ["GRAMMAR", "VOCABULARY", "READING", "LISTENING", "WRITING", "SPEAKING"];
@@ -189,6 +207,22 @@ function createDefaultFieldPayload(
         gradingOpts: null,
         style: baseStyle,
       };
+    case "TRUE_FALSE_GROUP":
+      return {
+        type,
+        label,
+        order,
+        points: 1,
+        options: [
+          { id: "a", text: "" },
+          { id: "b", text: "" },
+          { id: "c", text: "" },
+          { id: "d", text: "" },
+        ],
+        answerKey: { correct: { a: true, b: true, c: false, d: false } },
+        gradingOpts: { tfScoring: "THPT_2025" },
+        style: baseStyle,
+      };
     case "CHECKBOX":
       return {
         type,
@@ -208,6 +242,17 @@ function createDefaultFieldPayload(
         points: 2,
         options: null,
         answerKey: { rubric: "" },
+        gradingOpts: null,
+        style: baseStyle,
+      };
+    case "PHOTO_UPLOAD":
+      return {
+        type,
+        label,
+        order,
+        points: 2,
+        options: null,
+        answerKey: { rubric: "", maxFiles: 5 },
         gradingOpts: null,
         style: baseStyle,
       };
@@ -234,9 +279,17 @@ function clamp01(val: number): number {
 }
 
 export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
-  const { m: vi, tr } = useI18n();
+  const { m: vi, tr, locale } = useI18n();
   const [worksheetId] = useState(initialWorksheet.id);
   const [title, setTitle] = useState(initialWorksheet.title);
+  const [subject, setSubject] = useState<WorksheetSubject>(() =>
+    normalizeSubject(initialWorksheet.subject)
+  );
+  const [passages, setPassages] = useState<WorksheetPassageDTO[]>(
+    initialWorksheet.passages ?? []
+  );
+  const [showPassagesOverride, setShowPassagesOverride] = useState(false);
+  const [showAllTools, setShowAllTools] = useState(false);
   const [pdfFileKey, setPdfFileKey] = useState<string | null>(initialWorksheet.pdfFileKey);
   const [storageLocations, setStorageLocations] = useState<
     Record<string, "drive" | "s3" | "local">
@@ -317,9 +370,14 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
 
   // Mode B Quick-add + Bulk key state
   const [quickCount, setQuickCount] = useState(5);
-  const [quickType, setQuickType] = useState<FieldType>("MULTIPLE_CHOICE");
+  const [quickType, setQuickType] = useState<FieldType>(
+    () => getSubjectProfile(initialWorksheet.subject).defaultQuickType
+  );
   const [quickStart, setQuickStart] = useState(() => nextQuestionNumber(initialWorksheet.fields));
   const [bulkKeyInput, setBulkKeyInput] = useState("");
+
+  const profile = useMemo(() => getSubjectProfile(subject), [subject]);
+  const subjectMeta = useMemo(() => getSubjectMeta(subject), [subject]);
 
   // Student Preview Mode
   const [previewMode, setPreviewMode] = useState(false);
@@ -389,6 +447,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
               prompt: f.prompt ?? null,
               explanation: f.explanation ?? null,
               skillTag: f.skillTag ?? null,
+              passageId: f.passageId ?? null,
               audioId: f.audioId ?? null,
               order: idx,
               points: Number(f.points) || 0,
@@ -460,6 +519,47 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fields]);
+
+  const passagesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (passagesTimerRef.current) clearTimeout(passagesTimerRef.current);
+    };
+  }, []);
+
+  const handlePassagesChange = (next: WorksheetPassageDTO[]) => {
+    setPassages(next);
+    if (passagesTimerRef.current) clearTimeout(passagesTimerRef.current);
+    passagesTimerRef.current = setTimeout(() => {
+      void fetch(`/api/worksheets/${worksheetId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ passages: next }),
+      });
+    }, 800);
+  };
+
+  const handleChangeSubject = async (nextSubject: WorksheetSubject) => {
+    setSubject(nextSubject);
+    setActiveTool("SELECT");
+    setQuickType(getSubjectProfile(nextSubject).defaultQuickType);
+    const res = await fetch(`/api/worksheets/${worksheetId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subject: nextSubject }),
+    });
+    if (res.ok) {
+      const m = getSubjectMeta(nextSubject);
+      toast.success(
+        tr(
+          `Đã chuyển giao diện môn ${m.shortVi}.`,
+          `Switched editor to ${m.shortEn}.`
+        )
+      );
+    } else {
+      toast.error(vi.common.saveFailed);
+    }
+  };
 
   const saveTitle = async (newTitle: string) => {
     const trimmed = newTitle.trim();
@@ -872,6 +972,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
         label: f.label,
         prompt: f.prompt,
         skillTag: f.skillTag,
+        passageId: f.passageId,
         audioId: f.audioId,
         order: f.order,
         points: f.points,
@@ -1042,7 +1143,9 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
           <AnswerSheetPanel
             wide={pages.length === 0}
             allFields={previewFields}
+            passages={passages}
             answers={previewAnswers}
+            previewOnly
             onChange={(fieldId, val) =>
               setPreviewAnswers((prev) => ({ ...prev, [fieldId]: val }))
             }
@@ -1071,16 +1174,46 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
   }
 
   // ===== EDITOR MODE =====
+  const showAudioSection =
+    profile.showAudio || audios.length > 0 || fields.some((f) => f.type === "DICTATION");
+  const showSkillTagControl =
+    profile.showEnglishSkills || Boolean(selectedField?.skillTag);
+  const showPassagesSection =
+    profile.showPassages || passages.length > 0 || showPassagesOverride;
+
+  const toolMetaByType: Record<FieldType, { label: string; icon: React.ReactNode }> = {
+    TEXT: { label: vi.worksheets.tools.TEXT, icon: <Type className="h-3.5 w-3.5" /> },
+    NUMBER: { label: vi.worksheets.tools.NUMBER, icon: <Hash className="h-3.5 w-3.5" /> },
+    DROPDOWN: { label: vi.worksheets.tools.DROPDOWN, icon: <ChevronDownSquare className="h-3.5 w-3.5" /> },
+    CHECKBOX: { label: vi.worksheets.tools.CHECKBOX, icon: <CheckSquare className="h-3.5 w-3.5" /> },
+    MULTIPLE_CHOICE: { label: vi.worksheets.tools.MULTIPLE_CHOICE, icon: <ListChecks className="h-3.5 w-3.5" /> },
+    MULTI_SELECT: { label: vi.worksheets.tools.MULTI_SELECT, icon: <ListChecks className="h-3.5 w-3.5" /> },
+    TRUE_FALSE: { label: vi.worksheets.tools.TRUE_FALSE, icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
+    TRUE_FALSE_GROUP: { label: vi.worksheets.tools.TRUE_FALSE_GROUP, icon: <CheckSquare className="h-3.5 w-3.5" /> },
+    ESSAY: { label: vi.worksheets.tools.ESSAY, icon: <FileText className="h-3.5 w-3.5" /> },
+    DICTATION: { label: vi.worksheets.tools.DICTATION, icon: <Mic className="h-3.5 w-3.5" /> },
+    PHOTO_UPLOAD: { label: vi.worksheets.tools.PHOTO_UPLOAD, icon: <Camera className="h-3.5 w-3.5" /> },
+  };
+
+  const visibleToolTypes = showAllTools
+    ? profile.allAvailableTools
+    : profile.primaryTools;
+
   const tools: Array<{ id: ActiveTool; label: string; icon: React.ReactNode }> = [
     { id: "SELECT", label: vi.worksheets.tools.select, icon: <MousePointer2 className="h-3.5 w-3.5" /> },
-    { id: "TEXT", label: vi.worksheets.tools.TEXT, icon: <Type className="h-3.5 w-3.5" /> },
-    { id: "NUMBER", label: vi.worksheets.tools.NUMBER, icon: <Hash className="h-3.5 w-3.5" /> },
-    { id: "DROPDOWN", label: vi.worksheets.tools.DROPDOWN, icon: <ChevronDownSquare className="h-3.5 w-3.5" /> },
-    { id: "CHECKBOX", label: vi.worksheets.tools.CHECKBOX, icon: <CheckSquare className="h-3.5 w-3.5" /> },
-    { id: "MULTIPLE_CHOICE", label: vi.worksheets.tools.MULTIPLE_CHOICE, icon: <ListChecks className="h-3.5 w-3.5" /> },
-    { id: "ESSAY", label: vi.worksheets.tools.ESSAY, icon: <FileText className="h-3.5 w-3.5" /> },
-    { id: "DICTATION", label: vi.worksheets.tools.DICTATION, icon: <Mic className="h-3.5 w-3.5" /> },
+    ...visibleToolTypes.map((ft) => ({
+      id: ft as ActiveTool,
+      label: toolMetaByType[ft].label,
+      icon: toolMetaByType[ft].icon,
+    })),
   ];
+
+  const availableQuickTypes: FieldType[] = Array.from(
+    new Set([
+      ...profile.allAvailableTools,
+      ...sheetFields.map((f) => f.type),
+    ])
+  );
 
   const hasPdf = Boolean(pdfFileKey) && pages.length > 0;
 
@@ -1128,6 +1261,32 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
           </div>
         </div>
 
+        {/* Shared Passages / Stimulus Blocks */}
+        {showPassagesSection ? (
+          <PassagesEditorPanel
+            passages={passages}
+            onChange={handlePassagesChange}
+            titleLabel={
+              subject === "LITERATURE" || profile.key === "SOCIAL"
+                ? tr("Ngữ liệu / Văn bản đọc hiểu dùng chung", "Shared reading / source passage")
+                : tr("Đoạn đọc / Ngữ liệu dùng chung", "Shared reading passage")
+            }
+          />
+        ) : (
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowPassagesOverride(true)}
+              className="text-xs text-[#464555] hover:text-[#3525CD]"
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              {tr("+ Thêm đoạn đọc / ngữ liệu dùng chung", "+ Add shared reading / stimulus passage")}
+            </Button>
+          </div>
+        )}
+
         {/* Quick Add + Bulk Answer Key Controls */}
         <div className={cn("grid grid-cols-1 gap-4", hasPdf ? "xl:grid-cols-2" : "lg:grid-cols-2")}>
           {/* Quick Add N questions */}
@@ -1152,14 +1311,14 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                 <select
                   value={quickType}
                   onChange={(e) => setQuickType(e.target.value as FieldType)}
+                  data-testid="quick-add-type-select"
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-medium outline-none focus:border-[#4F46E5]"
                 >
-                  <option value="MULTIPLE_CHOICE">{tr("Trắc nghiệm A–D", "Multiple choice A–D")}</option>
-                  <option value="TRUE_FALSE">{tr("Đúng / Sai", "True / False")}</option>
-                  <option value="TEXT">{tr("Điền ngắn", "Short answer")}</option>
-                  <option value="NUMBER">{tr("Điền số", "Number")}</option>
-                  <option value="ESSAY">{tr("Tự luận", "Essay")}</option>
-                  <option value="DICTATION">{tr("Chép chính tả (Dictation)", "Dictation")}</option>
+                  {availableQuickTypes.map((ft) => (
+                    <option key={ft} value={ft}>
+                      {vi.worksheets.tools[ft]}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="w-24">
@@ -1254,8 +1413,13 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                       rows={2}
                       className="mt-1 min-h-[52px] text-xs leading-relaxed"
                     />
+                    {field.prompt && hasMathSyntax(field.prompt) && (
+                      <div className="mt-1 rounded-lg bg-[#F8F9FF] px-2 py-1 text-xs text-[#0B1C30]">
+                        <PromptText text={field.prompt} />
+                      </div>
+                    )}
                     <Label className="mt-2 block text-[10px] font-bold uppercase text-slate-400">
-                      {field.type === "ESSAY"
+                      {field.type === "ESSAY" || field.type === "PHOTO_UPLOAD"
                         ? tr("Hướng dẫn chấm", "Rubric")
                         : tr("Đáp án", "Answer")}
                     </Label>
@@ -1346,6 +1510,34 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                       />
                     )}
 
+                    {field.type === "TRUE_FALSE_GROUP" && (
+                      <TrueFalseGroupEditor
+                        fieldId={field.id}
+                        options={field.options}
+                        answerKey={field.answerKey}
+                        gradingOpts={field.gradingOpts}
+                        compact
+                        onChange={(patch) => updateField(field.id, patch)}
+                      />
+                    )}
+
+                    {(field.type === "ESSAY" || field.type === "PHOTO_UPLOAD") && (
+                      <Input
+                        value={String(field.answerKey.rubric ?? "")}
+                        onChange={(e) =>
+                          updateField(field.id, {
+                            answerKey: { ...field.answerKey, rubric: e.target.value },
+                          })
+                        }
+                        placeholder={
+                          field.type === "PHOTO_UPLOAD"
+                            ? tr("Yêu cầu chụp vở / tiêu chí chấm…", "Notebook photo instructions / rubric…")
+                            : tr("Tiêu chí chấm tự luận…", "Essay rubric…")
+                        }
+                        className="h-8 text-xs"
+                      />
+                    )}
+
                     {field.type === "DICTATION" && (
                       <Textarea
                         rows={2}
@@ -1416,6 +1608,26 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                 <span className="text-slate-500">
                   {pages.length} {tr("trang •", "pages •")} {fields.length} {tr("câu", "questions")}
                 </span>
+                <span className="text-slate-300">•</span>
+                <select
+                  aria-label={tr("Môn học của phiếu", "Worksheet subject")}
+                  value={subject}
+                  onChange={(e) => void handleChangeSubject(e.target.value as WorksheetSubject)}
+                  data-testid="editor-subject-select"
+                  className={cn(
+                    "h-5 rounded-full border-0 px-2 text-[10px] font-bold outline-none cursor-pointer",
+                    subjectMeta.badgeClass
+                  )}
+                >
+                  {WORKSHEET_SUBJECTS.map((subj) => {
+                    const m = getSubjectMeta(subj);
+                    return (
+                      <option key={subj} value={subj}>
+                        {locale === "en" ? m.shortEn : m.shortVi}
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
             </div>
           </div>
@@ -1439,6 +1651,16 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                 <span className="hidden sm:inline">{t.label}</span>
               </button>
             ))}
+            {profile.allAvailableTools.length > profile.primaryTools.length && (
+              <button
+                type="button"
+                onClick={() => setShowAllTools((v) => !v)}
+                className="inline-flex items-center rounded-lg px-2 py-1.5 text-[11px] font-bold text-[#3525CD] hover:bg-white"
+                title={tr("Hiện thêm / thu gọn công cụ ít dùng", "Toggle secondary tools")}
+              >
+                {showAllTools ? tr("Thu gọn", "Less") : `+${profile.allAvailableTools.length - profile.primaryTools.length}`}
+              </button>
+            )}
           </div>
 
           {/* Right: Share + Export + Preview + Save + Assign CTA */}
@@ -1702,8 +1924,9 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
             </div>
           </div>
 
-          {/* Worksheet Audio Manager Card */}
-          <div className="stitch-card p-3 space-y-2.5">
+          {/* Worksheet Audio Manager Card (shown for Language / General or when existing audio/dictation exists) */}
+          {showAudioSection && (
+          <div className="stitch-card p-3 space-y-2.5" data-testid="editor-audio-panel">
             <div className="flex items-center justify-between">
               <h3 className="flex items-center gap-1.5 text-xs font-bold text-[#0B1C30]">
                 <Headphones className="h-3.5 w-3.5 text-[#4F46E5]" />
@@ -1791,6 +2014,37 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                 : tr("Tải file nghe (MP3/WAV)", "Upload audio")}
             </Button>
           </div>
+          )}
+
+          {/* Math LaTeX Cheat Sheet Card (for STEM / Informatics / General) */}
+          {profile.showMathHint && (
+            <div className="stitch-card p-3 space-y-2" data-testid="math-latex-hint-card">
+              <h3 className="flex items-center gap-1.5 text-xs font-bold text-[#0B1C30]">
+                <Sigma className="h-3.5 w-3.5 text-[#4F46E5]" />
+                {tr("Gõ công thức LaTeX", "LaTeX math guide")}
+              </h3>
+              <p className="text-[11px] leading-relaxed text-[#464555]">
+                {tr(
+                  "Bọc công thức trong $...$ (trong dòng) hoặc $$...$$ (xuống dòng riêng).",
+                  "Wrap formulas in $...$ (inline) or $$...$$ (display)."
+                )}
+              </p>
+              <div className="space-y-1.5 rounded-xl bg-[#F8F9FF] p-2 text-[11px]">
+                <div className="flex items-center justify-between gap-2">
+                  <code className="font-mono text-[#3525CD]">{"$\\frac{a}{b}$"}</code>
+                  <MathText text={"$\\frac{a}{b}$"} />
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <code className="font-mono text-[#3525CD]">{"$x^2 + \\sqrt{x}$"}</code>
+                  <MathText text={"$x^2 + \\sqrt{x}$"} />
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <code className="font-mono text-[#3525CD]">{"$\\Delta \\ge 0$"}</code>
+                  <MathText text={"$\\Delta \\ge 0$"} />
+                </div>
+              </div>
+            </div>
+          )}
         </aside>
 
         {/* CENTER: PDF Canvas + Draw + React-Rnd Overlays */}
@@ -1952,7 +2206,9 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                               );
                               const h = snapValue(
                                 rawH < 0.018
-                                  ? toolType === "ESSAY"
+                                  ? toolType === "ESSAY" ||
+                                    toolType === "TRUE_FALSE_GROUP" ||
+                                    toolType === "PHOTO_UPLOAD"
                                     ? 0.1
                                     : 0.04
                                   : rawH
@@ -2167,7 +2423,12 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                       className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2 text-xs font-medium outline-none focus:border-[#4F46E5]"
                     >
                       {(Object.keys(vi.worksheets.tools) as Array<keyof typeof vi.worksheets.tools>)
-                        .filter((k): k is FieldType => k !== "select")
+                        .filter(
+                          (k): k is FieldType =>
+                            k !== "select" &&
+                            (profile.allAvailableTools.includes(k as FieldType) ||
+                              k === selectedField.type)
+                        )
                         .map((ft) => (
                           <option key={ft} value={ft}>
                             {vi.worksheets.tools[ft]}
@@ -2186,8 +2447,8 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                   </div>
                 </div>
 
-                {/* Points & SkillTag */}
-                <div className="grid grid-cols-2 gap-2">
+                {/* Points & Optional English SkillTag */}
+                <div className={cn("grid gap-2", showSkillTagControl ? "grid-cols-2" : "grid-cols-1")}>
                   <div className="space-y-1">
                     <Label className="text-xs">{vi.worksheets.editor.points}</Label>
                     <Input
@@ -2201,7 +2462,8 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                       className="h-9 text-xs"
                     />
                   </div>
-                  <div className="space-y-1">
+                  {showSkillTagControl && (
+                  <div className="space-y-1" data-testid="inspector-skill-tag">
                     <Label className="text-xs">{vi.worksheets.editor.skillTag}</Label>
                     <select
                       value={selectedField.skillTag ?? ""}
@@ -2220,11 +2482,35 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                       ))}
                     </select>
                   </div>
+                  )}
                 </div>
+
+                {/* Optional Shared Passage link */}
+                {passages.length > 0 && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">{tr("Gắn vào đoạn đọc / ngữ liệu", "Linked passage")}</Label>
+                    <select
+                      value={selectedField.passageId ?? ""}
+                      onChange={(e) =>
+                        updateField(selectedField.id, {
+                          passageId: e.target.value || null,
+                        })
+                      }
+                      className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#4F46E5]"
+                    >
+                      <option value="">{tr("Không gắn đoạn đọc", "None")}</option>
+                      {passages.map((psg, i) => (
+                        <option key={psg.id} value={psg.id}>
+                          #{i + 1}: {psg.title || tr("Đoạn đọc", "Passage")}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {/* Optional prompt (handy for ANSWER_SHEET) */}
                 {selectedField.placement === "ANSWER_SHEET" && (
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     <Label className="text-xs">{vi.worksheets.editor.prompt}</Label>
                     <Textarea
                       value={selectedField.prompt ?? ""}
@@ -2233,6 +2519,36 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                       rows={4}
                       className="text-xs leading-relaxed"
                     />
+                    {profile.showMathHint && (
+                      <div className="flex flex-wrap gap-1">
+                        {[
+                          ["x²", "$x^2$"],
+                          ["a/b", "$\\frac{a}{b}$"],
+                          ["√x", "$\\sqrt{x}$"],
+                          ["≤", "$\\le$"],
+                          ["π", "$\\pi$"],
+                          ["$$...$$", "$$  $$"],
+                        ].map(([lbl, snippet]) => (
+                          <button
+                            key={lbl}
+                            type="button"
+                            onClick={() =>
+                              updateField(selectedField.id, {
+                                prompt: `${selectedField.prompt ?? ""}${selectedField.prompt ? " " : ""}${snippet}`,
+                              })
+                            }
+                            className="rounded border border-slate-200 bg-[#F8F9FF] px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[#3525CD] hover:bg-[#EEF2FF]"
+                          >
+                            {lbl}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {selectedField.prompt && hasMathSyntax(selectedField.prompt) && (
+                      <div className="rounded-lg border border-indigo-100 bg-[#F8F9FF] px-2.5 py-1.5 text-xs text-[#0B1C30]">
+                        <PromptText text={selectedField.prompt} />
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -2491,6 +2807,56 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                         placeholder={tr("Tiêu chí chấm tự luận…", "Essay grading criteria…")}
                         className="text-xs"
                       />
+                    </div>
+                  )}
+
+                  {selectedField.type === "TRUE_FALSE_GROUP" && (
+                    <TrueFalseGroupEditor
+                      fieldId={selectedField.id}
+                      options={selectedField.options}
+                      answerKey={selectedField.answerKey}
+                      gradingOpts={selectedField.gradingOpts}
+                      onChange={(patch) => updateField(selectedField.id, patch)}
+                    />
+                  )}
+
+                  {selectedField.type === "PHOTO_UPLOAD" && (
+                    <div className="space-y-2.5">
+                      <div className="space-y-1">
+                        <Label className="text-[11px]">{tr("Số ảnh / file tối đa", "Max photos / files")}</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={15}
+                          value={Number(selectedField.answerKey.maxFiles ?? 5)}
+                          onChange={(e) =>
+                            updateField(selectedField.id, {
+                              answerKey: {
+                                ...selectedField.answerKey,
+                                maxFiles: Math.max(1, Math.min(15, Number(e.target.value) || 5)),
+                              },
+                            })
+                          }
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[11px]">{vi.worksheets.editor.rubric}</Label>
+                        <Textarea
+                          rows={3}
+                          value={String(selectedField.answerKey.rubric ?? "")}
+                          onChange={(e) =>
+                            updateField(selectedField.id, {
+                              answerKey: { ...selectedField.answerKey, rubric: e.target.value },
+                            })
+                          }
+                          placeholder={tr(
+                            "Hướng dẫn chấm ảnh bài làm / ghi chú cho học sinh…",
+                            "Photo grading rubric / instructions…"
+                          )}
+                          className="text-xs"
+                        />
+                      </div>
                     </div>
                   )}
 

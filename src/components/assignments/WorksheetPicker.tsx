@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { WorksheetSubject } from "@prisma/client";
 import { Check, ChevronDown, FileText, Headphones, Search, Users } from "lucide-react";
 import { cn, formatDateTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
 import { foldText } from "@/lib/text-search";
+import { SubjectBadge } from "@/components/worksheet/SubjectPicker";
 
 export interface WorksheetPickerOption {
   id: string;
   title: string;
+  subject?: WorksheetSubject;
   updatedAt?: string;
   owner?: { name: string };
   _count: { fields: number; audios?: number; assignments?: number };
@@ -107,7 +110,10 @@ export function WorksheetPicker({
         <span className="min-w-0 flex-1">
           {selected ? (
             <>
-              <span className="block truncate text-sm font-semibold text-[#0B1C30]">{selected.title}</span>
+              <span className="flex items-center gap-2 min-w-0">
+                <span className="truncate text-sm font-semibold text-[#0B1C30]">{selected.title}</span>
+                <SubjectBadge subject={selected.subject} className="shrink-0" />
+              </span>
               <span className="block truncate text-xs text-[#464555]">
                 {selected._count.fields} {tr("câu hỏi", selected._count.fields === 1 ? "question" : "questions")}
                 {(selected._count.audios ?? 0) > 0 && ` · ${selected._count.audios} ${tr("file nghe", "audio")}`}
@@ -182,7 +188,10 @@ export function WorksheetPicker({
                         )}
                       >
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-semibold text-[#0B1C30]">{w.title}</span>
+                          <span className="flex items-center gap-1.5 min-w-0">
+                            <span className="truncate text-sm font-semibold text-[#0B1C30]">{w.title}</span>
+                            <SubjectBadge subject={w.subject} className="shrink-0" />
+                          </span>
                           <span className="flex flex-wrap items-center gap-x-2 text-[11px] text-[#464555]">
                             <span>
                               {w._count.fields} {tr("câu", w._count.fields === 1 ? "question" : "questions")}

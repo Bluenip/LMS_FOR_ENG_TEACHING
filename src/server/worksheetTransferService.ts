@@ -1,9 +1,16 @@
 import crypto from "node:crypto";
 import JSZip from "jszip";
 import mammoth from "mammoth";
-import type { FieldPlacement, FieldType, Prisma, SkillTag } from "@prisma/client";
+import {
+  Prisma,
+  type FieldPlacement,
+  type FieldType,
+  type SkillTag,
+  type WorksheetSubject,
+} from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { normalizeSubject } from "@/lib/subjects";
 import { getStorageProvider } from "@/lib/storage";
 import {
   parseFillBlankText,
@@ -17,7 +24,9 @@ export interface ExportedWorksheetManifest {
   exportedAt: string;
   worksheet: {
     title: string;
+    subject?: WorksheetSubject;
     instructions: string | null;
+    passages?: Array<{ id: string; title: string; content: string; order: number }> | null;
     pageCount: number;
     hasPdf: boolean;
     pdfEntry?: string;
@@ -37,6 +46,7 @@ export interface ExportedWorksheetManifest {
       prompt: string | null;
       explanation: string | null;
       skillTag: SkillTag | null;
+      passageId?: string | null;
       audioOldId: string | null;
       order: number;
       points: number;
@@ -159,7 +169,11 @@ async function packWorksheetIntoZip(
     exportedAt: new Date().toISOString(),
     worksheet: {
       title: ws.title,
+      subject: ws.subject,
       instructions: ws.instructions,
+      passages: Array.isArray(ws.passages)
+        ? (ws.passages as Array<{ id: string; title: string; content: string; order: number }>)
+        : null,
       pageCount: hasPdf ? ws.pageCount : 0,
       hasPdf,
       pdfEntry: hasPdf ? "document.pdf" : undefined,
@@ -178,6 +192,7 @@ async function packWorksheetIntoZip(
         prompt: f.prompt,
         explanation: f.explanation,
         skillTag: f.skillTag,
+        passageId: f.passageId ?? null,
         audioOldId: f.audioId,
         order: f.order,
         points: f.points,
@@ -299,8 +314,21 @@ export async function exportWorksheetAsDocx(
   paragraphs.push({ text: "" });
 
   const answerLines: string[] = [];
+  const passagesList = Array.isArray(ws.passages)
+    ? (ws.passages as Array<{ id: string; title: string; content: string; order: number }>)
+    : [];
+  const passageById = new Map(passagesList.map((p) => [p.id, p]));
+  const renderedPassages = new Set<string>();
 
   for (const f of ws.fields) {
+    if (f.passageId && !renderedPassages.has(f.passageId)) {
+      const passage = passageById.get(f.passageId);
+      if (passage) {
+        renderedPassages.add(f.passageId);
+        if (passage.title) paragraphs.push({ text: passage.title, bold: true });
+        if (passage.content) paragraphs.push({ text: passage.content });
+      }
+    }
     const key = (f.answerKey && typeof f.answerKey === "object"
       ? f.answerKey
       : {}) as Record<string, unknown>;
@@ -354,12 +382,37 @@ export async function exportWorksheetAsDocx(
     } else if (f.type === "TRUE_FALSE") {
       paragraphs.push({ text: `Câu ${f.label} (Đúng / Sai): ${f.prompt?.trim() || ""}` });
       answerLines.push(`Câu ${f.label}: ${key.correct === true ? "Đúng" : "Sai"}`);
+    } else if (f.type === "TRUE_FALSE_GROUP") {
+      paragraphs.push({
+        text: `Câu ${f.label} (Đúng / Sai 4 ý — ${f.points}đ): ${f.prompt?.trim() || ""}`,
+        bold: true,
+      });
+      const opts = Array.isArray(f.options)
+        ? (f.options as Array<{ id: string; text: string }>)
+        : [];
+      const correctMap =
+        key.correct && typeof key.correct === "object" && !Array.isArray(key.correct)
+          ? (key.correct as Record<string, unknown>)
+          : {};
+      for (const o of opts) {
+        paragraphs.push({ text: `   ${o.id}) ${o.text || ""}` });
+      }
+      const keyParts = opts.map((o) => `${o.id}-${correctMap[o.id] === true ? "Đ" : "S"}`);
+      answerLines.push(`Câu ${f.label}: ${keyParts.join(", ")}`);
     } else if (f.type === "NUMBER") {
       paragraphs.push({ text: `Câu ${f.label}: ${f.prompt?.trim() || "________"}` });
       answerLines.push(`Câu ${f.label}: ${String(key.value ?? "")}`);
     } else if (f.type === "ESSAY") {
       paragraphs.push({
         text: `Câu ${f.label} (Tự luận — ${f.points}đ): ${f.prompt?.trim() || ""}`,
+        bold: true,
+      });
+      if (includeAnswers && key.rubric) {
+        paragraphs.push({ text: `Gợi ý chấm: ${String(key.rubric)}`, italic: true });
+      }
+    } else if (f.type === "PHOTO_UPLOAD") {
+      paragraphs.push({
+        text: `Câu ${f.label} (Chụp ảnh vở / Nộp file — ${f.points}đ): ${f.prompt?.trim() || ""}`,
         bold: true,
       });
       if (includeAnswers && key.rubric) {
@@ -407,7 +460,11 @@ async function restoreManifestForOwner(
     data: {
       ownerId,
       title: data.title.slice(0, 200),
+      subject: normalizeSubject(data.subject),
       instructions: data.instructions ?? null,
+      ...(Array.isArray(data.passages)
+        ? { passages: data.passages as unknown as Prisma.InputJsonValue }
+        : {}),
     },
   });
 
@@ -472,6 +529,7 @@ async function restoreManifestForOwner(
         prompt: f.prompt ?? null,
         explanation: f.explanation ?? null,
         skillTag: f.skillTag ?? null,
+        passageId: f.passageId ?? null,
         audioId: f.audioOldId ? audioIdMap.get(f.audioOldId) ?? null : null,
         order: f.order ?? idx,
         points: Number(f.points) || 1,
@@ -504,7 +562,7 @@ export async function importWorksheetFile(
   ownerId: string,
   buffer: Buffer,
   filename: string,
-  opts?: { title?: string; defaultPoints?: number }
+  opts?: { title?: string; defaultPoints?: number; subject?: WorksheetSubject }
 ) {
   const lower = filename.toLowerCase();
 
@@ -529,6 +587,7 @@ export async function importWorksheetFile(
       data: {
         ownerId,
         title: cleanTitle.slice(0, 200),
+        subject: normalizeSubject(opts?.subject),
         instructions: "Điền từ hoặc cụm từ thích hợp vào chỗ trống.",
         fields: {
           create: parsed.fields.map((f, idx) => ({
