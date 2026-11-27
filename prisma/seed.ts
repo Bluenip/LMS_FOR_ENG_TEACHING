@@ -277,6 +277,12 @@ async function main() {
   await prisma.assignmentTarget.deleteMany();
   await prisma.teacherCommentPreset.deleteMany();
   await prisma.audioPlay.deleteMany();
+  await prisma.publicAttempt.deleteMany();
+  await prisma.aiUsageLog.deleteMany();
+  await prisma.contentReport.deleteMany();
+  await prisma.teacherFollow.deleteMany();
+  await prisma.worksheetLike.deleteMany();
+  await prisma.worksheetVersion.deleteMany();
   await prisma.proctorEvent.deleteMany();
   await prisma.answer.deleteMany();
   await prisma.submissionRevision.deleteMany();
@@ -311,6 +317,7 @@ async function main() {
   await prisma.lessonItem.deleteMany();
   await prisma.classLesson.deleteMany();
   await prisma.lesson.deleteMany();
+  await prisma.libraryFolder.deleteMany();
   await prisma.comment.deleteMany();
   await prisma.postPollVote.deleteMany();
   await prisma.postPollOption.deleteMany();
@@ -862,6 +869,8 @@ async function main() {
       showLeaderboard: "AFTER_DUE",
       leaderboardAnon: false,
       proctorMode: "OFF",
+      allowPublicPractice: true,
+      publicShareToken: "demo-public-practice-p25",
     },
   });
 
@@ -2368,6 +2377,210 @@ async function main() {
         createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
       },
     ],
+  });
+
+  // Phase 25 seed: Library folders, Worksheet versions, Discover public worksheets, and Public Practice demo
+  const rootFolder = await prisma.libraryFolder.create({
+    data: {
+      ownerId: teacher1.id,
+      kind: "WORKSHEET",
+      name: "Ngữ pháp & Từ vựng 12",
+      color: "#4F46E5",
+    },
+  });
+  const childFolder = await prisma.libraryFolder.create({
+    data: {
+      ownerId: teacher1.id,
+      parentId: rootFolder.id,
+      kind: "WORKSHEET",
+      name: "Chuyên đề Unit 6",
+      color: "#10B981",
+    },
+  });
+  await prisma.worksheet.update({
+    where: { id: wsUnit6.id },
+    data: {
+      folderId: childFolder.id,
+      tags: ["unit6", "vocabulary", "b1"],
+    },
+  });
+
+  await prisma.worksheetVersion.createMany({
+    data: [
+      {
+        worksheetId: wsUnit6.id,
+        versionNo: 1,
+        note: "Bản khởi tạo ban đầu",
+        createdById: teacher1.id,
+        snapshot: {
+          title: wsUnit6.title,
+          subject: wsUnit6.subject,
+          instructions: wsUnit6.instructions,
+          passages: wsUnit6.passages,
+          fields: wsUnit6.fields.map((f) => ({
+            placement: f.placement,
+            type: f.type,
+            label: f.label,
+            prompt: f.prompt,
+            explanation: f.explanation,
+            skillTag: f.skillTag,
+            topicTag: f.topicTag,
+            order: f.order,
+            points: f.points,
+            pageIndex: f.pageIndex,
+            x: f.x,
+            y: f.y,
+            w: f.w,
+            h: f.h,
+            style: f.style,
+            options: f.options,
+            answerKey: f.answerKey,
+            rubric: f.rubric,
+            gradingOpts: f.gradingOpts,
+          })),
+        },
+      },
+      {
+        worksheetId: wsUnit6.id,
+        versionNo: 2,
+        note: "Tự động lưu trước khi giao bài",
+        createdById: teacher1.id,
+        snapshot: {
+          title: wsUnit6.title,
+          subject: wsUnit6.subject,
+          instructions: wsUnit6.instructions,
+          passages: wsUnit6.passages,
+          fields: wsUnit6.fields.map((f) => ({
+            placement: f.placement,
+            type: f.type,
+            label: f.label,
+            prompt: f.prompt,
+            explanation: f.explanation,
+            skillTag: f.skillTag,
+            topicTag: f.topicTag,
+            order: f.order,
+            points: f.points,
+            pageIndex: f.pageIndex,
+            x: f.x,
+            y: f.y,
+            w: f.w,
+            h: f.h,
+            style: f.style,
+            options: f.options,
+            answerKey: f.answerKey,
+            rubric: f.rubric,
+            gradingOpts: f.gradingOpts,
+          })),
+        },
+      },
+    ],
+  });
+
+  const discoverWs1 = await prisma.worksheet.create({
+    data: {
+      ownerId: teacher1.id,
+      title: "Discover: Câu điều kiện (Conditionals B1)",
+      subject: "ENGLISH",
+      instructions: "Chọn đáp án đúng hoặc điền từ còn thiếu cho câu điều kiện loại 1 & 2.",
+      folderId: rootFolder.id,
+      tags: ["conditionals", "grammar", "b1"],
+      isPublic: true,
+      publicLevel: "B1",
+      likeCount: 1,
+      fields: {
+        create: [
+          {
+            placement: "ANSWER_SHEET",
+            type: "MULTIPLE_CHOICE",
+            label: "1",
+            prompt: "If it rains tomorrow, we ____ the picnic.",
+            order: 0,
+            points: 1,
+            options: [
+              { id: "A", text: "will cancel" },
+              { id: "B", text: "cancelled" },
+              { id: "C", text: "would cancel" },
+              { id: "D", text: "cancel" },
+            ],
+            answerKey: { correct: "A" },
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "TEXT",
+            label: "2",
+            prompt: "If I ____ (be) you, I would review carefully.",
+            order: 1,
+            points: 1,
+            answerKey: { accepted: ["were", "was"] },
+          },
+        ],
+      },
+    },
+  });
+
+  const discoverWs2 = await prisma.worksheet.create({
+    data: {
+      ownerId: teacher2.id,
+      title: "Discover: IELTS Academic Task 1 Trends",
+      subject: "ENGLISH",
+      instructions: "Practice describing upward and downward trends cleanly.",
+      tags: ["ielts", "writing", "academic"],
+      isPublic: true,
+      publicLevel: "IELTS",
+      likeCount: 1,
+      fields: {
+        create: [
+          {
+            placement: "ANSWER_SHEET",
+            type: "MULTIPLE_CHOICE",
+            label: "1",
+            prompt: "Which verb describes a sudden sharp increase?",
+            order: 0,
+            points: 1,
+            options: [
+              { id: "A", text: "plummet" },
+              { id: "B", text: "surge" },
+              { id: "C", text: "stabilize" },
+              { id: "D", text: "decline" },
+            ],
+            answerKey: { correct: "B" },
+          },
+        ],
+      },
+    },
+  });
+
+  await prisma.worksheetLike.createMany({
+    data: [
+      { worksheetId: discoverWs1.id, userId: teacher2.id },
+      { worksheetId: discoverWs2.id, userId: teacher1.id },
+    ],
+  });
+
+  await prisma.teacherFollow.create({
+    data: {
+      followerId: teacher2.id,
+      teacherId: teacher1.id,
+    },
+  });
+
+  await prisma.contentReport.create({
+    data: {
+      worksheetId: discoverWs2.id,
+      reporterId: students[2]!.id,
+      reason: "Mẫu báo cáo kiểm duyệt cộng đồng (seed).",
+      status: "OPEN",
+    },
+  });
+
+  await prisma.publicAttempt.create({
+    data: {
+      assignmentId: asgUnit6.id,
+      guestName: "Khách Luyện Tập Demo",
+      answers: { demo: "sample" },
+      autoScore: 8,
+      maxScore: 10,
+    },
   });
 
   console.log("Seed completed successfully!");

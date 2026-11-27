@@ -2,6 +2,7 @@
 
 import { TRASH_DAYS } from "@/lib/trash";
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetchJson } from "@/lib/api-client";
 import { DriveAdminCard } from "@/components/drive/DriveAdminCard";
@@ -224,16 +225,24 @@ export default function AdminPortalPage() {
 
   return (
     <div className="space-y-8 pb-10">
-      <div className="flex items-center gap-3">
-        <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#4F46E5] text-white">
-          <Shield className="h-6 w-6" />
-        </span>
-        <div>
-          <h1 className="text-2xl font-bold text-[#0B1C30]">{vi.admin.title}</h1>
-          <p className="text-sm text-[#464555]">
-            {tr("Quản lý tài khoản, phân quyền, khoá tài khoản và liên kết phụ huynh – học sinh.", "Manage accounts, roles, account locks and parent – student links.")}
-          </p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#4F46E5] text-white">
+            <Shield className="h-6 w-6" />
+          </span>
+          <div>
+            <h1 className="text-2xl font-bold text-[#0B1C30]">{vi.admin.title}</h1>
+            <p className="text-sm text-[#464555]">
+              {tr("Quản lý tài khoản, phân quyền, khoá tài khoản và liên kết phụ huynh – học sinh.", "Manage accounts, roles, account locks and parent – student links.")}
+            </p>
+          </div>
         </div>
+        <Button variant="outline" size="sm" asChild className="min-h-[40px]">
+          <Link href="/admin/moderation" data-testid="admin-moderation-link">
+            <Shield className="h-4 w-4 text-amber-600" />
+            {tr("Kiểm duyệt Discover", "Discover Moderation")}
+          </Link>
+        </Button>
       </div>
 
       {/* System Stats Grid */}

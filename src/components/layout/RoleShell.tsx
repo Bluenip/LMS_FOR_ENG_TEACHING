@@ -45,6 +45,7 @@ export async function RoleShell({
       fallbackName = tr("Quản trị viên", "Administrator");
       links = [
         { href: "/admin", label: m.nav.adminOverview, exact: true },
+        { href: "/admin/moderation", label: tr("Kiểm duyệt", "Moderation") },
         { href: "/admin/audit", label: tr("Nhật ký hoạt động", "Audit log") },
         { href: "/admin/errors", label: tr("Nhật ký lỗi", "Error log") },
         { href: "/teacher", label: tr("Giao diện Giáo viên", "Teacher view") },
@@ -60,6 +61,7 @@ export async function RoleShell({
         { href: "/teacher/schedule", label: tr("Lịch dạy", "Schedule") },
         { href: "/teacher/worksheets", label: m.nav.worksheets },
         { href: "/teacher/question-bank", label: tr("Ngân hàng câu", "Question bank") },
+        { href: "/discover", label: tr("Khám phá", "Discover") },
         { href: "/teacher/assignments", label: m.nav.assignments },
         { href: "/teacher/exams", label: tr("Kỳ thi", "Exams") },
         { href: "/teacher/settings", label: tr("Cài đặt", "Settings") },

@@ -3,6 +3,7 @@
 import { BackLink } from "@/components/navigation/BackLink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Rnd } from "react-rnd";
 import { toast } from "sonner";
 import {
@@ -24,11 +25,13 @@ import {
   FileDown,
   FileText,
   FileUp,
+  Globe,
   Grid,
   Grid3X3,
   Hash,
   Headphones,
   Highlighter,
+  History,
   ImagePlus,
   Link2,
   ListChecks,
@@ -126,6 +129,10 @@ interface WorksheetEditorProps {
     pdfFileKey: string | null;
     pageCount: number;
     isShared?: boolean;
+    isPublic?: boolean;
+    publicLevel?: string | null;
+    tags?: string[];
+    folderId?: string | null;
     pages: WorksheetPageDTO[];
     fields: EditorFieldDTO[];
     audios?: WorksheetAudioDTO[];
@@ -459,6 +466,7 @@ function clamp01(val: number): number {
 
 export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
   const { m: vi, tr, locale } = useI18n();
+  const router = useRouter();
   const [worksheetId] = useState(initialWorksheet.id);
   const [title, setTitle] = useState(initialWorksheet.title);
   const [subject, setSubject] = useState<WorksheetSubject>(() =>
@@ -476,6 +484,59 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
   const [pages, setPages] = useState<WorksheetPageDTO[]>(initialWorksheet.pages);
   const [audios, setAudios] = useState<WorksheetAudioDTO[]>(initialWorksheet.audios ?? []);
   const [isShared, setIsShared] = useState(Boolean(initialWorksheet.isShared));
+  const [isPublic, setIsPublic] = useState(Boolean(initialWorksheet.isPublic));
+  const [publicLevel, setPublicLevel] = useState(initialWorksheet.publicLevel ?? "B1");
+  const [tagsText, setTagsText] = useState((initialWorksheet.tags ?? []).join(", "));
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const [savingPublish, setSavingPublish] = useState(false);
+
+  // Version history modal state
+  const [versionDialogOpen, setVersionDialogOpen] = useState(false);
+  const [loadingVersions, setLoadingVersions] = useState(false);
+  const [versions, setVersions] = useState<
+    Array<{
+      id: string;
+      versionNo: number;
+      note: string | null;
+      createdAt: string;
+      createdByName: string;
+      title: string;
+      fieldCount: number;
+      fieldDelta: number;
+    }>
+  >([]);
+  const [hasSubmissionsForVersion, setHasSubmissionsForVersion] = useState(false);
+  const [versionNote, setVersionNote] = useState("");
+  const [savingVersion, setSavingVersion] = useState(false);
+  const [restoringVersionId, setRestoringVersionId] = useState<string | null>(null);
+
+  // AI Question Generator modal state
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [aiSourceText, setAiSourceText] = useState("");
+  const [aiCount, setAiCount] = useState(5);
+  const [aiLevel, setAiLevel] = useState("B1");
+  const [aiTypes, setAiTypes] = useState<
+    Array<"MULTIPLE_CHOICE" | "TRUE_FALSE_GROUP" | "TEXT" | "WORDSEARCH" | "ESSAY">
+  >(["MULTIPLE_CHOICE"]);
+  const [aiQuota, setAiQuota] = useState<{
+    limit: number;
+    used: number;
+    remaining: number;
+    hasApiKey: boolean;
+  } | null>(null);
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiDrafts, setAiDrafts] = useState<
+    Array<{
+      type: "MULTIPLE_CHOICE" | "TRUE_FALSE_GROUP" | "TEXT" | "WORDSEARCH" | "ESSAY";
+      prompt: string;
+      points: number;
+      options: EditorFieldDTO["options"];
+      answerKey: Record<string, unknown>;
+      explanation: string | null;
+      topicTag: string | null;
+    }>
+  >([]);
+  const [selectedAiIndices, setSelectedAiIndices] = useState<number[]>([]);
   const [uploadingAudio, setUploadingAudio] = useState(false);
   const [importingWord, setImportingWord] = useState(false);
   const [uploadingBgImages, setUploadingBgImages] = useState(false);
@@ -1058,6 +1119,168 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
           ? tr("Đã chia sẻ phiếu cho các giáo viên khác!", "Shared with other teachers!")
           : tr("Đã tắt chia sẻ.", "Sharing disabled.")
       );
+    }
+  };
+
+  const loadVersions = async () => {
+    setLoadingVersions(true);
+    try {
+      const res = await fetch(`/api/worksheets/${worksheetId}/versions`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? tr("Không tải được phiên bản", "Failed to load versions"));
+      setVersions(json.versions ?? []);
+      setHasSubmissionsForVersion(Boolean(json.hasSubmissions));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : tr("Lỗi tải phiên bản", "Failed to load versions"));
+    } finally {
+      setLoadingVersions(false);
+    }
+  };
+
+  const handleCreateManualVersion = async () => {
+    setSavingVersion(true);
+    try {
+      const res = await fetch(`/api/worksheets/${worksheetId}/versions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: versionNote.trim() || null }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? tr("Lưu phiên bản thất bại", "Failed to save snapshot"));
+      toast.success(tr("Đã lưu phiên bản phiếu bài tập!", "Saved worksheet snapshot!"));
+      setVersionNote("");
+      await loadVersions();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : tr("Lỗi lưu phiên bản", "Error saving snapshot"));
+    } finally {
+      setSavingVersion(false);
+    }
+  };
+
+  const handleRestoreVersion = async (versionId: string) => {
+    setRestoringVersionId(versionId);
+    try {
+      const res = await fetch(`/api/worksheets/${worksheetId}/versions/${versionId}/restore`, {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? tr("Khôi phục thất bại", "Restore failed"));
+      if (json.mode === "CLONED" && json.worksheetId) {
+        toast.success(
+          tr("Đã khôi phục thành bản sao mới để bảo toàn bài nộp học sinh!", "Restored into a safe cloned worksheet!")
+        );
+        setVersionDialogOpen(false);
+        router.push(`/teacher/worksheets/${json.worksheetId}/edit`);
+      } else {
+        toast.success(tr("Đã khôi phục phiên bản phiếu tại chỗ!", "Restored worksheet version!"));
+        window.location.reload();
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : tr("Khôi phục thất bại", "Restore failed"));
+    } finally {
+      setRestoringVersionId(null);
+    }
+  };
+
+  const loadAiQuota = async () => {
+    try {
+      const res = await fetch("/api/ai/generate-questions");
+      if (res.ok) {
+        const json = await res.json();
+        setAiQuota(json.quota ?? null);
+      }
+    } catch {
+      // Ignore silent quota refresh errors
+    }
+  };
+
+  const handleAiGenerate = async () => {
+    setAiGenerating(true);
+    try {
+      const res = await fetch("/api/ai/generate-questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          worksheetId,
+          sourceText: aiSourceText,
+          subject,
+          count: aiCount,
+          types: aiTypes,
+          level: aiLevel.trim() || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? tr("AI sinh câu hỏi thất bại", "AI generation failed"));
+      const drafts = Array.isArray(json.questions) ? json.questions : [];
+      setAiDrafts(drafts);
+      setSelectedAiIndices(drafts.map((_: unknown, idx: number) => idx));
+      if (json.quota) setAiQuota((prev) => ({ ...(prev ?? { hasApiKey: true }), ...json.quota }));
+      toast.success(tr(`AI đã soạn ${drafts.length} câu hỏi!`, `Generated ${drafts.length} questions!`));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : tr("Lỗi gọi AI", "AI request failed"));
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const handleInsertAiQuestions = () => {
+    const picked = aiDrafts.filter((_, idx) => selectedAiIndices.includes(idx));
+    if (picked.length === 0) return;
+    const startNum = nextQuestionNumber(fields);
+    const nextFields: EditorFieldDTO[] = picked.map((q, idx) => ({
+      id: `tmp-ai-${Date.now()}-${idx}`,
+      isPersisted: false,
+      placement: "ANSWER_SHEET",
+      type: q.type,
+      label: String(startNum + idx),
+      prompt: q.prompt,
+      explanation: q.explanation,
+      topicTag: q.topicTag,
+      order: fields.length + idx,
+      points: q.points,
+      options: q.options,
+      answerKey: q.answerKey,
+      gradingOpts: null,
+      style: { fontSize: 13, align: "left", transparentBg: false },
+    }));
+    const merged = [...fields, ...nextFields];
+    setFields(merged);
+    setStudioView("sheet");
+    setAiDialogOpen(false);
+    setAiDrafts([]);
+    void persistFields(merged);
+    toast.success(tr(`Đã chèn ${nextFields.length} câu hỏi AI vào phiếu!`, `Inserted ${nextFields.length} AI questions!`));
+  };
+
+  const handleSaveDiscoverMeta = async () => {
+    setSavingPublish(true);
+    try {
+      const tags = tagsText
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
+        .slice(0, 20);
+      const res = await fetch(`/api/worksheets/${worksheetId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          isPublic,
+          publicLevel: publicLevel || null,
+          tags,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? tr("Cập nhật thất bại", "Update failed"));
+      toast.success(
+        isPublic
+          ? tr("Đã xuất bản phiếu lên Thư viện Cộng đồng!", "Published to Discover community!")
+          : tr("Đã cập nhật thẻ & tắt công khai Discover.", "Updated metadata & set private.")
+      );
+      setPublishDialogOpen(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : vi.common.saveFailed);
+    } finally {
+      setSavingPublish(false);
     }
   };
 
@@ -2139,8 +2362,49 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
             </div>
           </div>
 
-          {/* Right: Share + Export + Preview + Save + Assign CTA */}
+          {/* Right: Phase 25 AI/Versions/Discover + Share + Export + Preview + Save + Assign CTA */}
           <div className="flex flex-wrap items-center gap-1.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setVersionDialogOpen(true);
+                void loadVersions();
+              }}
+              data-testid="version-history-btn"
+              title={tr("Lịch sử phiên bản & khôi phục", "Version history & restore")}
+            >
+              <History className="h-4 w-4 text-[#4F46E5]" />
+              <span className="hidden 2xl:inline">{tr("Phiên bản", "Versions")}</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setAiDialogOpen(true);
+                void loadAiQuota();
+              }}
+              data-testid="ai-generate-btn"
+              title={tr("Dùng AI tạo câu hỏi nhanh từ đoạn văn", "Generate questions with AI")}
+            >
+              <Sparkles className="h-4 w-4 text-[#F97316]" />
+              <span className="hidden 2xl:inline">AI</span>
+            </Button>
+            <Button
+              type="button"
+              variant={isPublic ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setPublishDialogOpen(true)}
+              data-testid="publish-discover-btn"
+              title={tr("Xuất bản lên Thư viện Cộng đồng (Discover) & gắn nhãn", "Publish to Discover & edit tags")}
+            >
+              <Globe className={cn("h-4 w-4", isPublic && "text-emerald-600")} />
+              <span className="hidden 2xl:inline">
+                {isPublic ? "Discover" : tr("Cộng đồng", "Discover")}
+              </span>
+            </Button>
             <Button
               type="button"
               variant={isShared ? "secondary" : "outline"}
@@ -3824,6 +4088,334 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                 `Thêm ${selectedBlankIndices.length} ô đã chọn`,
                 `Add ${selectedBlankIndices.length} selected`
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Version History Dialog */}
+      <Dialog open={versionDialogOpen} onOpenChange={setVersionDialogOpen}>
+        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto" data-testid="version-history-dialog">
+          <DialogHeader>
+            <DialogTitle>{tr("Lịch sử phiên bản phiếu bài tập", "Worksheet version history")}</DialogTitle>
+            <DialogDescription>
+              {tr(
+                "Hệ thống tự động lưu bản chụp trước khi giao bài (tối đa 30 phiên bản gần nhất).",
+                "Snapshots are automatically captured before assigning (up to 30 versions retained)."
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {hasSubmissionsForVersion && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              {tr(
+                "Phiếu này đã có học sinh nộp bài. Khi bấm Khôi phục, hệ thống sẽ tự tạo thành một phiếu sao chép mới để bảo toàn toàn bộ điểm và bài làm lịch sử.",
+                "This worksheet already has student submissions. Restoring creates a safe cloned copy so existing student answers remain untouched."
+              )}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              value={versionNote}
+              onChange={(e) => setVersionNote(e.target.value)}
+              placeholder={tr("Ghi chú phiên bản (VD: Sau khi chỉnh phần Reading)", "Snapshot note (optional)")}
+              className="flex-1 min-w-[200px]"
+              data-testid="version-note-input"
+            />
+            <Button
+              type="button"
+              disabled={savingVersion}
+              onClick={() => void handleCreateManualVersion()}
+              data-testid="create-version-snapshot-btn"
+            >
+              <Save className="h-4 w-4" />
+              {savingVersion ? vi.common.saving : tr("Lưu phiên bản", "Save snapshot")}
+            </Button>
+          </div>
+
+          <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+            {loadingVersions ? (
+              <p className="py-6 text-center text-xs text-slate-400">{vi.common.loading}</p>
+            ) : versions.length === 0 ? (
+              <p className="py-6 text-center text-xs text-slate-400">
+                {tr("Chưa có phiên bản nào được lưu.", "No saved versions yet.")}
+              </p>
+            ) : (
+              versions.map((v) => (
+                <div
+                  key={v.id}
+                  data-testid={`version-row-${v.versionNo}`}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3 text-xs"
+                >
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="indigo">v{v.versionNo}</Badge>
+                      <span className="font-bold text-[#0B1C30]">{v.title}</span>
+                      <span className="text-slate-500">
+                        ({v.fieldCount} {tr("câu", "Q")}
+                        {v.fieldDelta !== 0
+                          ? `, ${v.fieldDelta > 0 ? `+${v.fieldDelta}` : v.fieldDelta}`
+                          : ""}
+                        )
+                      </span>
+                    </div>
+                    {v.note && <p className="text-[#464555]">{v.note}</p>}
+                    <p className="text-[11px] text-slate-400">
+                      {v.createdByName} • {new Date(v.createdAt).toLocaleString(locale === "en" ? "en-US" : "vi-VN")}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={restoringVersionId === v.id}
+                    onClick={() => void handleRestoreVersion(v.id)}
+                    data-testid={`restore-version-${v.versionNo}`}
+                  >
+                    {restoringVersionId === v.id
+                      ? tr("Đang khôi phục…", "Restoring…")
+                      : tr("Khôi phục", "Restore")}
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI Question Generator Dialog */}
+      <Dialog open={aiDialogOpen} onOpenChange={setAiDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto" data-testid="ai-generator-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-[#F97316]" />
+              {tr("Tạo câu hỏi bằng AI (Gemini)", "AI Question Generator (Gemini)")}
+            </DialogTitle>
+            <DialogDescription>
+              {aiQuota
+                ? tr(
+                    `Hạn mức hôm nay: còn ${aiQuota.remaining}/${aiQuota.limit} lượt.`,
+                    `Daily quota: ${aiQuota.remaining}/${aiQuota.limit} requests remaining.`
+                  )
+                : tr("Nhập đoạn văn bản hoặc chủ đề để AI soạn câu hỏi kèm đáp án.", "Paste source material to generate graded questions.")}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 text-sm">
+            {aiQuota && !aiQuota.hasApiKey && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                {tr(
+                  "Máy chủ chưa cấu hình GEMINI_API_KEY nên chưa gọi được AI trực tiếp.",
+                  "GEMINI_API_KEY is not configured on this server."
+                )}
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label>{tr("Văn bản / Ngữ liệu nguồn", "Source text / Passage")}</Label>
+              <Textarea
+                rows={4}
+                value={aiSourceText}
+                onChange={(e) => setAiSourceText(e.target.value)}
+                placeholder={tr(
+                  "Dán đoạn đọc hiểu, từ vựng hoặc mô tả chủ đề (tối thiểu 10 ký tự)…",
+                  "Paste reading text, vocabulary list, or topic description (min 10 chars)…"
+                )}
+                data-testid="ai-source-input"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="space-y-1">
+                <Label className="text-xs">{tr("Số câu hỏi", "Question count")}</Label>
+                <Input
+                  type="number"
+                  step={1}
+                  min={1}
+                  max={15}
+                  value={aiCount}
+                  onChange={(e) => setAiCount(Math.max(1, Math.min(15, Number(e.target.value) || 5)))}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">{tr("Trình độ", "Level")}</Label>
+                <Input
+                  value={aiLevel}
+                  onChange={(e) => setAiLevel(e.target.value)}
+                  placeholder="B1 / IELTS / THPT"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">{tr("Dạng câu hỏi cần tạo", "Question types")}</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {(
+                  [
+                    ["MULTIPLE_CHOICE", tr("Trắc nghiệm", "MCQ")],
+                    ["TRUE_FALSE_GROUP", tr("Đúng/Sai 4 ý", "T/F Group")],
+                    ["TEXT", tr("Điền từ", "Fill-in-blank")],
+                    ["WORDSEARCH", "Wordsearch"],
+                    ["ESSAY", tr("Tự luận", "Essay")],
+                  ] as const
+                ).map(([typeId, labelText]) => {
+                  const active = aiTypes.includes(typeId);
+                  return (
+                    <button
+                      key={typeId}
+                      type="button"
+                      onClick={() =>
+                        setAiTypes((prev) =>
+                          prev.includes(typeId)
+                            ? prev.length > 1
+                              ? prev.filter((x) => x !== typeId)
+                              : prev
+                            : [...prev, typeId]
+                        )
+                      }
+                      className={cn(
+                        "rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition",
+                        active
+                          ? "border-[#4F46E5] bg-[#EEF2FF] text-[#3525CD]"
+                          : "border-slate-200 bg-white text-[#464555]"
+                      )}
+                    >
+                      {labelText}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                disabled={aiGenerating || aiSourceText.trim().length < 10}
+                onClick={() => void handleAiGenerate()}
+                data-testid="ai-generate-submit-btn"
+              >
+                <Sparkles className="h-4 w-4" />
+                {aiGenerating ? tr("AI đang soạn…", "Generating…") : tr("Sinh câu hỏi bằng AI", "Generate questions")}
+              </Button>
+            </div>
+
+            {aiDrafts.length > 0 && (
+              <div className="space-y-2 border-t border-slate-100 pt-3">
+                <p className="text-xs font-bold text-[#0B1C30]">
+                  {tr(`Xem trước ${aiDrafts.length} câu hỏi AI đã soạn:`, `Preview (${aiDrafts.length} drafts):`)}
+                </p>
+                <div className="max-h-60 space-y-2 overflow-y-auto pr-1">
+                  {aiDrafts.map((q, idx) => {
+                    const checked = selectedAiIndices.includes(idx);
+                    return (
+                      <label
+                        key={idx}
+                        className={cn(
+                          "flex cursor-pointer items-start gap-2.5 rounded-xl border p-2.5 text-xs",
+                          checked ? "border-[#4F46E5] bg-[#EEF2FF]/50" : "border-slate-200"
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) =>
+                            setSelectedAiIndices((prev) =>
+                              e.target.checked ? [...prev, idx] : prev.filter((x) => x !== idx)
+                            )
+                          }
+                          className="mt-0.5 h-4 w-4 rounded accent-[#4F46E5]"
+                        />
+                        <div className="space-y-1">
+                          <Badge variant="neutral">{q.type}</Badge>
+                          <p className="font-medium text-[#0B1C30]">{q.prompt}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    disabled={selectedAiIndices.length === 0}
+                    onClick={handleInsertAiQuestions}
+                    data-testid="ai-insert-btn"
+                  >
+                    {tr(`Chèn ${selectedAiIndices.length} câu vào phiếu`, `Insert ${selectedAiIndices.length} selected`)}
+                  </Button>
+                </DialogFooter>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Publish to Discover & Tags Dialog */}
+      <Dialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen}>
+        <DialogContent className="max-w-md" data-testid="publish-discover-dialog">
+          <DialogHeader>
+            <DialogTitle>{tr("Xuất bản lên Cộng đồng (Discover)", "Publish to Discover")}</DialogTitle>
+            <DialogDescription>
+              {tr(
+                "Cho phép giáo viên khác tìm thấy, xem trước và clone phiếu này về thư viện của họ.",
+                "Allow educators in Discover to browse, preview, and clone this worksheet."
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3">
+              <div>
+                <p className="font-semibold text-[#0B1C30]">
+                  {tr("Hiển thị công khai trên /discover", "Publicly listed on /discover")}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {tr("Không bao gồm kết quả bài làm của học sinh.", "Student submissions remain private.")}
+                </p>
+              </div>
+              <Switch
+                checked={isPublic}
+                onCheckedChange={setIsPublic}
+                data-testid="publish-discover-switch"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>{tr("Trình độ mục tiêu", "Target level")}</Label>
+              <select
+                value={publicLevel}
+                onChange={(e) => setPublicLevel(e.target.value)}
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                data-testid="publish-discover-level"
+              >
+                {["A1", "A2", "B1", "B2", "C1", "IELTS", "TOEIC", "THPT"].map((lvl) => (
+                  <option key={lvl} value={lvl}>
+                    {lvl}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>{tr("Thẻ phân loại (cách nhau bằng dấu phẩy)", "Tags (comma-separated)")}</Label>
+              <Input
+                value={tagsText}
+                onChange={(e) => setTagsText(e.target.value)}
+                placeholder="grammar, unit6, tense"
+                data-testid="publish-discover-tags"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={() => setPublishDialogOpen(false)}>
+              {vi.common.cancel}
+            </Button>
+            <Button
+              type="button"
+              disabled={savingPublish}
+              onClick={() => void handleSaveDiscoverMeta()}
+              data-testid="publish-discover-save"
+            >
+              {savingPublish ? vi.common.saving : vi.common.save}
             </Button>
           </DialogFooter>
         </DialogContent>

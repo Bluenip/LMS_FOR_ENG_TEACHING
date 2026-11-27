@@ -109,8 +109,26 @@ export async function updateWorksheet(
     instructions?: string | null;
     passages?: Array<{ id: string; title: string; content: string; order: number }> | null;
     isShared?: boolean;
+    folderId?: string | null;
+    tags?: string[];
+    isPublic?: boolean;
+    publicLevel?: string | null;
   }
 ) {
+  if (input.folderId) {
+    const existingWs = await prisma.worksheet.findUnique({
+      where: { id: worksheetId },
+      select: { ownerId: true },
+    });
+    const folder = await prisma.libraryFolder.findUnique({
+      where: { id: input.folderId },
+      select: { ownerId: true, kind: true },
+    });
+    if (!existingWs || !folder || folder.ownerId !== existingWs.ownerId || folder.kind !== "WORKSHEET") {
+      throw new AppError("Không tìm thấy thư mục.", 404, "NOT_FOUND");
+    }
+  }
+
   return prisma.worksheet.update({
     where: { id: worksheetId },
     data: {
@@ -126,6 +144,10 @@ export async function updateWorksheet(
           }
         : {}),
       ...(input.isShared !== undefined ? { isShared: input.isShared } : {}),
+      ...(input.folderId !== undefined ? { folderId: input.folderId } : {}),
+      ...(input.tags !== undefined ? { tags: input.tags } : {}),
+      ...(input.isPublic !== undefined ? { isPublic: input.isPublic } : {}),
+      ...(input.publicLevel !== undefined ? { publicLevel: input.publicLevel } : {}),
     },
   });
 }
@@ -625,11 +647,12 @@ export async function authorizeFileDownload(
   // Check if worksheet PDF
   const worksheet = await prisma.worksheet.findFirst({
     where: { pdfFileKey: fileKey },
-    select: { id: true, ownerId: true },
+    select: { id: true, ownerId: true, isPublic: true, publicHiddenByAdmin: true },
   });
   if (worksheet) {
     if (role === "TEACHER") {
       if (worksheet.ownerId === userId) return true;
+      if (worksheet.isPublic && !worksheet.publicHiddenByAdmin) return true;
       const taught = await prisma.assignment.findFirst({
         where: {
           worksheetId: worksheet.id,
@@ -691,12 +714,12 @@ export async function authorizeFileDownload(
     const wsId = imgMatch[1]!;
     const ws = await prisma.worksheet.findFirst({
       where: { id: wsId, deletedAt: null },
-      select: { id: true, ownerId: true, isShared: true },
+      select: { id: true, ownerId: true, isShared: true, isPublic: true, publicHiddenByAdmin: true },
     });
     if (!ws) return false;
     if (role === "TEACHER" && ws.ownerId === userId) return true;
 
-    // For non-owner teachers (shared), students, and parents, confirm the key actually belongs to this worksheet
+    // For non-owner teachers (shared/public), students, and parents, confirm the key actually belongs to this worksheet
     const isReferenced = await prisma.worksheet.findFirst({
       where: {
         id: wsId,
@@ -710,7 +733,7 @@ export async function authorizeFileDownload(
     if (!isReferenced) return false;
 
     if (role === "TEACHER") {
-      if (ws.isShared) return true;
+      if (ws.isShared || (ws.isPublic && !ws.publicHiddenByAdmin)) return true;
       const taught = await prisma.assignment.findFirst({
         where: {
           worksheetId: wsId,

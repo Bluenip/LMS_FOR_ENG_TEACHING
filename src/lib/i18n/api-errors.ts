@@ -218,6 +218,29 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
     "No verified parent link found for this student.",
   "Máy chủ chưa cấu hình VAPID Web Push.": "Web Push VAPID keys are not configured on the server.",
 
+  // Library Folders, Versions, Discover, AI & Public Practice (Phase 25)
+  "Tên thư mục không được để trống": "Folder name cannot be empty.",
+  "Không tìm thấy thư mục.": "Folder not found.",
+  "Không thể đặt thư mục con làm thư mục cha (tạo vòng lặp).":
+    "Cannot move a folder inside itself or its own descendant.",
+  "Không tìm thấy phiên bản phiếu bài tập.": "Worksheet version not found.",
+  "Không tìm thấy học liệu công khai này.": "Public worksheet not found or is hidden.",
+  "Chỉ quản trị viên mới kiểm duyệt được báo cáo nội dung.":
+    "Only administrators can moderate content reports.",
+  "Hệ thống chưa bật AI (chưa cấu hình GEMINI_API_KEY).":
+    "AI question generation is not enabled yet (missing GEMINI_API_KEY).",
+  "Bạn đã dùng hết lượt tạo câu hỏi AI trong ngày hôm nay.":
+    "You have reached your daily AI question generation limit for today.",
+  "Gemini API trả về lỗi hoặc không phản hồi hợp lệ.":
+    "Gemini API returned an invalid response or failed.",
+  "Vui lòng mô tả lý do báo cáo (tối thiểu 5 ký tự)":
+    "Please describe the report reason (at least 5 characters).",
+  "Vui lòng nhập nội dung nguồn (tối thiểu 10 ký tự)":
+    "Please enter source material (at least 10 characters).",
+  "Vui lòng nhập họ tên để làm bài": "Please enter your name to submit.",
+  "Liên kết luyện tập công khai không tồn tại hoặc đã tắt.":
+    "This public practice link does not exist or has been disabled.",
+
   // Parent & admin
   "Chỉ học sinh xem được danh sách mã liên kết của mình.":
     "Only students can view their own parent invite codes.",

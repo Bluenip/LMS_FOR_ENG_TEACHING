@@ -20,6 +20,7 @@ import { generateVariantsForAssignment } from "./examVariantService";
 import { formatDateTime } from "@/lib/utils";
 import type { UpdateAssignmentInput } from "@/lib/validators";
 import { logAudit } from "@/server/auditService";
+import { createWorksheetSnapshot } from "./worksheetVersionService";
 
 export interface CreateAssignmentInput {
   worksheetId: string;
@@ -127,6 +128,12 @@ export async function createAssignmentsForClasses(
 
   const openAt = input.openAt ? new Date(input.openAt) : null;
   const dueAt = input.dueAt ? new Date(input.dueAt) : null;
+
+  await createWorksheetSnapshot(
+    worksheet.id,
+    teacherId,
+    "Tự động lưu trước khi giao bài"
+  ).catch(() => undefined);
 
   const createdAssignments = [];
   for (const cls of classes) {

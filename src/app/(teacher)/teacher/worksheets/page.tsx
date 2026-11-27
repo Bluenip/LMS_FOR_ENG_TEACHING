@@ -18,6 +18,9 @@ import {
   FileDown,
   FileText,
   FileUp,
+  Folder,
+  FolderPlus,
+  Globe,
   Headphones,
   Layers,
   Plus,
@@ -44,6 +47,8 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -62,32 +67,74 @@ interface WorksheetRow {
   pdfFileKey: string | null;
   pageCount: number;
   isShared?: boolean;
+  isPublic?: boolean;
+  publicLevel?: string | null;
+  folderId?: string | null;
+  tags?: string[];
   lastDriveBackupAt?: string | null;
   updatedAt: string;
   owner?: { id: string; name: string; email: string };
   _count: { fields: number; assignments: number; audios?: number; driveFiles?: number };
 }
 
+interface FolderItem {
+  id: string;
+  parentId: string | null;
+  kind: string;
+  name: string;
+  color: string | null;
+  worksheetCount: number;
+}
+
+interface FolderTreeNode extends FolderItem {
+  children: FolderTreeNode[];
+}
+
+function collectFolderSubtreeIds(folders: FolderItem[], rootId: string): Set<string> {
+  const result = new Set<string>([rootId]);
+  let added = true;
+  while (added) {
+    added = false;
+    for (const f of folders) {
+      if (f.parentId && result.has(f.parentId) && !result.has(f.id)) {
+        result.add(f.id);
+        added = true;
+      }
+    }
+  }
+  return result;
+}
+
 type WorksheetSort = "updated_desc" | "updated_asc" | "title" | "most_assigned" | "most_questions";
 
 
-/** Client-side search + subject filter + sort for the worksheet library. */
+/** Client-side search + subject filter + folder filter + sort for the worksheet library. */
 function filterAndSortWorksheets(
   rows: WorksheetRow[],
   query: string,
   sort: WorksheetSort,
-  subjectFilter: "ALL" | WorksheetSubject
+  subjectFilter: "ALL" | WorksheetSubject,
+  folderFilter?: string,
+  subtreeIds?: Set<string> | null
 ): WorksheetRow[] {
   const needle = foldText(query.trim());
   const bySubject =
     subjectFilter === "ALL"
       ? rows
       : rows.filter((ws) => (ws.subject ?? "GENERAL") === subjectFilter);
+  const byFolder =
+    !folderFilter || folderFilter === "ALL"
+      ? bySubject
+      : folderFilter === "UNFILED"
+        ? bySubject.filter((ws) => !ws.folderId)
+        : bySubject.filter((ws) => Boolean(ws.folderId && subtreeIds?.has(ws.folderId)));
   const out = needle
-    ? bySubject.filter((ws) =>
-        foldText(`${ws.title} ${ws.instructions ?? ""} ${ws.owner?.name ?? ""}`).includes(needle)
+    ? byFolder.filter((ws) =>
+        foldText(
+          `${ws.title} ${ws.instructions ?? ""} ${ws.owner?.name ?? ""} ${(ws.tags ?? []).join(" ")}`
+        ).includes(needle)
       )
-    : [...bySubject];
+    : [...byFolder];
   const time = (ws: WorksheetRow) => new Date(ws.updatedAt).getTime();
   out.sort((a, b) => {
     switch (sort) {
@@ -156,6 +203,83 @@ export default function TeacherWorksheetsPage() {
   // Backup import state
   const [importingBackup, setImportingBackup] = useState(false);
   const backupFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Phase 25: Folder tree + tag organization state
+  const [selectedFolderId, setSelectedFolderId] = useState<string>("ALL");
+  const [folderDialogOpen, setFolderDialogOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderParentId, setNewFolderParentId] = useState<string>("");
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const [deleteFolderTarget, setDeleteFolderTarget] = useState<FolderItem | null>(null);
+  const [deletingFolder, setDeletingFolder] = useState(false);
+
+  const { data: foldersData } = useQuery<{ folders: FolderItem[]; tree: FolderTreeNode[] }>({
+    queryKey: ["library-folders", "WORKSHEET"],
+    queryFn: () =>
+      apiFetchJson<{ folders: FolderItem[]; tree: FolderTreeNode[] }>(
+        "/api/folders?kind=WORKSHEET",
+        undefined,
+        tr("Không tải được thư mục", "Could not load folders")
+      ),
+  });
+
+  const handleCreateFolder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFolderName.trim()) return;
+    setCreatingFolder(true);
+    try {
+      await apiFetchJson("/api/folders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "WORKSHEET",
+          name: newFolderName.trim(),
+          parentId: newFolderParentId || null,
+        }),
+      });
+      toast.success(tr("Đã tạo thư mục mới!", "Created folder!"));
+      setFolderDialogOpen(false);
+      setNewFolderName("");
+      setNewFolderParentId("");
+      queryClient.invalidateQueries({ queryKey: ["library-folders", "WORKSHEET"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : vi.common.errorGeneric);
+    } finally {
+      setCreatingFolder(false);
+    }
+  };
+
+  const handleDeleteFolder = async () => {
+    if (!deleteFolderTarget) return;
+    setDeletingFolder(true);
+    try {
+      await apiFetchJson(`/api/folders/${deleteFolderTarget.id}`, { method: "DELETE" });
+      toast.success(tr("Đã xoá thư mục (phiếu giữ nguyên ở thư viện).", "Deleted folder (worksheets kept)."));
+      if (selectedFolderId === deleteFolderTarget.id) setSelectedFolderId("ALL");
+      setDeleteFolderTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["library-folders", "WORKSHEET"] });
+      queryClient.invalidateQueries({ queryKey: ["teacher-worksheets"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : vi.common.errorGeneric);
+    } finally {
+      setDeletingFolder(false);
+    }
+  };
+
+  const handleMoveWorksheetFolder = async (wsId: string, folderId: string | null) => {
+    try {
+      await apiFetchJson(`/api/worksheets/${wsId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderId }),
+      });
+      toast.success(tr("Đã cập nhật thư mục cho phiếu!", "Updated worksheet folder!"));
+      queryClient.invalidateQueries({ queryKey: ["teacher-worksheets"] });
+      queryClient.invalidateQueries({ queryKey: ["library-folders", "WORKSHEET"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : vi.common.errorGeneric);
+    }
+  };
 
   const { data, isLoading } = useQuery<{
     worksheets: WorksheetRow[];
@@ -476,13 +600,31 @@ export default function TeacherWorksheetsPage() {
     }
   };
 
+  const folders = useMemo(() => foldersData?.folders ?? [], [foldersData]);
+  const folderTree = foldersData?.tree ?? [];
+  const selectedSubtree = useMemo(
+    () =>
+      selectedFolderId !== "ALL" && selectedFolderId !== "UNFILED"
+        ? collectFolderSubtreeIds(folders, selectedFolderId)
+        : null,
+    [folders, selectedFolderId]
+  );
+
   const worksheets = data?.worksheets ?? [];
   const sharedWorksheets = data?.sharedWorksheets ?? [];
   /** admin: the second tab lists every other teacher's worksheet, editable */
   const isAdmin = Boolean(data?.isAdmin);
   const visibleMine = useMemo(
-    () => filterAndSortWorksheets(data?.worksheets ?? [], wsQuery, wsSort, wsSubjectFilter),
-    [data?.worksheets, wsQuery, wsSort, wsSubjectFilter]
+    () =>
+      filterAndSortWorksheets(
+        data?.worksheets ?? [],
+        wsQuery,
+        wsSort,
+        wsSubjectFilter,
+        selectedFolderId,
+        selectedSubtree
+      ),
+    [data?.worksheets, wsQuery, wsSort, wsSubjectFilter, selectedFolderId, selectedSubtree]
   );
   const visibleShared = useMemo(
     () => filterAndSortWorksheets(data?.sharedWorksheets ?? [], wsQuery, wsSort, wsSubjectFilter),
@@ -807,6 +949,92 @@ export default function TeacherWorksheetsPage() {
         </div>
       )}
 
+      {tab === "mine" && (
+        <div className="stitch-card flex flex-wrap items-center justify-between gap-3 p-3.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setSelectedFolderId("ALL")}
+              data-testid="folder-filter-all"
+              className={cn(
+                "inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition",
+                selectedFolderId === "ALL"
+                  ? "border-[#4F46E5] bg-[#EEF2FF] text-[#3525CD]"
+                  : "border-slate-200 bg-white text-[#464555] hover:bg-slate-50"
+              )}
+            >
+              <Folder className="h-3.5 w-3.5" />
+              {tr("Tất cả thư mục", "All folders")} ({worksheets.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedFolderId("UNFILED")}
+              data-testid="folder-filter-unfiled"
+              className={cn(
+                "inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition",
+                selectedFolderId === "UNFILED"
+                  ? "border-[#4F46E5] bg-[#EEF2FF] text-[#3525CD]"
+                  : "border-slate-200 bg-white text-[#464555] hover:bg-slate-50"
+              )}
+            >
+              {tr("Chưa phân loại", "Unfiled")} ({worksheets.filter((w) => !w.folderId).length})
+            </button>
+            {(() => {
+              const items: Array<{ node: FolderTreeNode; depth: number }> = [];
+              const walk = (nodes: FolderTreeNode[], depth: number) => {
+                for (const n of nodes) {
+                  items.push({ node: n, depth });
+                  if (n.children.length > 0) walk(n.children, depth + 1);
+                }
+              };
+              walk(folderTree, 0);
+              return items.map(({ node, depth }) => (
+                <div key={node.id} className="inline-flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedFolderId(node.id)}
+                    data-testid={`folder-chip-${node.id}`}
+                    className={cn(
+                      "inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition",
+                      selectedFolderId === node.id
+                        ? "border-[#4F46E5] bg-[#EEF2FF] text-[#3525CD]"
+                        : "border-slate-200 bg-white text-[#464555] hover:bg-slate-50"
+                    )}
+                  >
+                    <Folder className="h-3.5 w-3.5 text-[#4F46E5]" />
+                    <span>
+                      {depth > 0 ? "↳ " : ""}
+                      {node.name}
+                    </span>
+                    <span className="text-[11px] opacity-70">({node.worksheetCount})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteFolderTarget(node)}
+                    className="rounded-lg p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                    title={tr("Xoá thư mục", "Delete folder")}
+                    data-testid={`delete-folder-${node.id}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ));
+            })()}
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="min-h-[40px]"
+            onClick={() => setFolderDialogOpen(true)}
+            data-testid="create-folder-btn"
+          >
+            <FolderPlus className="h-4 w-4 text-[#4F46E5]" />
+            {tr("Tạo thư mục", "New folder")}
+          </Button>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="stitch-card p-12 text-center text-sm text-slate-400">
           {vi.common.loading}
@@ -905,6 +1133,41 @@ export default function TeacherWorksheetsPage() {
                   <h3 className="text-base font-bold text-[#0B1C30] line-clamp-2">{ws.title}</h3>
                   {ws.instructions && (
                     <p className="text-xs text-[#464555] line-clamp-2">{ws.instructions}</p>
+                  )}
+                  {(ws.isPublic || (ws.tags && ws.tags.length > 0)) && (
+                    <div className="flex flex-wrap items-center gap-1">
+                      {ws.isPublic && (
+                        <Badge variant="mint" className="text-[10px]">
+                          <Globe className="h-3 w-3" /> Discover{ws.publicLevel ? ` · ${ws.publicLevel}` : ""}
+                        </Badge>
+                      )}
+                      {(ws.tags ?? []).slice(0, 3).map((tag) => (
+                        <span
+                          key={tag}
+                          className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600"
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {folders.length > 0 && (
+                    <div className="pt-0.5">
+                      <select
+                        aria-label={tr("Chọn thư mục", "Select folder")}
+                        value={ws.folderId ?? ""}
+                        onChange={(e) => void handleMoveWorksheetFolder(ws.id, e.target.value || null)}
+                        data-testid={`worksheet-folder-select-${ws.id}`}
+                        className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs text-[#464555]"
+                      >
+                        <option value="">{tr("📁 Chưa phân thư mục", "📁 Unfiled")}</option>
+                        {folders.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            📁 {f.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   )}
                   <div className="flex items-center gap-3 text-xs text-slate-500">
                     <span>
@@ -1430,6 +1693,91 @@ export default function TeacherWorksheetsPage() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Folder Dialog */}
+      <Dialog open={folderDialogOpen} onOpenChange={setFolderDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{tr("Tạo thư mục sắp xếp học liệu", "Create library folder")}</DialogTitle>
+            <DialogDescription>
+              {tr(
+                "Nhóm phiếu bài tập theo chương, lớp hoặc trình độ.",
+                "Group worksheets by unit, grade level, or topic."
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateFolder} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="folder-name-input">{tr("Tên thư mục", "Folder name")}</Label>
+              <Input
+                id="folder-name-input"
+                required
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                placeholder={tr("VD: Ngữ pháp nâng cao", "e.g., Grammar Unit 1")}
+                data-testid="folder-name-input"
+              />
+            </div>
+            {folders.length > 0 && (
+              <div className="space-y-1.5">
+                <Label htmlFor="folder-parent-select">{tr("Thư mục cha (tuỳ chọn)", "Parent folder (optional)")}</Label>
+                <select
+                  id="folder-parent-select"
+                  value={newFolderParentId}
+                  onChange={(e) => setNewFolderParentId(e.target.value)}
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                >
+                  <option value="">{tr("-- Thư mục gốc --", "-- Root folder --")}</option>
+                  {folders.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" onClick={() => setFolderDialogOpen(false)}>
+                {vi.common.cancel}
+              </Button>
+              <Button type="submit" disabled={creatingFolder} data-testid="folder-create-submit">
+                {creatingFolder ? vi.common.saving : tr("Tạo thư mục", "Create folder")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Folder Confirmation Dialog */}
+      <Dialog open={Boolean(deleteFolderTarget)} onOpenChange={(o) => !o && setDeleteFolderTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{tr("Xoá thư mục?", "Delete folder?")}</DialogTitle>
+            <DialogDescription>
+              {deleteFolderTarget
+                ? tr(
+                    `Xoá thư mục "${deleteFolderTarget.name}"? Các phiếu bên trong sẽ không bị xoá mà chuyển ra ngoài thư mục.`,
+                    `Delete folder "${deleteFolderTarget.name}"? Worksheets inside will remain safe in your library.`
+                  )
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={() => setDeleteFolderTarget(null)}>
+              {vi.common.cancel}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deletingFolder}
+              onClick={() => void handleDeleteFolder()}
+              data-testid="folder-delete-confirm"
+            >
+              {deletingFolder ? vi.common.saving : tr("Xoá thư mục", "Delete folder")}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

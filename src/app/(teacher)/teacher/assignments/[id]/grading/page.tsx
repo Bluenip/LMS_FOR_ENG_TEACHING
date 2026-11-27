@@ -17,8 +17,10 @@ import {
   Download,
   FileText,
   Flag,
+  Globe,
   Headphones,
   History,
+  Link2,
   ListChecks,
   Mic,
   Radio,
@@ -1036,6 +1038,51 @@ export default function AssignmentGradingPage() {
   const [overrideTarget, setOverrideTarget] = useState<ReportPayload["studentRows"][number] | null>(
     null
   );
+  const [publicLinkOpen, setPublicLinkOpen] = useState(false);
+  const [togglingPublicLink, setTogglingPublicLink] = useState(false);
+
+  const { data: publicLinkData } = useQuery<{
+    assignment: { id: string; allowPublicPractice: boolean; publicShareToken: string | null };
+    attempts: Array<{
+      id: string;
+      guestName: string;
+      autoScore: number;
+      maxScore: number;
+      submittedAt: string;
+    }>;
+    count: number;
+    avgScore: number | null;
+  }>({
+    queryKey: ["assignment-public-link", assignmentId],
+    enabled: publicLinkOpen,
+    queryFn: () =>
+      apiFetchJson(
+        `/api/assignments/${assignmentId}/public-link`,
+        undefined,
+        tr("Không tải được cấu hình link mở", "Failed to load public link settings")
+      ),
+  });
+
+  const handleTogglePublicLink = async (enabled: boolean) => {
+    setTogglingPublicLink(true);
+    try {
+      await apiFetchJson(`/api/assignments/${assignmentId}/public-link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      toast.success(
+        enabled
+          ? tr("Đã bật link luyện tập mở!", "Enabled public practice link!")
+          : tr("Đã tắt link luyện tập mở.", "Disabled public practice link.")
+      );
+      queryClient.invalidateQueries({ queryKey: ["assignment-public-link", assignmentId] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : tr("Không thể cập nhật link mở", "Failed to update link"));
+    } finally {
+      setTogglingPublicLink(false);
+    }
+  };
 
   const { data: report, isLoading } = useQuery<ReportPayload>({
     queryKey: ["assignment-report", assignmentId, locale],
@@ -1118,6 +1165,16 @@ export default function AssignmentGradingPage() {
               <Download className="h-4 w-4 text-emerald-600" />
               {vi.assignments.grading.exportExcel}
             </a>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setPublicLinkOpen(true)}
+            data-testid="public-practice-link-btn"
+          >
+            <Globe className="h-4 w-4 text-[#4F46E5]" />
+            {tr("Link luyện tập mở", "Public practice link")}
           </Button>
           <Button variant="outline" size="sm" asChild>
             <Link
@@ -1569,6 +1626,106 @@ export default function AssignmentGradingPage() {
           queryClient.invalidateQueries({ queryKey: ["assignment-report", assignmentId] });
         }}
       />
+
+      <Dialog open={publicLinkOpen} onOpenChange={setPublicLinkOpen}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{tr("Link luyện tập mở (Guest Practice)", "Public Practice Link")}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3">
+              <div>
+                <p className="font-semibold text-[#0B1C30]">
+                  {tr("Cho phép làm bài không cần tài khoản", "Allow guest attempts without login")}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {tr(
+                    "Kết quả khách được lưu riêng và không ảnh hưởng bảng điểm hoặc xếp hạng lớp.",
+                    "Guest attempts are isolated from class grades and leaderboard."
+                  )}
+                </p>
+              </div>
+              <Switch
+                checked={Boolean(publicLinkData?.assignment?.allowPublicPractice)}
+                disabled={togglingPublicLink}
+                onCheckedChange={(checked) => void handleTogglePublicLink(checked)}
+                data-testid="public-practice-toggle"
+              />
+            </div>
+
+            {publicLinkData?.assignment?.publicShareToken &&
+              publicLinkData.assignment.allowPublicPractice && (
+                <div className="space-y-2 rounded-xl border border-indigo-200 bg-[#EEF2FF]/50 p-3">
+                  <Label className="text-xs font-semibold text-[#3525CD]">
+                    {tr("Đường dẫn chia sẻ", "Share URL")}
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      readOnly
+                      value={
+                        typeof window !== "undefined"
+                          ? `${window.location.origin}/practice/${publicLinkData.assignment.publicShareToken}`
+                          : `/practice/${publicLinkData.assignment.publicShareToken}`
+                      }
+                      data-testid="public-practice-url-input"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        const url = `${window.location.origin}/practice/${publicLinkData.assignment.publicShareToken}`;
+                        void navigator.clipboard?.writeText(url);
+                        toast.success(tr("Đã sao chép liên kết!", "Copied URL!"));
+                      }}
+                    >
+                      <Link2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs font-semibold text-[#0B1C30]">
+                <span>
+                  {tr("Lượt khách đã làm", "Guest attempts")} ({publicLinkData?.count ?? 0})
+                </span>
+                {publicLinkData?.avgScore !== null && publicLinkData?.avgScore !== undefined && (
+                  <span className="text-[#4F46E5]">
+                    {tr("Điểm TB:", "Avg:")} {publicLinkData.avgScore}
+                  </span>
+                )}
+              </div>
+              {publicLinkData && publicLinkData.attempts.length > 0 ? (
+                <div className="max-h-56 divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-200">
+                  {publicLinkData.attempts.map((att) => (
+                    <div key={att.id} className="flex items-center justify-between px-3 py-2 text-xs">
+                      <div>
+                        <p className="font-semibold text-[#0B1C30]">{att.guestName}</p>
+                        <p className="text-[11px] text-slate-400">
+                          {formatDateTime(att.submittedAt, locale)}
+                        </p>
+                      </div>
+                      <Badge variant="indigo">
+                        {att.autoScore}/{att.maxScore}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400">
+                  {tr("Chưa có khách nào làm qua link mở.", "No guest attempts recorded yet.")}
+                </p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPublicLinkOpen(false)}>
+              {vi.common.close}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

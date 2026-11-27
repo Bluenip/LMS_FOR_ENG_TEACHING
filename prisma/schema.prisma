@@ -279,6 +279,14 @@ model User {
   weeklyReportsChild         WeeklyReportSent[]       @relation("WeeklyReportStudent")
   pushSubscriptions          PushSubscription[]
   notificationPreference     NotificationPreference?
+  libraryFolders             LibraryFolder[]
+  worksheetVersionsCreated   WorksheetVersion[]
+  worksheetLikes             WorksheetLike[]
+  followingTeachers          TeacherFollow[]          @relation("FollowFollower")
+  teacherFollowers           TeacherFollow[]          @relation("FollowTeacher")
+  contentReportsFiled        ContentReport[]          @relation("ContentReportReporter")
+  contentReportsReviewed     ContentReport[]          @relation("ContentReportReviewer")
+  aiUsageLogs                AiUsageLog[]
 
   @@index([deletedAt])
 }
@@ -403,17 +411,21 @@ model Lesson {
   deletedAt     DateTime?
   deletedSource String?
   order         Int       @default(0)
+  folderId      String?
+  tags          String[]  @default([])
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  class        Class?        @relation(fields: [classId], references: [id], onDelete: SetNull)
-  owner        User?         @relation("LessonOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  class        Class?         @relation(fields: [classId], references: [id], onDelete: SetNull)
+  owner        User?          @relation("LessonOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  folder       LibraryFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
   items        LessonItem[]
   classLinks   ClassLesson[]
   driveUploads DriveUpload[]
 
   @@index([classId, order])
   @@index([ownerId, updatedAt])
+  @@index([folderId])
 }
 
 /// A library lesson shown in a class (one lesson can be given to many classes, like a worksheet).
@@ -461,6 +473,12 @@ model Worksheet {
   pdfFileKey            String?
   pageCount             Int              @default(0)
   isShared              Boolean          @default(false) // shared with other teachers in the LMS
+  folderId              String?
+  tags                  String[]         @default([])
+  isPublic              Boolean          @default(false)
+  publicLevel           String?
+  publicHiddenByAdmin   Boolean          @default(false)
+  likeCount             Int              @default(0)
   lastDriveBackupAt     DateTime?
   lastDriveBackupFileId String?
   /// Trash (Phase 14): set when moved to the trash; purged after 30 days. Source: "USER" | "DRIVE"
@@ -469,17 +487,23 @@ model Worksheet {
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
 
-  owner       User             @relation("WorksheetOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  pages       WorksheetPage[]
-  fields      Field[]
-  audios      WorksheetAudio[]
-  assignments   Assignment[]
-  workbookItems WorkbookItem[]
-  driveFiles    DriveFile[]
-  examSessions  ExamSession[]
+  owner          User               @relation("WorksheetOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  folder         LibraryFolder?     @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  pages          WorksheetPage[]
+  fields         Field[]
+  audios         WorksheetAudio[]
+  assignments    Assignment[]
+  workbookItems  WorkbookItem[]
+  driveFiles     DriveFile[]
+  examSessions   ExamSession[]
+  versions       WorksheetVersion[]
+  likes          WorksheetLike[]
+  contentReports ContentReport[]
 
   @@index([ownerId])
   @@index([subject])
+  @@index([folderId])
+  @@index([isPublic, publicHiddenByAdmin, subject])
 }
 
 model WorksheetPage {
@@ -600,6 +624,10 @@ model Assignment {
   // Phase 22: Multi-class ExamSession
   examSessionId String?
 
+  // Phase 25: Open public guest practice link (strictly proctor OFF)
+  publicShareToken    String? @unique
+  allowPublicPractice Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -614,6 +642,7 @@ model Assignment {
   overrides             AssignmentOverride[]
   targets               AssignmentTarget[]
   reminders             AssignmentReminderSent[]
+  publicAttempts        PublicAttempt[]
 
   @@index([classId])
   @@index([worksheetId])
@@ -1403,4 +1432,111 @@ model NotificationPreference {
   updatedAt          DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Phase 25: Multi-level folder tree for organizing worksheets and lessons.
+model LibraryFolder {
+  id        String   @id @default(cuid())
+  ownerId   String
+  parentId  String?
+  kind      String   // "WORKSHEET" | "LESSON"
+  name      String
+  color     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner      User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  parent     LibraryFolder?  @relation("LibraryFolderHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children   LibraryFolder[] @relation("LibraryFolderHierarchy")
+  worksheets Worksheet[]
+  lessons    Lesson[]
+
+  @@index([ownerId, kind])
+}
+
+/// Phase 25: Point-in-time worksheet version snapshots (max 30 retained per worksheet).
+model WorksheetVersion {
+  id          String   @id @default(cuid())
+  worksheetId String
+  versionNo   Int
+  note        String?
+  createdById String?
+  snapshot    Json
+  createdAt   DateTime @default(now())
+
+  worksheet Worksheet @relation(fields: [worksheetId], references: [id], onDelete: Cascade)
+  createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([worksheetId, versionNo])
+}
+
+/// Phase 25: Public worksheet community likes.
+model WorksheetLike {
+  worksheetId String
+  userId      String
+  createdAt   DateTime @default(now())
+
+  worksheet Worksheet @relation(fields: [worksheetId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([worksheetId, userId])
+}
+
+/// Phase 25: Teacher follow subscriptions from the Discover portal.
+model TeacherFollow {
+  followerId String
+  teacherId  String
+  createdAt  DateTime @default(now())
+
+  follower User @relation("FollowFollower", fields: [followerId], references: [id], onDelete: Cascade)
+  teacher  User @relation("FollowTeacher", fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, teacherId])
+}
+
+/// Phase 25: Community moderation reports on public worksheets.
+model ContentReport {
+  id           String    @id @default(cuid())
+  worksheetId  String
+  reporterId   String
+  reason       String
+  status       String    @default("OPEN") // "OPEN" | "HIDDEN" | "DISMISSED"
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  worksheet  Worksheet @relation(fields: [worksheetId], references: [id], onDelete: Cascade)
+  reporter   User      @relation("ContentReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reviewedBy User?     @relation("ContentReportReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+}
+
+/// Phase 25: Daily AI generation quota ledger per teacher.
+model AiUsageLog {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String
+  dayKey     String
+  tokensUsed Int?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, dayKey])
+}
+
+/// Phase 25: Anonymous guest attempts via public share practice links (isolated from Submission & leaderboard).
+model PublicAttempt {
+  id           String   @id @default(cuid())
+  assignmentId String
+  guestName    String
+  answers      Json
+  autoScore    Float
+  maxScore     Float
+  submittedAt  DateTime @default(now())
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@index([assignmentId, submittedAt])
 }

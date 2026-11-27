@@ -118,14 +118,30 @@ export async function createLesson(
 export async function updateLesson(
   actor: Actor,
   lessonId: string,
-  input: { title?: string; description?: string | null }
+  input: {
+    title?: string;
+    description?: string | null;
+    folderId?: string | null;
+    tags?: string[];
+  }
 ) {
-  await requireEditableLesson(actor, lessonId);
+  const existing = await requireEditableLesson(actor, lessonId);
+  if (input.folderId) {
+    const folder = await prisma.libraryFolder.findUnique({
+      where: { id: input.folderId },
+      select: { id: true, ownerId: true, kind: true },
+    });
+    if (!folder || folder.ownerId !== existing.ownerId || folder.kind !== "LESSON") {
+      throw new AppError("Thư mục không hợp lệ.", 400, "INVALID_FOLDER");
+    }
+  }
   return prisma.lesson.update({
     where: { id: lessonId },
     data: {
       ...(input.title !== undefined ? { title: input.title } : {}),
       ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.folderId !== undefined ? { folderId: input.folderId } : {}),
+      ...(input.tags !== undefined ? { tags: input.tags } : {}),
     },
     include: LIBRARY_INCLUDE,
   });

@@ -190,6 +190,10 @@ export const updateWorksheetSchema = z.object({
   instructions: z.string().trim().max(3000).optional().nullable(),
   passages: z.array(worksheetPassageSchema).max(30).optional().nullable(),
   isShared: z.boolean().optional(),
+  folderId: z.string().trim().min(1).max(64).optional().nullable(),
+  tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
+  isPublic: z.boolean().optional(),
+  publicLevel: z.string().trim().max(60).optional().nullable(),
 });
 
 export const fieldOptionSchema = z.object({
@@ -535,6 +539,11 @@ export const createLessonSchema = z.object({
 export const updateLessonSchema = z.object({
   title: z.string().trim().min(2).max(200).optional(),
   description: z.string().trim().max(1000).optional().nullable(),
+  folderId: z.string().trim().min(1).max(64).optional().nullable(),
+  tags: z
+    .array(z.string().trim().min(1).max(40))
+    .max(20)
+    .optional(),
 });
 
 /** Exact set of classes that should show a library lesson. */
@@ -880,4 +889,57 @@ export const pushSubscribeSchema = z.object({
     p256dh: z.string().trim().min(10).max(500),
     auth: z.string().trim().min(6).max(300),
   }),
+});
+
+// ===== Phase 25: Folders, Worksheet Versions, Discover, AI Generator & Public Practice =====
+export const createFolderSchema = z.object({
+  kind: z.enum(["WORKSHEET", "LESSON"]).default("WORKSHEET"),
+  name: z.string().trim().min(1, "Tên thư mục không được để trống").max(100),
+  parentId: z.string().trim().min(1).optional().nullable(),
+  color: z.string().trim().max(32).optional().nullable(),
+});
+
+export const updateFolderSchema = z.object({
+  name: z.string().trim().min(1).max(100).optional(),
+  parentId: z.string().trim().min(1).optional().nullable(),
+  color: z.string().trim().max(32).optional().nullable(),
+});
+
+export const createWorksheetVersionSchema = z.object({
+  note: z.string().trim().max(300).optional().nullable(),
+});
+
+export const reportWorksheetSchema = z.object({
+  reason: z.string().trim().min(5, "Vui lòng mô tả lý do báo cáo (tối thiểu 5 ký tự)").max(1000),
+});
+
+export const moderateReportSchema = z.object({
+  reportId: z.string().trim().min(1),
+  action: z.enum(["HIDE", "DISMISS", "RESTORE"]),
+});
+
+export const aiGenerateQuestionsSchema = z.object({
+  sourceText: z.string().trim().min(10, "Vui lòng nhập nội dung nguồn (tối thiểu 10 ký tự)").max(12000),
+  subject: z.nativeEnum(WorksheetSubject).default("ENGLISH"),
+  count: z.number().int().min(1).max(15).default(5),
+  types: z
+    .array(z.enum(["MULTIPLE_CHOICE", "TRUE_FALSE_GROUP", "TEXT", "WORDSEARCH", "ESSAY"]))
+    .min(1)
+    .max(5)
+    .default(["MULTIPLE_CHOICE"]),
+  level: z.string().trim().max(60).optional().nullable(),
+});
+
+export const togglePublicPracticeSchema = z.object({
+  enabled: z.boolean(),
+});
+
+export const submitPublicPracticeSchema = z.object({
+  guestName: z.string().trim().min(1, "Vui lòng nhập họ tên để làm bài").max(120),
+  answers: z.array(
+    z.object({
+      fieldId: z.string().trim().min(1),
+      value: z.unknown(),
+    })
+  ),
 });

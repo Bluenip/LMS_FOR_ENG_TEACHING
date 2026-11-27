@@ -866,16 +866,24 @@ export async function importWorksheetFile(
 export async function cloneWorksheetForTeacher(
   sourceWorksheetId: string,
   targetOwnerId: string,
-  opts?: { isAdmin?: boolean }
+  opts?: { isAdmin?: boolean; allowPublic?: boolean }
 ) {
   const source = await prisma.worksheet.findUnique({
     where: { id: sourceWorksheetId },
-    select: { id: true, ownerId: true, isShared: true },
+    select: {
+      id: true,
+      ownerId: true,
+      isShared: true,
+      isPublic: true,
+      publicHiddenByAdmin: true,
+      deletedAt: true,
+    },
   });
-  if (!source) {
+  if (!source || source.deletedAt) {
     throw new AppError("Không tìm thấy phiếu bài tập.", 404, "NOT_FOUND");
   }
-  if (source.ownerId !== targetOwnerId && !source.isShared && !opts?.isAdmin) {
+  const publicAllowed = Boolean(opts?.allowPublic && source.isPublic && !source.publicHiddenByAdmin);
+  if (source.ownerId !== targetOwnerId && !source.isShared && !publicAllowed && !opts?.isAdmin) {
     throw new AppError(
       "Phiếu bài tập này chưa được giáo viên chia sẻ.",
       403,
