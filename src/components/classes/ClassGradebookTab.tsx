@@ -72,11 +72,21 @@ export interface ClassGradebookDTO {
     totalOnlineCount: number;
     submissionRatePct: number;
     weightedAvg10: number | null;
+    attendance?: {
+      presentCount: number;
+      lateCount: number;
+      excusedCount: number;
+      absentCount: number;
+      totalMarked: number;
+      attendanceRatePct: number | null;
+    };
   }>;
   classSummary: {
     studentCount: number;
     classAvg10: number | null;
     avgSubmissionRatePct: number;
+    avgAttendanceRatePct?: number | null;
+    sessionCount?: number;
   };
 }
 
@@ -485,6 +495,15 @@ export function ClassGradebookTab({
                   <th className="min-w-[95px] px-3 py-3 text-center">
                     {tr("Tỉ lệ nộp", "Submit %")}
                   </th>
+                  <th
+                    data-testid="gradebook-attendance-hdr"
+                    className="min-w-[105px] px-3 py-3 text-center"
+                  >
+                    {tr("% Chuyên cần", "Attendance %")}
+                  </th>
+                  <th className="min-w-[80px] px-3 py-3 text-center">
+                    {tr("Vắng KP", "Absent")}
+                  </th>
                   <th className="min-w-[110px] bg-indigo-50/70 dark:bg-indigo-950/30 px-3 py-3 text-center text-[#3525CD] dark:text-indigo-300">
                     {tr("ĐTB Tổng (/10)", "Weighted Avg")}
                   </th>
@@ -566,6 +585,23 @@ export function ClassGradebookTab({
                       {row.submissionRatePct}%
                     </td>
                     <td
+                      data-testid={`gradebook-att-${row.student.id}`}
+                      className="px-3 py-2.5 text-center tabular-nums font-semibold text-emerald-700 dark:text-emerald-400"
+                    >
+                      {row.attendance?.attendanceRatePct !== null &&
+                      row.attendance?.attendanceRatePct !== undefined
+                        ? `${row.attendance.attendanceRatePct}%`
+                        : "—"}
+                    </td>
+                    <td
+                      data-testid={`gradebook-absent-${row.student.id}`}
+                      className="px-3 py-2.5 text-center tabular-nums text-red-600 font-semibold"
+                    >
+                      {row.attendance && row.attendance.totalMarked > 0
+                        ? row.attendance.absentCount
+                        : "—"}
+                    </td>
+                    <td
                       data-testid={`gradebook-avg-${row.student.id}`}
                       className="bg-indigo-50/40 dark:bg-indigo-950/20 px-3 py-2.5 text-center font-extrabold text-[#3525CD] dark:text-indigo-300 tabular-nums"
                     >
@@ -592,6 +628,13 @@ export function ClassGradebookTab({
                   <td className="px-3 py-3 text-center tabular-nums">
                     {gradebook.classSummary.avgSubmissionRatePct}%
                   </td>
+                  <td className="px-3 py-3 text-center tabular-nums">
+                    {gradebook.classSummary.avgAttendanceRatePct !== null &&
+                    gradebook.classSummary.avgAttendanceRatePct !== undefined
+                      ? `${gradebook.classSummary.avgAttendanceRatePct}%`
+                      : "—"}
+                  </td>
+                  <td className="px-3 py-3 text-center tabular-nums">—</td>
                   <td className="px-3 py-3 text-center text-[#3525CD] dark:text-indigo-300 tabular-nums">
                     {gradebook.classSummary.classAvg10 ?? "—"}
                   </td>

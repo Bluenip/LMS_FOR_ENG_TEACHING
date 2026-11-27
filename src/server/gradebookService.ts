@@ -1,8 +1,10 @@
+import type { AttendanceStatus } from "@prisma/client";
 import ExcelJS from "exceljs";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, type PDFPage } from "pdf-lib";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { computeAttendanceSummary, type AttendanceSummary } from "@/lib/attendance-calc";
 import {
   computeSubmissionRatePct,
   computeWeightedAvg10,
@@ -66,7 +68,7 @@ export async function getClassGradebook(classId: string, range?: GradebookDateRa
     throw new AppError("Không tìm thấy lớp học.", 404, "NOT_FOUND");
   }
 
-  const [enrollments, assignments, offlineColumns] = await Promise.all([
+  const [enrollments, assignments, offlineColumns, sessions] = await Promise.all([
     prisma.enrollment.findMany({
       where: { classId, status: "ACTIVE", student: { deletedAt: null } },
       orderBy: { student: { name: "asc" } },
@@ -115,12 +117,32 @@ export async function getClassGradebook(classId: string, range?: GradebookDateRa
         },
       },
     }),
+    prisma.classSession.findMany({
+      where: { classId, status: { not: "CANCELLED" } },
+      select: {
+        id: true,
+        startsAt: true,
+        attendanceRecords: {
+          select: { studentId: true, status: true },
+        },
+      },
+    }),
   ]);
 
   const filteredAssignments = assignments.filter((a) =>
     isWithinDateRange(a.dueAt ?? a.createdAt, range)
   );
   const filteredOffline = offlineColumns.filter((c) => isWithinDateRange(c.date, range));
+  const filteredSessions = sessions.filter((s) => isWithinDateRange(s.startsAt, range));
+
+  const attendanceByStudent = new Map<string, AttendanceStatus[]>();
+  for (const ses of filteredSessions) {
+    for (const rec of ses.attendanceRecords) {
+      const list = attendanceByStudent.get(rec.studentId) ?? [];
+      list.push(rec.status);
+      attendanceByStudent.set(rec.studentId, list);
+    }
+  }
 
   const onlineAcc = new Map<string, number[]>();
   const offlineAcc = new Map<string, number[]>();
@@ -259,6 +281,9 @@ export async function getClassGradebook(classId: string, range?: GradebookDateRa
 
     const weightedAvg10 = computeWeightedAvg10(scoreItems);
     const submissionRatePct = computeSubmissionRatePct(submittedOnlineCount, totalOnlineCount);
+    const attendance: AttendanceSummary = computeAttendanceSummary(
+      attendanceByStudent.get(stu.id) ?? []
+    );
 
     return {
       student: stu,
@@ -268,6 +293,7 @@ export async function getClassGradebook(classId: string, range?: GradebookDateRa
       totalOnlineCount,
       submissionRatePct,
       weightedAvg10,
+      attendance,
     };
   });
 
@@ -308,6 +334,13 @@ export async function getClassGradebook(classId: string, range?: GradebookDateRa
     rows.length > 0
       ? Math.round(rows.reduce((s, r) => s + r.submissionRatePct, 0) / rows.length)
       : 0;
+  const attRates = rows
+    .map((r) => r.attendance.attendanceRatePct)
+    .filter((v): v is number => v !== null);
+  const avgAttendanceRatePct =
+    attRates.length > 0
+      ? Math.round((attRates.reduce((s, v) => s + v, 0) / attRates.length) * 10) / 10
+      : null;
 
   return {
     class: {
@@ -326,6 +359,8 @@ export async function getClassGradebook(classId: string, range?: GradebookDateRa
       studentCount: rows.length,
       classAvg10,
       avgSubmissionRatePct,
+      avgAttendanceRatePct,
+      sessionCount: filteredSessions.length,
     },
   };
 }
@@ -395,6 +430,7 @@ export async function getStudentGradebookDetail(
       totalOnlineCount: row.totalOnlineCount,
       offlineGradedCount,
       offlineTotalCount: offlineItems.length,
+      attendance: row.attendance,
     },
     onlineItems,
     offlineItems,
@@ -434,6 +470,8 @@ export async function exportClassGradebookExcel(
   }
   columns.push(
     { header: isEn ? "Submission rate (%)" : "Tỉ lệ nộp (%)", key: "rate", width: 16 },
+    { header: isEn ? "Attendance (%)" : "% Chuyên cần", key: "attendancePct", width: 16 },
+    { header: isEn ? "Absent" : "Vắng KP", key: "absentCount", width: 12 },
     { header: isEn ? "Weighted Avg (/10)" : "Điểm TB tổng (/10)", key: "avg", width: 18 }
   );
 
@@ -452,6 +490,9 @@ export async function exportClassGradebookExcel(
       name: row.student.name,
       email: row.student.email,
       rate: `${row.submissionRatePct}% (${row.submittedOnlineCount}/${row.totalOnlineCount})`,
+      attendancePct:
+        row.attendance.attendanceRatePct !== null ? `${row.attendance.attendanceRatePct}%` : "",
+      absentCount: row.attendance.totalMarked > 0 ? row.attendance.absentCount : "",
       avg: row.weightedAvg10 ?? "",
     };
     for (const col of gb.onlineColumns) {
@@ -471,6 +512,11 @@ export async function exportClassGradebookExcel(
     name: isEn ? "Class Average" : "Trung bình cả lớp",
     email: "",
     rate: `${gb.classSummary.avgSubmissionRatePct}%`,
+    attendancePct:
+      gb.classSummary.avgAttendanceRatePct !== null
+        ? `${gb.classSummary.avgAttendanceRatePct}%`
+        : "",
+    absentCount: "",
     avg: gb.classSummary.classAvg10 ?? "",
   };
   for (const col of gb.onlineColumns) {
@@ -594,7 +640,6 @@ export async function exportStudentReportCardPdf(
 
   // KPI strip
   ensureSpace(58);
-  const kpiW = (CONTENT_W - 18) / 3;
   const kpis = [
     {
       label: isEn ? "Weighted Avg (/10)" : "Điểm TB tổng (/10)",
@@ -608,7 +653,16 @@ export async function exportStudentReportCardPdf(
       label: isEn ? "Submission rate" : "Tỉ lệ nộp online",
       val: `${detail.summary.submissionRatePct}% (${detail.summary.submittedOnlineCount}/${detail.summary.totalOnlineCount})`,
     },
+    ...(detail.summary.attendance.attendanceRatePct !== null
+      ? [
+          {
+            label: isEn ? "Attendance" : "Chuyên cần",
+            val: `${detail.summary.attendance.attendanceRatePct}% (${detail.summary.attendance.absentCount} ${isEn ? "absent" : "vắng"})`,
+          },
+        ]
+      : []),
   ];
+  const kpiW = (CONTENT_W - 9 * (kpis.length - 1)) / kpis.length;
   kpis.forEach((k, idx) => {
     const x = MARGIN + idx * (kpiW + 9);
     page.drawRectangle({ x, y: y - 44, width: kpiW, height: 44, color: CARD_BG });

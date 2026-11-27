@@ -57,6 +57,7 @@ export async function RoleShell({
           ? [{ href: "/admin", label: m.nav.adminOverview, exact: true }]
           : []),
         { href: "/teacher", label: m.nav.classes, exact: true, activePrefixes: ["/teacher/classes"] },
+        { href: "/teacher/schedule", label: tr("Lịch dạy", "Schedule") },
         { href: "/teacher/worksheets", label: m.nav.worksheets },
         { href: "/teacher/question-bank", label: tr("Ngân hàng câu", "Question bank") },
         { href: "/teacher/assignments", label: m.nav.assignments },
@@ -79,6 +80,7 @@ export async function RoleShell({
       links = [
         { href: "/student", label: m.nav.dashboard, exact: true },
         { href: "/student/classes", label: m.nav.classes },
+        { href: "/student/schedule", label: tr("Lịch học", "Schedule") },
       ];
   }
 

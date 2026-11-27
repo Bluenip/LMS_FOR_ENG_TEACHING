@@ -1,6 +1,7 @@
 import type { SkillTag } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { computeAttendanceSummary } from "@/lib/attendance-calc";
 import { normalizeToScale10, round2 } from "@/lib/gradebook-calc";
 import { generateParentInviteCode } from "@/lib/utils";
 import { canRevealResult } from "./submissionService";
@@ -210,6 +211,22 @@ export async function getChildOverviewForParent(studentId: string, selectedClass
       })),
       recentAssignments: [],
       offlineGrades: [],
+      attendance: {
+        presentCount: 0,
+        lateCount: 0,
+        excusedCount: 0,
+        absentCount: 0,
+        totalMarked: 0,
+        attendanceRatePct: null as number | null,
+        recentRecords: [] as Array<{
+          sessionId: string;
+          sessionTitle: string;
+          className: string;
+          startsAt: string;
+          status: "PRESENT" | "EXCUSED" | "ABSENT" | "LATE";
+          note: string | null;
+        }>,
+      },
       teacherFeedback: [],
       proctorAlerts: [],
     };
@@ -608,6 +625,45 @@ export async function getChildOverviewForParent(studentId: string, selectedClass
     };
   });
 
+  // Load attendance records strictly scoped to studentId across enrolled classes (zero peer leakage)
+  const childAttendanceRecords = await prisma.attendanceRecord.findMany({
+    where: {
+      studentId,
+      session: {
+        classId: { in: classIds },
+        status: { not: "CANCELLED" },
+      },
+    },
+    orderBy: { session: { startsAt: "desc" } },
+    select: {
+      status: true,
+      note: true,
+      session: {
+        select: {
+          id: true,
+          title: true,
+          startsAt: true,
+          class: { select: { name: true } },
+        },
+      },
+    },
+  });
+
+  const attendanceSummary = computeAttendanceSummary(
+    childAttendanceRecords.map((r) => r.status)
+  );
+  const attendance = {
+    ...attendanceSummary,
+    recentRecords: childAttendanceRecords.slice(0, 12).map((r) => ({
+      sessionId: r.session.id,
+      sessionTitle: r.session.title,
+      className: r.session.class.name,
+      startsAt: r.session.startsAt.toISOString(),
+      status: r.status,
+      note: r.note,
+    })),
+  };
+
   return {
     student: { id: student.id, name: student.name },
     classes: classes.map((c) => ({
@@ -633,6 +689,7 @@ export async function getChildOverviewForParent(studentId: string, selectedClass
     skills,
     recentAssignments: recentAssignments.reverse(),
     offlineGrades,
+    attendance,
     teacherFeedback: teacherFeedback.reverse(),
     proctorAlerts,
   };

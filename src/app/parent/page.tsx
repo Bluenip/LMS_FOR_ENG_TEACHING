@@ -104,6 +104,22 @@ interface ParentOverviewDTO {
     note: string | null;
     classAvg10: number | null;
   }>;
+  attendance?: {
+    presentCount: number;
+    lateCount: number;
+    excusedCount: number;
+    absentCount: number;
+    totalMarked: number;
+    attendanceRatePct: number | null;
+    recentRecords: Array<{
+      sessionId: string;
+      sessionTitle: string;
+      className: string;
+      startsAt: string;
+      status: "PRESENT" | "EXCUSED" | "ABSENT" | "LATE";
+      note: string | null;
+    }>;
+  };
   teacherFeedback: Array<{
     assignmentTitle: string;
     className: string;
@@ -754,6 +770,92 @@ function ParentPortalContent() {
               </div>
             )}
           </div>
+
+          {/* Attendance & Punctuality (Strictly Child's Own Records — Phase 23) */}
+          {overview.attendance && (
+            <div className="stitch-card overflow-hidden" data-testid="parent-attendance-card">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 px-6 py-4">
+                <div>
+                  <h3 className="flex items-center gap-2 text-base font-bold text-[#0B1C30] dark:text-slate-100">
+                    <UserCheck className="h-5 w-5 text-[#4F46E5]" />
+                    {tr("Chuyên cần & Điểm danh trên lớp", "Class Attendance & Punctuality")}
+                  </h3>
+                  <p className="text-xs text-[#464555] dark:text-slate-400">
+                    {tr(
+                      "Thống kê buổi học gần đây và thông báo vắng/muộn của con",
+                      "Recent session attendance status and absence/late records for your child"
+                    )}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  <Badge variant="indigo">
+                    {tr("Chuyên cần:", "Rate:")}{" "}
+                    {overview.attendance.attendanceRatePct !== null
+                      ? `${overview.attendance.attendanceRatePct}%`
+                      : "—"}
+                  </Badge>
+                  <Badge variant="mint">
+                    {tr("Có mặt:", "Present:")} {overview.attendance.presentCount}
+                  </Badge>
+                  <Badge variant="orange">
+                    {tr("Đi muộn:", "Late:")} {overview.attendance.lateCount}
+                  </Badge>
+                  <Badge variant="danger">
+                    {tr("Vắng KP:", "Absent:")} {overview.attendance.absentCount}
+                  </Badge>
+                </div>
+              </div>
+
+              {overview.attendance.recentRecords.length === 0 ? (
+                <p className="px-6 py-6 text-xs text-slate-400">
+                  {tr("Chưa có dữ liệu điểm danh buổi học nào.", "No attendance records yet.")}
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-[#F8F9FF] dark:bg-slate-800/60 text-xs font-bold uppercase text-[#464555] dark:text-slate-300">
+                      <tr>
+                        <th className="px-6 py-3">{tr("Buổi học", "Session")}</th>
+                        <th className="px-6 py-3">{tr("Thời gian", "Date")}</th>
+                        <th className="px-6 py-3">{tr("Trạng thái", "Status")}</th>
+                        <th className="px-6 py-3">{tr("Ghi chú", "Note")}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {overview.attendance.recentRecords.map((rec) => (
+                        <tr key={rec.sessionId} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                          <td className="px-6 py-3">
+                            <p className="font-semibold text-[#0B1C30] dark:text-slate-100">
+                              {rec.sessionTitle}
+                            </p>
+                            <p className="text-xs text-slate-400">{rec.className}</p>
+                          </td>
+                          <td className="px-6 py-3 text-xs text-slate-500 tabular-nums whitespace-nowrap">
+                            {formatDateTime(rec.startsAt)}
+                          </td>
+                          <td className="px-6 py-3">
+                            {rec.status === "PRESENT" && (
+                              <Badge variant="mint">{tr("Có mặt", "Present")}</Badge>
+                            )}
+                            {rec.status === "LATE" && (
+                              <Badge variant="orange">{tr("Đi muộn", "Late")}</Badge>
+                            )}
+                            {rec.status === "EXCUSED" && (
+                              <Badge variant="sky">{tr("Vắng có phép", "Excused")}</Badge>
+                            )}
+                            {rec.status === "ABSENT" && (
+                              <Badge variant="danger">{tr("Vắng không phép", "Absent")}</Badge>
+                            )}
+                          </td>
+                          <td className="px-6 py-3 text-xs text-slate-500">{rec.note ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Teacher Feedback + Shared Proctor Alerts */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">

@@ -180,6 +180,24 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
   "Không tìm thấy kỳ thi.": "Exam session not found.",
   "Bạn không có quyền xem kỳ thi này.": "You do not have permission to access this exam session.",
 
+  // Schedule & Attendance (Phase 23)
+  "Giờ phải theo định dạng HH:MM": "Time must be in HH:MM format.",
+  "Giờ kết thúc phải sau giờ bắt đầu.": "End time must be after start time.",
+  "Link phòng học phải bắt đầu bằng http:// hoặc https://":
+    "Meeting URL must start with http:// or https://.",
+  "Tên buổi học tối thiểu 2 ký tự": "Session title must be at least 2 characters.",
+  "Thời gian kết thúc phải sau thời gian bắt đầu.":
+    "End time must be after start time.",
+  "Không tìm thấy quy tắc lịch học.": "Schedule rule not found.",
+  "Không tìm thấy buổi học.": "Class session not found.",
+  "Không thể điểm danh buổi học đã bị huỷ.":
+    "Cannot record attendance for a cancelled session.",
+  "Danh sách điểm danh có học sinh không thuộc lớp học.":
+    "Attendance list contains a student who is not an active member of this class.",
+  "Bài giảng hoặc bài tập đính kèm không thuộc lớp này.":
+    "Selected lesson or assignment does not belong to this class.",
+  "Danh sách điểm danh không được trống.": "Attendance records cannot be empty.",
+
   // Parent & admin
   "Chỉ học sinh xem được danh sách mã liên kết của mình.":
     "Only students can view their own parent invite codes.",
@@ -538,6 +556,18 @@ const NOTIFICATION_PATTERNS: Array<[RegExp, (...args: string[]) => string]> = [
   [
     /^Giáo viên đã trả bài để bạn chỉnh sửa và nộp lại\.$/,
     () => "Your teacher returned this submission for revision and resubmission.",
+  ],
+  [
+    /^Điểm danh: (.+) vắng không phép$/,
+    (_m, name) => `Attendance: ${name} marked absent (unexcused)`,
+  ],
+  [
+    /^Điểm danh: (.+) đi muộn$/,
+    (_m, name) => `Attendance: ${name} arrived late`,
+  ],
+  [
+    /^Điểm danh: (.+) vắng có phép$/,
+    (_m, name) => `Attendance: ${name} marked excused`,
   ],
 ];
 

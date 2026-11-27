@@ -15,6 +15,7 @@ import {
   BookMarked,
   BookOpen,
   BookOpenCheck,
+  CalendarDays,
   Check,
   CheckCircle2,
   ClipboardCheck,
@@ -71,6 +72,7 @@ import { QuickTextbookModal } from "@/components/assignments/QuickTextbookModal"
 import { ClassSubmissionsTab } from "@/components/classes/ClassSubmissionsTab";
 import { ClassAnalyticsTab } from "@/components/classes/ClassAnalyticsTab";
 import { ClassGradebookTab } from "@/components/classes/ClassGradebookTab";
+import { ClassScheduleTab } from "@/components/classes/ClassScheduleTab";
 import { StudentProgressDrawer } from "@/components/classes/StudentProgressDrawer";
 import {
   ClassTeachersSection,
@@ -206,6 +208,7 @@ const CLASS_TABS = [
   "feed",
   "assignments",
   "lessons",
+  "schedule",
   "students",
   "gradebook",
   "submissions",
@@ -771,6 +774,10 @@ export function ClassDetailView({
           <TabsTrigger value="lessons" className="gap-1.5">
             <BookOpen className="h-4 w-4" />
             {vi.classes.tabs.lessons} ({cls.lessons.length})
+          </TabsTrigger>
+          <TabsTrigger value="schedule" className="gap-1.5" data-testid="class-tab-schedule">
+            <CalendarDays className="h-4 w-4" />
+            {isTeacher ? tr("Lịch & Điểm danh", "Schedule & Attendance") : tr("Lịch học", "Schedule")}
           </TabsTrigger>
           <TabsTrigger value="students" className="gap-1.5">
             <Users className="h-4 w-4" />
@@ -1563,6 +1570,18 @@ export function ClassDetailView({
               ))}
             </div>
           </div>
+        </TabsContent>
+
+        {/* SCHEDULE & ATTENDANCE TAB */}
+        <TabsContent value="schedule">
+          <ClassScheduleTab
+            classId={cls.id}
+            className={cls.name}
+            isTeacher={isTeacher}
+            canEditSchedule={canEditClass}
+            lessons={cls.lessons.map((l) => ({ id: l.id, title: l.title }))}
+            assignments={cls.assignments.map((a) => ({ id: a.id, title: a.title }))}
+          />
         </TabsContent>
 
         {/* TAB 5, 6 & 7: GRADEBOOK, SUBMISSIONS & ANALYTICS (TEACHER ONLY) */}

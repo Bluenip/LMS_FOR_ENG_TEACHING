@@ -27,6 +27,14 @@ interface StudentProgressDetailDTO {
     totalOnlineCount: number;
     offlineGradedCount: number;
     offlineTotalCount: number;
+    attendance?: {
+      presentCount: number;
+      lateCount: number;
+      excusedCount: number;
+      absentCount: number;
+      totalMarked: number;
+      attendanceRatePct: number | null;
+    };
   };
   timeline: Array<{
     id: string;
@@ -245,6 +253,13 @@ export function StudentProgressDrawer({
                   {tr("Nộp online:", "Online:")} {data.summary.submittedOnlineCount}/
                   {data.summary.totalOnlineCount} ({data.summary.submissionRatePct}%)
                 </Badge>
+                {data.summary.attendance && data.summary.attendance.totalMarked > 0 && (
+                  <Badge variant="sky">
+                    {tr("Chuyên cần:", "Attendance:")}{" "}
+                    {data.summary.attendance.attendanceRatePct ?? "—"}% (
+                    {data.summary.attendance.absentCount} {tr("vắng", "absent")})
+                  </Badge>
+                )}
               </div>
               <Button variant="outline" className="min-h-10" asChild>
                 <a href={pdfHref} data-testid="download-report-card-pdf-btn">

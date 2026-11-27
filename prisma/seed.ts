@@ -285,6 +285,9 @@ async function main() {
   await prisma.assignment.updateMany({ data: { unlockAfterAssignmentId: null } });
   await prisma.assignment.deleteMany();
   await prisma.examSession.deleteMany();
+  await prisma.attendanceRecord.deleteMany();
+  await prisma.classSession.deleteMany();
+  await prisma.classScheduleRule.deleteMany();
   await prisma.offlineGradeEntry.deleteMany();
   await prisma.offlineGradeColumn.deleteMany();
   await prisma.workbookItem.deleteMany();
@@ -2020,6 +2023,144 @@ async function main() {
       },
     });
   }
+
+  // Phase 23 seed: Weekly schedule rules (Mon & Fri), 4 sessions & sample attendance (with 1 absent + 1 late)
+  const monRule = await prisma.classScheduleRule.create({
+    data: {
+      classId: class1.id,
+      dayOfWeek: 1,
+      startTime: "19:00",
+      endTime: "20:30",
+      title: "12A1 — Tối Thứ 2",
+      meetingUrl: "https://meet.google.com/pivora-eng12a",
+      effectiveFrom: new Date(Date.now() - 14 * 86_400_000),
+      active: true,
+    },
+  });
+  await prisma.classScheduleRule.create({
+    data: {
+      classId: class1.id,
+      dayOfWeek: 5,
+      startTime: "19:00",
+      endTime: "20:30",
+      title: "12A1 — Tối Thứ 6",
+      meetingUrl: "https://meet.google.com/pivora-eng12a",
+      effectiveFrom: new Date(Date.now() - 14 * 86_400_000),
+      active: true,
+    },
+  });
+
+  const makeSlot = (dayOffset: number, startH = 19, endH = 20, endM = 30) => {
+    const start = new Date();
+    start.setDate(start.getDate() + dayOffset);
+    start.setHours(startH, 0, 0, 0);
+    const end = new Date(start);
+    end.setHours(endH, endM, 0, 0);
+    return { start, end };
+  };
+
+  const slotPast = makeSlot(-7);
+  const slotToday = makeSlot(0);
+  const slotNext2 = makeSlot(2);
+  const slotNext7 = makeSlot(7);
+
+  const seedClass1Lesson = await prisma.lesson.findFirst({
+    where: {
+      deletedAt: null,
+      OR: [{ classId: class1.id }, { classLinks: { some: { classId: class1.id } } }],
+    },
+    select: { id: true },
+  });
+
+  const p23SessionPast = await prisma.classSession.create({
+    data: {
+      classId: class1.id,
+      ruleId: monRule.id,
+      title: "Buổi 1 — Thì Hiện Tại Hoàn Thành & Từ Vựng",
+      startsAt: slotPast.start,
+      endsAt: slotPast.end,
+      status: "COMPLETED",
+      meetingUrl: "https://meet.google.com/pivora-eng12a",
+      notes: "Ôn lại trọng tâm câu 1-10 và hoàn thành bài đọc về nhà.",
+      lessonIds: seedClass1Lesson ? [seedClass1Lesson.id] : [],
+      assignmentIds: [asgUnit6.id],
+    },
+  });
+
+  await prisma.classSession.createMany({
+    data: [
+      {
+        classId: class1.id,
+        ruleId: monRule.id,
+        title: "Buổi 2 — Thực hành Ngữ pháp trọng tâm",
+        startsAt: slotToday.start,
+        endsAt: slotToday.end,
+        status: "SCHEDULED",
+        meetingUrl: "https://meet.google.com/pivora-eng12a",
+        notes: "Chuẩn bị vở ghi chép và làm trước bài kiểm tra nhanh.",
+      },
+      {
+        classId: class1.id,
+        title: "Buổi 3 — Luyện đề Đọc hiểu THPT",
+        startsAt: slotNext2.start,
+        endsAt: slotNext2.end,
+        status: "SCHEDULED",
+        meetingUrl: "https://meet.google.com/pivora-eng12a",
+      },
+      {
+        classId: class1.id,
+        ruleId: monRule.id,
+        title: "Buổi 4 — Tổng kết & Giải đáp thắc mắc",
+        startsAt: slotNext7.start,
+        endsAt: slotNext7.end,
+        status: "SCHEDULED",
+      },
+    ],
+  });
+
+  await prisma.attendanceRecord.createMany({
+    data: [
+      {
+        sessionId: p23SessionPast.id,
+        studentId: students[0]!.id,
+        status: "PRESENT",
+        markedById: teacher1.id,
+      },
+      {
+        sessionId: p23SessionPast.id,
+        studentId: students[1]!.id,
+        status: "LATE",
+        note: "Vào muộn 10 phút",
+        markedById: teacher1.id,
+      },
+      {
+        sessionId: p23SessionPast.id,
+        studentId: students[2]!.id,
+        status: "ABSENT",
+        note: "Vắng không phép buổi 1",
+        markedById: teacher1.id,
+      },
+      {
+        sessionId: p23SessionPast.id,
+        studentId: students[3]!.id,
+        status: "EXCUSED",
+        note: "Xin phép nghỉ khám bệnh",
+        markedById: teacher1.id,
+      },
+      {
+        sessionId: p23SessionPast.id,
+        studentId: students[4]!.id,
+        status: "PRESENT",
+        markedById: teacher1.id,
+      },
+      {
+        sessionId: p23SessionPast.id,
+        studentId: students[5]!.id,
+        status: "PRESENT",
+        markedById: teacher1.id,
+      },
+    ],
+  });
 
   // Phase 13 seed: sample AuditLog & ErrorLog entries for /admin/audit and /admin/errors
   await prisma.auditLog.createMany({

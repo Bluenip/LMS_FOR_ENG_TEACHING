@@ -159,6 +159,20 @@ enum NotificationType {
   PARENT_ALERT
   SYSTEM_ALERT
   DUE_REMINDER
+  ATTENDANCE_ALERT
+}
+
+enum AttendanceStatus {
+  PRESENT
+  EXCUSED
+  ABSENT
+  LATE
+}
+
+enum SessionStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
 }
 
 enum ScoreScale {
@@ -250,6 +264,8 @@ model User {
   offlineGradeEntries        OfflineGradeEntry[]      @relation("StudentOfflineGrades")
   questionBankItems          QuestionBankItem[]       @relation("QuestionBankOwner")
   examSessions               ExamSession[]            @relation("ExamSessionOwner")
+  attendanceRecords          AttendanceRecord[]       @relation("StudentAttendance")
+  attendanceMarked           AttendanceRecord[]       @relation("AttendanceMarkedBy")
 
   @@index([deletedAt])
 }
@@ -305,6 +321,8 @@ model Class {
   driveFiles          DriveFile[]
   driveUploads        DriveUpload[]
   offlineGradeColumns OfflineGradeColumn[]
+  scheduleRules       ClassScheduleRule[]
+  sessions            ClassSession[]
 
   @@index([teacherId])
 }
@@ -1156,4 +1174,67 @@ model ExamSession {
   assignments Assignment[]
 
   @@index([ownerId])
+}
+
+/// Phase 23: Weekly recurring class timetable rule.
+model ClassScheduleRule {
+  id            String    @id @default(cuid())
+  classId       String
+  dayOfWeek     Int
+  startTime     String
+  endTime       String
+  title         String?
+  meetingUrl    String?
+  effectiveFrom DateTime  @default(now())
+  effectiveTo   DateTime?
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+
+  class    Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  sessions ClassSession[]
+
+  @@index([classId, active])
+}
+
+/// Phase 23: Individual scheduled or makeup class session.
+model ClassSession {
+  id            String        @id @default(cuid())
+  classId       String
+  ruleId        String?
+  title         String
+  startsAt      DateTime
+  endsAt        DateTime
+  status        SessionStatus @default(SCHEDULED)
+  isMakeup      Boolean       @default(false)
+  meetingUrl    String?
+  notes         String?
+  lessonIds     Json?
+  assignmentIds Json?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  class             Class              @relation(fields: [classId], references: [id], onDelete: Cascade)
+  rule              ClassScheduleRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  attendanceRecords AttendanceRecord[]
+
+  @@unique([ruleId, startsAt])
+  @@index([classId, startsAt])
+}
+
+/// Phase 23: Per-student attendance status for a class session.
+model AttendanceRecord {
+  id         String           @id @default(cuid())
+  sessionId  String
+  studentId  String
+  status     AttendanceStatus @default(PRESENT)
+  note       String?
+  markedById String?
+  markedAt   DateTime         @default(now())
+
+  session  ClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student  User         @relation("StudentAttendance", fields: [studentId], references: [id], onDelete: Cascade)
+  markedBy User?        @relation("AttendanceMarkedBy", fields: [markedById], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, studentId])
+  @@index([studentId])
 }

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  AttendanceStatus,
   CameraSensitivity,
   FieldPlacement,
   FieldType,
@@ -9,6 +10,7 @@ import {
   ProctorMode,
   Role,
   ScoreScale,
+  SessionStatus,
   ShowResultMode,
   SkillTag,
   ViolationAction,
@@ -752,4 +754,77 @@ export const createExamSessionSchema = z.object({
   requireMicMonitor: z.boolean().optional().default(false),
   scoreScale: z.nativeEnum(ScoreScale).optional().default("SCALE_10"),
   weight: z.number().min(0.5).max(10).optional().default(2),
+});
+
+// ===== Phase 23: Class Schedule, Sessions & Attendance =====
+const hhmmSchema = z
+  .string()
+  .trim()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Giờ phải theo định dạng HH:MM");
+
+const safeMeetingUrlSchema = z
+  .string()
+  .trim()
+  .max(500)
+  .optional()
+  .nullable()
+  .transform((v) => (v && v.length > 0 ? v : null))
+  .refine((v) => v === null || /^https?:\/\//i.test(v), {
+    message: "Link phòng học phải bắt đầu bằng http:// hoặc https://",
+  });
+
+export const createScheduleRuleSchema = z
+  .object({
+    dayOfWeek: z.number().int().min(0).max(6),
+    startTime: hhmmSchema,
+    endTime: hhmmSchema,
+    title: z.string().trim().max(150).optional().nullable(),
+    meetingUrl: safeMeetingUrlSchema,
+    effectiveFrom: z.string().datetime().optional().nullable().or(z.literal("")),
+    effectiveTo: z.string().datetime().optional().nullable().or(z.literal("")),
+    generateWeeks: z.number().int().min(1).max(26).optional().default(12),
+  })
+  .refine((v) => v.endTime > v.startTime, {
+    message: "Giờ kết thúc phải sau giờ bắt đầu.",
+    path: ["endTime"],
+  });
+
+export const createMakeupSessionSchema = z
+  .object({
+    title: z.string().trim().min(2, "Tên buổi học tối thiểu 2 ký tự").max(200),
+    startsAt: z.string().datetime(),
+    endsAt: z.string().datetime(),
+    isMakeup: z.boolean().optional().default(true),
+    meetingUrl: safeMeetingUrlSchema,
+    notes: z.string().trim().max(3000).optional().nullable(),
+    lessonIds: z.array(z.string().trim().min(1)).max(50).optional().default([]),
+    assignmentIds: z.array(z.string().trim().min(1)).max(50).optional().default([]),
+  })
+  .refine((v) => new Date(v.endsAt) > new Date(v.startsAt), {
+    message: "Thời gian kết thúc phải sau thời gian bắt đầu.",
+    path: ["endsAt"],
+  });
+
+export const updateClassSessionSchema = z.object({
+  title: z.string().trim().min(2, "Tên buổi học tối thiểu 2 ký tự").max(200).optional(),
+  startsAt: z.string().datetime().optional(),
+  endsAt: z.string().datetime().optional(),
+  status: z.nativeEnum(SessionStatus).optional(),
+  meetingUrl: safeMeetingUrlSchema,
+  notes: z.string().trim().max(3000).optional().nullable(),
+  lessonIds: z.array(z.string().trim().min(1)).max(50).optional(),
+  assignmentIds: z.array(z.string().trim().min(1)).max(50).optional(),
+});
+
+export const saveAttendanceSchema = z.object({
+  records: z
+    .array(
+      z.object({
+        studentId: z.string().trim().min(1),
+        status: z.nativeEnum(AttendanceStatus),
+        note: z.string().trim().max(400).optional().nullable(),
+      })
+    )
+    .min(1, "Danh sách điểm danh không được trống.")
+    .max(500),
 });
