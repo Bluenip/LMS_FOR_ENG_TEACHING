@@ -352,6 +352,38 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
   "Bạn đã gửi quá nhiều yêu cầu đặt lại mật khẩu. Vui lòng thử lại sau 15 phút.":
     "Too many password reset requests. Please try again in 15 minutes.",
 
+  // Phase 27: Live Quiz, Exit Ticket & behavior points
+  "Không tìm thấy phiên Live Quiz.": "Live Quiz session not found.",
+  "Bạn không có quyền điều khiển phiên Live Quiz này.": "You are not allowed to control this Live Quiz.",
+  "Bạn không có quyền dùng phiếu bài tập này.": "You are not allowed to use this worksheet.",
+  "Phiếu bài tập không có câu tự chấm nào dùng được cho Live Quiz.":
+    "This worksheet has no auto-graded questions usable in a Live Quiz.",
+  "Câu trắc nghiệm cần từ 2 đến 6 phương án.": "A multiple-choice question needs 2 to 6 options.",
+  "Đáp án đúng không hợp lệ.": "Invalid correct answer.",
+  "Mã PIN không đúng hoặc phiên đã kết thúc.": "Wrong PIN or the session has ended.",
+  "Hãy đăng nhập để tham gia Live Quiz của lớp.": "Please sign in to join this class Live Quiz.",
+  "Bạn không thuộc lớp của phiên Live Quiz này.": "You are not a member of this Live Quiz's class.",
+  "Vui lòng nhập tên hiển thị.": "Please enter a display name.",
+  "Trạng thái phiên đã thay đổi, hãy tải lại.": "The session state changed, please reload.",
+  "Bạn chưa tham gia phiên Live Quiz này.": "You have not joined this Live Quiz.",
+  "Câu hỏi chưa mở hoặc đã đóng.": "The question is not open or has closed.",
+  "Câu trả lời không hợp lệ.": "Invalid answer.",
+  "Đã hết giờ trả lời câu này.": "Time is up for this question.",
+  "Bạn đã trả lời câu này rồi.": "You have already answered this question.",
+  "Chỉ phiên gắn với lớp mới chuyển được điểm sang Sổ điểm.":
+    "Only class sessions can be exported to the gradebook.",
+  "Mã PIN gồm 6 chữ số.": "The PIN has 6 digits.",
+  "Bạn thao tác quá nhanh. Vui lòng thử lại sau ít phút.":
+    "You are going too fast. Please try again in a few minutes.",
+  "Mỗi lớp tối đa 30 mẫu điểm cộng.": "A class can have at most 30 behavior presets.",
+  "Không tìm thấy mẫu điểm cộng.": "Behavior preset not found.",
+  "Số điểm cộng/trừ không hợp lệ.": "Invalid point value.",
+  "Vui lòng nhập lý do.": "Please enter a reason.",
+  "Không có học sinh hợp lệ trong lớp.": "No valid students in this class.",
+  "Không tìm thấy lượt điểm cộng.": "Behavior point entry not found.",
+  "Vui lòng nhập tên mẫu": "Please enter a preset name",
+  "Vui lòng nhập câu hỏi": "Please enter the question",
+
   // Submission & proctoring
   "Không tìm thấy bài làm.": "Submission not found.",
   "Không tìm thấy bài làm trong ca thi này.": "Submission not found in this exam session.",

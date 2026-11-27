@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { BehaviorQuickAwardRow, useSessionBehaviorTotals } from "@/components/classes/ClassBehaviorTab";
 
 interface AttendanceStudentRow {
   studentId: string;
@@ -106,6 +107,14 @@ export function AttendanceSheetDialog({
         tr("Không tải được danh sách điểm danh", "Could not load attendance sheet")
       ),
   });
+  const { data: behaviorData } = useSessionBehaviorTotals(
+    data?.session.classId ?? "",
+    sessionId ?? "",
+    open && Boolean(data?.session.classId && sessionId)
+  );
+  const behaviorTotals = new Map(
+    (behaviorData?.students ?? []).map((row) => [row.student.id, row.total])
+  );
 
   const [draftStatuses, setDraftStatuses] = useState<Record<string, AttendanceStatus>>({});
   const [draftNotes, setDraftNotes] = useState<Record<string, string>>({});
@@ -280,6 +289,14 @@ export function AttendanceSheetDialog({
                       placeholder={tr("Ghi chú (tuỳ chọn, ví dụ: xin nghỉ ốm)…", "Optional note…")}
                       className="h-9 text-xs"
                     />
+                    {sessionId && (
+                      <BehaviorQuickAwardRow
+                        classId={data.session.classId}
+                        sessionId={sessionId}
+                        studentId={stu.studentId}
+                        sessionTotal={behaviorTotals.get(stu.studentId) ?? 0}
+                      />
+                    )}
                   </div>
                 );
               })}

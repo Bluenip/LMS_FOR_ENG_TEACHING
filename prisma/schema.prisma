@@ -207,6 +207,18 @@ enum DriveUploadStatus {
   CANCELLED
 }
 
+enum LiveQuizMode {
+  HOST_PACED
+  SELF_PACED
+}
+
+enum LiveQuizStatus {
+  LOBBY
+  QUESTION_OPEN
+  QUESTION_CLOSED
+  FINISHED
+}
+
 model User {
   id                  String    @id @default(cuid())
   email               String    @unique
@@ -234,29 +246,29 @@ model User {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  classesTaught          Class[]            @relation("TeacherClasses")
-  enrollments            Enrollment[]
-  posts                  Post[]
-  comments               Comment[]
-  worksheets             Worksheet[]        @relation("WorksheetOwner")
-  lessonsOwned           Lesson[]           @relation("LessonOwner")
-  submissions            Submission[]       @relation("StudentSubmissions")
-  unlockedSubmissions    Submission[]       @relation("UnlockedByTeacher")
-  notifications          Notification[]
-  parentLinksAsParent    ParentLink[]       @relation("ParentUser")
-  parentLinksAsChild     ParentLink[]       @relation("StudentUser")
-  parentInviteCodes      ParentInviteCode[]
-  driveConnectionsOwned  DriveConnection[]  @relation("DriveConnectionOwner")
-  driveConnectionsLinked DriveConnection[]  @relation("DriveConnectionActor")
-  driveFiles             DriveFile[]        @relation("DriveFileOwner")
-  driveUploads           DriveUpload[]      @relation("DriveUploadOwner")
-  auditLogs              AuditLog[]               @relation("AuditLogActor")
-  errorLogs              ErrorLog[]               @relation("ErrorLogUser")
-  oneTimeExports         OneTimeExport[]          @relation("OneTimeExportCreator")
-  assignmentOverrides    AssignmentOverride[]     @relation("AssignmentOverrideStudent")
-  assignmentTargets      AssignmentTarget[]       @relation("AssignmentTargetStudent")
-  assignmentReminders    AssignmentReminderSent[] @relation("AssignmentReminderStudent")
-  teacherCommentPresets  TeacherCommentPreset[]   @relation("TeacherCommentPresets")
+  classesTaught              Class[]                  @relation("TeacherClasses")
+  enrollments                Enrollment[]
+  posts                      Post[]
+  comments                   Comment[]
+  worksheets                 Worksheet[]              @relation("WorksheetOwner")
+  lessonsOwned               Lesson[]                 @relation("LessonOwner")
+  submissions                Submission[]             @relation("StudentSubmissions")
+  unlockedSubmissions        Submission[]             @relation("UnlockedByTeacher")
+  notifications              Notification[]
+  parentLinksAsParent        ParentLink[]             @relation("ParentUser")
+  parentLinksAsChild         ParentLink[]             @relation("StudentUser")
+  parentInviteCodes          ParentInviteCode[]
+  driveConnectionsOwned      DriveConnection[]        @relation("DriveConnectionOwner")
+  driveConnectionsLinked     DriveConnection[]        @relation("DriveConnectionActor")
+  driveFiles                 DriveFile[]              @relation("DriveFileOwner")
+  driveUploads               DriveUpload[]            @relation("DriveUploadOwner")
+  auditLogs                  AuditLog[]               @relation("AuditLogActor")
+  errorLogs                  ErrorLog[]               @relation("ErrorLogUser")
+  oneTimeExports             OneTimeExport[]          @relation("OneTimeExportCreator")
+  assignmentOverrides        AssignmentOverride[]     @relation("AssignmentOverrideStudent")
+  assignmentTargets          AssignmentTarget[]       @relation("AssignmentTargetStudent")
+  assignmentReminders        AssignmentReminderSent[] @relation("AssignmentReminderStudent")
+  teacherCommentPresets      TeacherCommentPreset[]   @relation("TeacherCommentPresets")
   workbooksOwned             Workbook[]               @relation("WorkbookOwner")
   classTeacherRoles          ClassTeacher[]           @relation("ClassTeacherAssignments")
   lessonItemProgress         LessonItemProgress[]     @relation("StudentLessonProgress")
@@ -289,6 +301,10 @@ model User {
   aiUsageLogs                AiUsageLog[]
   passwordResetTokens        PasswordResetToken[]
   loginSessionLogs           LoginSessionLog[]
+  liveQuizzesHosted          LiveQuizSession[]        @relation("LiveQuizHost")
+  liveQuizParticipations     LiveQuizParticipant[]    @relation("LiveQuizParticipantUser")
+  behaviorPointsReceived     StudentBehaviorPoint[]   @relation("BehaviorPointStudent")
+  behaviorPointsAwarded      StudentBehaviorPoint[]   @relation("BehaviorPointAwardedBy")
 
   @@index([deletedAt])
 }
@@ -322,24 +338,24 @@ model ParentInviteCode {
 }
 
 model Class {
-  id              String    @id @default(cuid())
-  name            String
-  description     String?
-  joinCode        String    @unique
-  teacherId       String
-  archived        Boolean   @default(false)
+  id                 String    @id @default(cuid())
+  name               String
+  description        String?
+  joinCode           String    @unique
+  teacherId          String
+  archived           Boolean   @default(false)
   /// Trash: set when the teacher deletes the class; purged (with assignments, submissions, posts) after 30 days
   deletedAt          DateTime?
   requireApproval    Boolean   @default(false)
   enableGamification Boolean   @default(true)
   createdAt          DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  updatedAt          DateTime  @updatedAt
 
-  teacher      User          @relation("TeacherClasses", fields: [teacherId], references: [id], onDelete: Cascade)
-  enrollments  Enrollment[]
-  posts        Post[]
-  lessons      Lesson[]
-  classLessons ClassLesson[]
+  teacher             User                   @relation("TeacherClasses", fields: [teacherId], references: [id], onDelete: Cascade)
+  enrollments         Enrollment[]
+  posts               Post[]
+  lessons             Lesson[]
+  classLessons        ClassLesson[]
   assignments         Assignment[]
   classTeachers       ClassTeacher[]
   driveFiles          DriveFile[]
@@ -349,6 +365,9 @@ model Class {
   sessions            ClassSession[]
   flashcardDecks      FlashcardDeck[]
   parentThreads       ParentThread[]
+  liveQuizSessions    LiveQuizSession[]
+  behaviorPresets     ClassBehaviorPreset[]
+  behaviorPoints      StudentBehaviorPoint[]
 
   @@index([teacherId])
 }
@@ -501,6 +520,7 @@ model Worksheet {
   versions       WorksheetVersion[]
   likes          WorksheetLike[]
   contentReports ContentReport[]
+  liveQuizzes    LiveQuizSession[]
 
   @@index([ownerId])
   @@index([subject])
@@ -564,19 +584,19 @@ model Field {
 }
 
 model Assignment {
-  id            String         @id @default(cuid())
-  classId       String
-  worksheetId   String
-  title         String
-  openAt        DateTime?
-  dueAt         DateTime?
-  timeLimitMin  Int?
-  maxAttempts   Int?           @default(1) // null = unlimited
-  shuffle       Boolean        @default(false)
-  shuffleOptions Boolean       @default(false)
-  showResult    ShowResultMode @default(AFTER_SUBMIT)
-  showAnswerKey Boolean        @default(false)
-  allowLate     Boolean        @default(false)
+  id             String         @id @default(cuid())
+  classId        String
+  worksheetId    String
+  title          String
+  openAt         DateTime?
+  dueAt          DateTime?
+  timeLimitMin   Int?
+  maxAttempts    Int?           @default(1) // null = unlimited
+  shuffle        Boolean        @default(false)
+  shuffleOptions Boolean        @default(false)
+  showResult     ShowResultMode @default(AFTER_SUBMIT)
+  showAnswerKey  Boolean        @default(false)
+  allowLate      Boolean        @default(false)
 
   // Leaderboard
   showLeaderboard      LeaderboardMode @default(AFTER_DUE)
@@ -682,10 +702,10 @@ model Submission {
   lastHeartbeatAt DateTime?
   examVariantId   String?
 
-  assignment    Assignment     @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  student       User           @relation("StudentSubmissions", fields: [studentId], references: [id], onDelete: Cascade)
-  unlockedBy    User?          @relation("UnlockedByTeacher", fields: [unlockedById], references: [id], onDelete: SetNull)
-  examVariant   ExamVariant?   @relation(fields: [examVariantId], references: [id], onDelete: SetNull)
+  assignment    Assignment           @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student       User                 @relation("StudentSubmissions", fields: [studentId], references: [id], onDelete: Cascade)
+  unlockedBy    User?                @relation("UnlockedByTeacher", fields: [unlockedById], references: [id], onDelete: SetNull)
+  examVariant   ExamVariant?         @relation(fields: [examVariantId], references: [id], onDelete: SetNull)
   answers       Answer[]
   proctorEvents ProctorEvent[]
   audioPlays    AudioPlay[]
@@ -1260,9 +1280,10 @@ model ClassSession {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  class             Class              @relation(fields: [classId], references: [id], onDelete: Cascade)
-  rule              ClassScheduleRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  class             Class                  @relation(fields: [classId], references: [id], onDelete: Cascade)
+  rule              ClassScheduleRule?     @relation(fields: [ruleId], references: [id], onDelete: SetNull)
   attendanceRecords AttendanceRecord[]
+  behaviorPoints    StudentBehaviorPoint[]
 
   @@unique([ruleId, startsAt])
   @@index([classId, startsAt])
@@ -1441,7 +1462,7 @@ model LibraryFolder {
   id        String   @id @default(cuid())
   ownerId   String
   parentId  String?
-  kind      String   // "WORKSHEET" | "LESSON"
+  kind      String // "WORKSHEET" | "LESSON"
   name      String
   color     String?
   createdAt DateTime @default(now())
@@ -1570,4 +1591,108 @@ model LoginSessionLog {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+/// Phase 27: Live classroom quiz (Kahoot-style) or one-question exit ticket. Questions frozen in `questionsSnapshot`.
+model LiveQuizSession {
+  id                String         @id @default(cuid())
+  hostId            String
+  classId           String?
+  worksheetId       String?
+  title             String
+  pinCode           String         @unique
+  mode              LiveQuizMode   @default(HOST_PACED)
+  status            LiveQuizStatus @default(LOBBY)
+  currentIndex      Int            @default(0)
+  questionStartedAt DateTime?
+  questionLimitSec  Int            @default(30)
+  isExitTicket      Boolean        @default(false)
+  questionsSnapshot Json
+  createdAt         DateTime       @default(now())
+  endedAt           DateTime?
+
+  host         User                  @relation("LiveQuizHost", fields: [hostId], references: [id], onDelete: Cascade)
+  class        Class?                @relation(fields: [classId], references: [id], onDelete: SetNull)
+  worksheet    Worksheet?            @relation(fields: [worksheetId], references: [id], onDelete: SetNull)
+  participants LiveQuizParticipant[]
+  answers      LiveQuizAnswer[]
+
+  @@index([hostId, createdAt])
+  @@index([classId])
+}
+
+/// Phase 27: A player in a live quiz (logged-in student or guest identified by a hashed join token).
+model LiveQuizParticipant {
+  id            String   @id @default(cuid())
+  sessionId     String
+  userId        String?
+  displayName   String
+  joinTokenHash String
+  totalScore    Int      @default(0)
+  correctCount  Int      @default(0)
+  streak        Int      @default(0)
+  joinedAt      DateTime @default(now())
+
+  session LiveQuizSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User?            @relation("LiveQuizParticipantUser", fields: [userId], references: [id], onDelete: SetNull)
+  answers LiveQuizAnswer[]
+
+  @@unique([sessionId, joinTokenHash])
+  @@index([sessionId, totalScore])
+}
+
+/// Phase 27: One answer per participant per question (server-timed).
+model LiveQuizAnswer {
+  id            String   @id @default(cuid())
+  sessionId     String
+  participantId String
+  questionIndex Int
+  answer        Json
+  isCorrect     Boolean
+  responseMs    Int
+  pointsAwarded Int      @default(0)
+  answeredAt    DateTime @default(now())
+
+  session     LiveQuizSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  participant LiveQuizParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, questionIndex])
+  @@index([sessionId, questionIndex])
+}
+
+/// Phase 27: Reusable behavior point buttons per class (e.g. "Good answer +2").
+model ClassBehaviorPreset {
+  id        String   @id @default(cuid())
+  classId   String
+  label     String
+  delta     Int
+  icon      String?
+  createdAt DateTime @default(now())
+
+  class  Class                  @relation(fields: [classId], references: [id], onDelete: Cascade)
+  points StudentBehaviorPoint[]
+
+  @@index([classId])
+}
+
+/// Phase 27: Behavior (star) points awarded or deducted for a student in a class.
+model StudentBehaviorPoint {
+  id          String   @id @default(cuid())
+  classId     String
+  studentId   String
+  sessionId   String?
+  presetId    String?
+  delta       Int
+  reason      String
+  awardedById String
+  createdAt   DateTime @default(now())
+
+  class     Class                @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student   User                 @relation("BehaviorPointStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  session   ClassSession?        @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  preset    ClassBehaviorPreset? @relation(fields: [presetId], references: [id], onDelete: SetNull)
+  awardedBy User                 @relation("BehaviorPointAwardedBy", fields: [awardedById], references: [id], onDelete: Cascade)
+
+  @@index([classId, studentId])
+  @@index([sessionId])
 }

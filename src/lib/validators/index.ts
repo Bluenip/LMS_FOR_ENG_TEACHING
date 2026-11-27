@@ -953,3 +953,64 @@ export const resetPasswordSchema = z.object({
   token: z.string().trim().min(16, "Liên kết đặt lại mật khẩu không hợp lệ."),
   newPassword: z.string().min(8, "Mật khẩu mới tối thiểu 8 ký tự").max(200),
 });
+
+// ===== Phase 27: Live Quiz, Exit Ticket & Behavior Points =====
+export const createLiveQuizSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("WORKSHEET"),
+    worksheetId: z.string().trim().min(1),
+    classId: z.string().trim().min(1).optional().nullable(),
+    mode: z.enum(["HOST_PACED", "SELF_PACED"]).default("HOST_PACED"),
+    questionLimitSec: z.number().int().min(5).max(300).default(30),
+    title: z.string().trim().max(200).optional().nullable(),
+  }),
+  z.object({
+    kind: z.literal("EXIT_TICKET"),
+    classId: z.string().trim().min(1).optional().nullable(),
+    title: z.string().trim().min(1, "Vui lòng nhập tiêu đề").max(200),
+    type: z.enum(["MULTIPLE_CHOICE", "TEXT"]),
+    prompt: z.string().trim().min(1, "Vui lòng nhập câu hỏi").max(2000),
+    options: z.array(z.string().trim().max(300)).max(6).optional(),
+    correctIndex: z.number().int().min(0).max(5).optional().nullable(),
+    acceptedAnswers: z.array(z.string().trim().max(300)).max(20).optional(),
+    questionLimitSec: z.number().int().min(5).max(300).default(60),
+  }),
+]);
+
+export const liveQuizControlSchema = z.object({
+  action: z.enum(["OPEN", "CLOSE", "NEXT", "FINISH"]),
+});
+
+export const joinLiveQuizSchema = z.object({
+  pin: z.string().trim().regex(/^\d{6}$/, "Mã PIN gồm 6 chữ số."),
+  displayName: z.string().trim().max(40).optional().nullable(),
+});
+
+export const liveQuizAnswerSchema = z.object({
+  questionIndex: z.number().int().min(0).max(200),
+  answer: z.unknown(),
+});
+
+export const liveQuizExportGradeSchema = z.object({
+  columnTitle: z.string().trim().max(120).optional().nullable(),
+  maxScore: z.number().positive().max(1000).default(10),
+});
+
+export const behaviorPresetSchema = z.object({
+  label: z.string().trim().min(1, "Vui lòng nhập tên mẫu").max(60),
+  delta: z
+    .number()
+    .int()
+    .min(-10)
+    .max(10)
+    .refine((v) => v !== 0, "Số điểm cộng/trừ không hợp lệ."),
+  icon: z.string().trim().max(8).optional().nullable(),
+});
+
+export const awardBehaviorPointsSchema = z.object({
+  studentIds: z.array(z.string().trim().min(1)).min(1).max(200),
+  delta: z.number().int().min(-10).max(10).optional(),
+  reason: z.string().trim().max(200).optional(),
+  sessionId: z.string().trim().min(1).optional().nullable(),
+  presetId: z.string().trim().min(1).optional().nullable(),
+});

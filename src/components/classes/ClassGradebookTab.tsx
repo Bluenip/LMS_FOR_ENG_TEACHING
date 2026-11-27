@@ -72,6 +72,7 @@ export interface ClassGradebookDTO {
     totalOnlineCount: number;
     submissionRatePct: number;
     weightedAvg10: number | null;
+    behaviorTotal?: number;
     attendance?: {
       presentCount: number;
       lateCount: number;
@@ -504,6 +505,9 @@ export function ClassGradebookTab({
                   <th className="min-w-[80px] px-3 py-3 text-center">
                     {tr("Vắng KP", "Absent")}
                   </th>
+                  <th className="min-w-[80px] px-3 py-3 text-center">
+                    {tr("Sao thưởng", "Stars")}
+                  </th>
                   <th className="min-w-[110px] bg-indigo-50/70 dark:bg-indigo-950/30 px-3 py-3 text-center text-[#3525CD] dark:text-indigo-300">
                     {tr("ĐTB Tổng (/10)", "Weighted Avg")}
                   </th>
@@ -602,6 +606,12 @@ export function ClassGradebookTab({
                         : "—"}
                     </td>
                     <td
+                      data-testid={`gradebook-behavior-${row.student.id}`}
+                      className="px-3 py-2.5 text-center tabular-nums font-semibold text-amber-600 dark:text-amber-400"
+                    >
+                      {row.behaviorTotal ?? 0}
+                    </td>
+                    <td
                       data-testid={`gradebook-avg-${row.student.id}`}
                       className="bg-indigo-50/40 dark:bg-indigo-950/20 px-3 py-2.5 text-center font-extrabold text-[#3525CD] dark:text-indigo-300 tabular-nums"
                     >
@@ -634,6 +644,7 @@ export function ClassGradebookTab({
                       ? `${gradebook.classSummary.avgAttendanceRatePct}%`
                       : "—"}
                   </td>
+                  <td className="px-3 py-3 text-center tabular-nums">—</td>
                   <td className="px-3 py-3 text-center tabular-nums">—</td>
                   <td className="px-3 py-3 text-center text-[#3525CD] dark:text-indigo-300 tabular-nums">
                     {gradebook.classSummary.classAvg10 ?? "—"}

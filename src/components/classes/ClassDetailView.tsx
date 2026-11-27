@@ -46,6 +46,8 @@ import {
   UserCheck,
   UserMinus,
   Users,
+  Star,
+  Zap,
 } from "lucide-react";
 import { describeProctorRuleSummary } from "@/lib/proctor-helpers";
 import { formatDateTime, getInitials } from "@/lib/utils";
@@ -73,6 +75,8 @@ import { ClassSubmissionsTab } from "@/components/classes/ClassSubmissionsTab";
 import { ClassAnalyticsTab } from "@/components/classes/ClassAnalyticsTab";
 import { ClassGradebookTab } from "@/components/classes/ClassGradebookTab";
 import { ClassScheduleTab } from "@/components/classes/ClassScheduleTab";
+import { ClassBehaviorTab } from "@/components/classes/ClassBehaviorTab";
+import { ExitTicketDialog } from "@/components/live-quiz/ExitTicketDialog";
 import { StudentProgressDrawer } from "@/components/classes/StudentProgressDrawer";
 import {
   ClassTeachersSection,
@@ -214,6 +218,7 @@ const CLASS_TABS = [
   "gradebook",
   "submissions",
   "analytics",
+  "behavior",
   "settings",
 ] as const;
 
@@ -284,6 +289,7 @@ export function ClassDetailView({
   };
   const [removingLesson, setRemovingLesson] = useState<{ id: string; title: string } | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [exitTicketOpen, setExitTicketOpen] = useState(false);
   const canEditLesson = (lesson: { ownerId?: string | null }) =>
     isTeacher && (isAdmin || lesson.ownerId === currentUserId);
 
@@ -732,6 +738,18 @@ export function ClassDetailView({
               </div>
             )}
 
+            {isTeacher && (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setExitTicketOpen(true)}
+                data-testid="exit-ticket-btn"
+              >
+                <Zap className="h-4 w-4 text-[#F97316]" />
+                {tr("Hỏi nhanh", "Exit ticket")}
+              </Button>
+            )}
+
             <Button variant="secondary" asChild>
               <Link href={leaderboardHref}>
                 <Trophy className="h-4 w-4 text-[#F97316]" />
@@ -806,6 +824,10 @@ export function ClassDetailView({
               <TabsTrigger value="analytics" className="gap-1.5" data-testid="class-tab-analytics">
                 <BarChart2 className="h-4 w-4" />
                 {tr("Thống kê", "Analytics")}
+              </TabsTrigger>
+              <TabsTrigger value="behavior" className="gap-1.5" data-testid="class-tab-behavior">
+                <Star className="h-4 w-4" />
+                {tr("Sao thưởng", "Stars")}
               </TabsTrigger>
               <TabsTrigger value="settings" className="gap-1.5" data-testid="class-tab-settings">
                 <Settings className="h-4 w-4" />
@@ -1592,6 +1614,9 @@ export function ClassDetailView({
         {/* TAB 5, 6 & 7: GRADEBOOK, SUBMISSIONS & ANALYTICS (TEACHER ONLY) */}
         {isTeacher && (
           <>
+            <TabsContent value="behavior">
+              <ClassBehaviorTab classId={cls.id} canManagePresets={canEditClass} />
+            </TabsContent>
             <TabsContent value="gradebook">
               <ClassGradebookTab
                 classId={cls.id}
@@ -2085,6 +2110,9 @@ export function ClassDetailView({
             onClose={() => setProgressStudent(null)}
           />
         </>
+      )}
+      {isTeacher && (
+        <ExitTicketDialog classId={cls.id} open={exitTicketOpen} onOpenChange={setExitTicketOpen} />
       )}
     </div>
   );

@@ -19,6 +19,7 @@ import {
   ShieldAlert,
   TrendingUp,
   UserCheck,
+  Star,
 } from "lucide-react";
 import type { SkillTag } from "@prisma/client";
 import { cn, formatDateTime, getInitials } from "@/lib/utils";
@@ -132,6 +133,10 @@ interface ParentOverviewDTO {
     violationCount: number;
     events: Array<{ type: string; at: string; durationMs: number | null }>;
   }>;
+  behavior?: {
+    total: number;
+    recent: Array<{ id: string; delta: number; reason: string; className: string; createdAt: string }>;
+  };
 }
 
 function ScoreTrendSvgChart({
@@ -770,6 +775,48 @@ function ParentPortalContent() {
               </div>
             )}
           </div>
+
+          {/* Behavior / star points (Phase 27) */}
+          {overview.behavior && (
+            <div className="stitch-card overflow-hidden" data-testid="parent-behavior-card">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 px-6 py-4">
+                <h3 className="flex items-center gap-2 text-base font-bold text-[#0B1C30] dark:text-slate-100">
+                  <Star className="h-5 w-5 text-amber-500" />
+                  {tr("Sao thưởng & Điểm cộng", "Stars & behavior points")}
+                </h3>
+                <span className="text-lg font-extrabold text-amber-600 dark:text-amber-400" data-testid="parent-behavior-total">
+                  {overview.behavior.total}
+                </span>
+              </div>
+              {overview.behavior.recent.length === 0 ? (
+                <p className="px-6 py-5 text-sm text-slate-500">
+                  {tr("Chưa có điểm cộng nào.", "No behavior points yet.")}
+                </p>
+              ) : (
+                <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {overview.behavior.recent.map((b) => (
+                    <li key={b.id} className="flex items-center justify-between gap-3 px-6 py-2.5 text-sm">
+                      <span className="min-w-0">
+                        <span className="font-medium text-[#0B1C30] dark:text-slate-100">{b.reason}</span>
+                        <span className="block text-xs text-slate-500">
+                          {b.className} · {formatDateTime(b.createdAt)}
+                        </span>
+                      </span>
+                      <span
+                        className={
+                          b.delta > 0
+                            ? "font-bold text-emerald-600 dark:text-emerald-400"
+                            : "font-bold text-rose-600 dark:text-rose-400"
+                        }
+                      >
+                        {b.delta > 0 ? `+${b.delta}` : b.delta}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
           {/* Attendance & Punctuality (Strictly Child's Own Records — Phase 23) */}
           {overview.attendance && (

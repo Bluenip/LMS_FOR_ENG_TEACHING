@@ -279,6 +279,11 @@ async function main() {
   await prisma.audioPlay.deleteMany();
   await prisma.passwordResetToken.deleteMany();
   await prisma.loginSessionLog.deleteMany();
+  await prisma.liveQuizAnswer.deleteMany();
+  await prisma.liveQuizParticipant.deleteMany();
+  await prisma.liveQuizSession.deleteMany();
+  await prisma.studentBehaviorPoint.deleteMany();
+  await prisma.classBehaviorPreset.deleteMany();
   await prisma.publicAttempt.deleteMany();
   await prisma.aiUsageLog.deleteMany();
   await prisma.contentReport.deleteMany();
@@ -2611,6 +2616,100 @@ async function main() {
       },
     ],
   });
+
+  // Phase 27 seed: behavior presets & points for 12A1 + one finished Live Quiz
+  const behaviorPresetData = [
+    { label: "Phát biểu hay", delta: 2, icon: "💬" },
+    { label: "Làm bài tốt", delta: 2, icon: "⭐" },
+    { label: "Hỗ trợ bạn", delta: 1, icon: "🤝" },
+    { label: "Mất trật tự", delta: -1, icon: "🔇" },
+  ];
+  const behaviorPresets = [];
+  for (const p of behaviorPresetData) {
+    behaviorPresets.push(await prisma.classBehaviorPreset.create({ data: { classId: class1.id, ...p } }));
+  }
+  const behaviorSamples: Array<[number, number]> = [
+    [0, 0],
+    [0, 1],
+    [1, 2],
+    [2, 0],
+    [3, 3],
+    [4, 1],
+  ];
+  for (const [i, [stuIdx, presetIdx]] of behaviorSamples.entries()) {
+    const preset = behaviorPresets[presetIdx]!;
+    await prisma.studentBehaviorPoint.create({
+      data: {
+        classId: class1.id,
+        studentId: students[stuIdx]!.id,
+        presetId: preset.id,
+        delta: preset.delta,
+        reason: preset.label,
+        awardedById: teacher1.id,
+        createdAt: new Date(Date.now() - (i + 1) * 24 * 60 * 60 * 1000),
+      },
+    });
+  }
+
+  const liveQuestions = [
+    {
+      id: "seed-lq-1",
+      type: "MULTIPLE_CHOICE",
+      prompt: "She ___ to school every day.",
+      options: [
+        { id: "A", text: "go" },
+        { id: "B", text: "goes" },
+        { id: "C", text: "going" },
+        { id: "D", text: "gone" },
+      ],
+      imageKey: null,
+      timeLimitSec: 20,
+      answerKey: { correct: "B" },
+      gradingOpts: null,
+    },
+    {
+      id: "seed-lq-2",
+      type: "TRUE_FALSE",
+      prompt: "\"Children\" is the plural of \"child\".",
+      options: null,
+      imageKey: null,
+      timeLimitSec: 20,
+      answerKey: { correct: true },
+      gradingOpts: null,
+    },
+  ];
+  const liveSession = await prisma.liveQuizSession.create({
+    data: {
+      hostId: teacher1.id,
+      classId: class1.id,
+      worksheetId: wsUnit7.id,
+      title: "Warm-up Live Quiz (seed)",
+      pinCode: "246810",
+      status: "FINISHED",
+      currentIndex: 1,
+      questionLimitSec: 20,
+      questionsSnapshot: liveQuestions,
+      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      endedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 10 * 60 * 1000),
+    },
+  });
+  const liveScores: Array<[number, number, number]> = [
+    [0, 1850, 2],
+    [1, 980, 1],
+    [2, 0, 0],
+  ];
+  for (const [stuIdx, totalScore, correctCount] of liveScores) {
+    await prisma.liveQuizParticipant.create({
+      data: {
+        sessionId: liveSession.id,
+        userId: students[stuIdx]!.id,
+        displayName: students[stuIdx]!.name,
+        joinTokenHash: `seed-${stuIdx}-${liveSession.id}`,
+        totalScore,
+        correctCount,
+      },
+    });
+  }
 
   console.log("Seed completed successfully!");
   console.log("Accounts (password: password123):");

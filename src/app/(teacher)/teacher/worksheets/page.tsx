@@ -26,6 +26,7 @@ import {
   Plus,
   Search,
   Send,
+  Radio,
   Sparkles,
   Trash2,
   Upload,
@@ -57,6 +58,7 @@ import type { ParsedFillBlankField } from "@/lib/worksheet/fill-blank-parser";
 import type { ParsedWordExamField } from "@/lib/worksheet/word-exam-parser";
 import { getSubjectMeta, WORKSHEET_SUBJECTS } from "@/lib/subjects";
 import { PromptText } from "@/components/worksheet/PromptText";
+import { StartLiveQuizDialog } from "@/components/live-quiz/StartLiveQuizDialog";
 import { SubjectBadge, SubjectPicker } from "@/components/worksheet/SubjectPicker";
 
 interface WorksheetRow {
@@ -159,6 +161,7 @@ export default function TeacherWorksheetsPage() {
   const queryClient = useQueryClient();
 
   const [tab, setTab] = useState<"mine" | "shared">("mine");
+  const [liveWs, setLiveWs] = useState<{ id: string; title: string } | null>(null);
   // Library tab lives in the URL (?tab=lessons|workbooks|flashcards|trash) so links from class pages open it directly
   const [libraryTab, setLibraryTab] = useState<"worksheets" | "workbooks" | "lessons" | "flashcards" | "trash">("worksheets");
   useEffect(() => {
@@ -1233,7 +1236,7 @@ export default function TeacherWorksheetsPage() {
                   </div>
 
                   <div className="flex items-center justify-between gap-2">
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button size="sm" asChild>
                         <Link href={`/teacher/worksheets/${ws.id}/edit`}>
                           <Edit3 className="h-3.5 w-3.5" />
@@ -1245,6 +1248,16 @@ export default function TeacherWorksheetsPage() {
                           <Send className="h-3.5 w-3.5" />
                           {tr("Giao bài", "Assign")}
                         </Link>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setLiveWs({ id: ws.id, title: ws.title })}
+                        data-testid={`live-quiz-open-${ws.id}`}
+                        title={tr("Mở Live Quiz", "Start Live Quiz")}
+                      >
+                        <Radio className="h-3.5 w-3.5" />
+                        Live
                       </Button>
                     </div>
                     <button
@@ -1781,6 +1794,14 @@ export default function TeacherWorksheetsPage() {
         </DialogContent>
       </Dialog>
 
+      {liveWs && (
+        <StartLiveQuizDialog
+          worksheetId={liveWs.id}
+          worksheetTitle={liveWs.title}
+          open={Boolean(liveWs)}
+          onOpenChange={(o) => !o && setLiveWs(null)}
+        />
+      )}
     </div>
   );
 }

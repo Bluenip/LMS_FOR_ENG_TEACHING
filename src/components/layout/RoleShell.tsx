@@ -88,6 +88,7 @@ export async function RoleShell({
         { href: "/student/schedule", label: tr("Lịch học", "Schedule") },
         { href: "/student/flashcards", label: tr("Flashcard", "Flashcards") },
         { href: "/student/mistakes", label: tr("Ôn câu sai", "Mistakes") },
+        { href: "/live", label: "Live Quiz" },
       ];
   }
 

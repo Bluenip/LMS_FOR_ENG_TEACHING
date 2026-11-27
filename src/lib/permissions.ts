@@ -145,6 +145,16 @@ export async function requireAuth(): Promise<SessionUser> {
   };
 }
 
+/** Like requireAuth but returns null for anonymous / expired sessions (public pages such as /live). */
+export async function getOptionalAuthUser(): Promise<SessionUser | null> {
+  try {
+    return await requireAuth();
+  } catch (error) {
+    if (error instanceof AppError && error.statusCode === 401) return null;
+    throw error;
+  }
+}
+
 export async function requireRole(allowedRoles: Role[]): Promise<SessionUser> {
   const user = await requireAuth();
   if (!allowedRoles.includes(user.role)) {

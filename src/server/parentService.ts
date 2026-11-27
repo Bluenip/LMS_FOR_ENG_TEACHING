@@ -6,6 +6,7 @@ import { normalizeToScale10, round2 } from "@/lib/gradebook-calc";
 import { generateParentInviteCode } from "@/lib/utils";
 import { canRevealResult } from "./submissionService";
 import { getClassSemesterLeaderboard } from "./leaderboardService";
+import { getStudentBehaviorForParent } from "./behaviorPointService";
 
 const DISPLAY_SKILLS: SkillTag[] = [
   "GRAMMAR",
@@ -229,6 +230,16 @@ export async function getChildOverviewForParent(studentId: string, selectedClass
       },
       teacherFeedback: [],
       proctorAlerts: [],
+      behavior: {
+        total: 0,
+        recent: [] as Array<{
+          id: string;
+          delta: number;
+          reason: string;
+          className: string;
+          createdAt: string;
+        }>,
+      },
     };
   }
 
@@ -664,6 +675,8 @@ export async function getChildOverviewForParent(studentId: string, selectedClass
     })),
   };
 
+  const behavior = await getStudentBehaviorForParent(student.id, classIds);
+
   return {
     student: { id: student.id, name: student.name },
     classes: classes.map((c) => ({
@@ -692,5 +705,6 @@ export async function getChildOverviewForParent(studentId: string, selectedClass
     attendance,
     teacherFeedback: teacherFeedback.reverse(),
     proctorAlerts,
+    behavior,
   };
 }

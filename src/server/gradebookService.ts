@@ -16,6 +16,7 @@ import {
 } from "@/lib/gradebook-calc";
 import { loadNotoFonts, wrapText } from "@/lib/pdf/export-printable-pdf";
 import { formatDateTime } from "@/lib/utils";
+import { getBehaviorTotalsByStudent } from "./behaviorPointService";
 import type { Locale } from "@/lib/i18n/config";
 
 export interface GradebookOnlineColumnDTO {
@@ -193,6 +194,7 @@ export async function getClassGradebook(classId: string, range?: GradebookDateRa
     offlineEntryMap.set(c.id, byStudent);
   }
 
+  const behaviorTotals = await getBehaviorTotalsByStudent(classId);
   const rows = enrollments.map((enr) => {
     const stu = enr.student;
     const onlineCells: Record<string, GradebookOnlineCellDTO> = {};
@@ -294,6 +296,7 @@ export async function getClassGradebook(classId: string, range?: GradebookDateRa
       submissionRatePct,
       weightedAvg10,
       attendance,
+      behaviorTotal: behaviorTotals.get(stu.id) ?? 0,
     };
   });
 
