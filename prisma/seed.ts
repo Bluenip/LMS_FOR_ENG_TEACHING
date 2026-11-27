@@ -277,6 +277,8 @@ async function main() {
   await prisma.assignmentTarget.deleteMany();
   await prisma.teacherCommentPreset.deleteMany();
   await prisma.audioPlay.deleteMany();
+  await prisma.passwordResetToken.deleteMany();
+  await prisma.loginSessionLog.deleteMany();
   await prisma.publicAttempt.deleteMany();
   await prisma.aiUsageLog.deleteMany();
   await prisma.contentReport.deleteMany();
@@ -2581,6 +2583,33 @@ async function main() {
       autoScore: 8,
       maxScore: 10,
     },
+  });
+
+  // Phase 26 seed: sample LoginSessionLog rows (masked IPs)
+  await prisma.loginSessionLog.createMany({
+    data: [
+      {
+        userId: admin.id,
+        provider: "credentials",
+        ipMasked: "10.0.x.x",
+        userAgent: "Mozilla/5.0 (Pivora Seed Admin Browser)",
+        createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
+      },
+      {
+        userId: teacher1.id,
+        provider: "credentials",
+        ipMasked: "192.168.x.x",
+        userAgent: "Mozilla/5.0 (Pivora Seed Teacher Chrome)",
+        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      },
+      {
+        userId: students[0]!.id,
+        provider: "credentials",
+        ipMasked: "172.16.x.x",
+        userAgent: "Mozilla/5.0 (Pivora Seed Student Mobile)",
+        createdAt: new Date(Date.now() - 60 * 60 * 1000),
+      },
+    ],
   });
 
   console.log("Seed completed successfully!");

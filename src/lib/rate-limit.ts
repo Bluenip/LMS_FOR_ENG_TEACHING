@@ -1,3 +1,5 @@
+import { getRedisClient, type RedisLikeClient } from "@/lib/redis";
+
 interface RateLimitEntry {
   timestamps: number[];
 }
@@ -37,6 +39,54 @@ export function checkRateLimit(
     remaining: Math.max(0, maxRequests - entry.timestamps.length),
     retryAfterSec: 0,
   };
+}
+
+/**
+ * Distributed fixed-window rate limiter backed by Redis (`INCR` + `PEXPIRE`) when `REDIS_URL` is configured,
+ * transparently falling back to `checkRateLimit` when running single-node or if Redis errors.
+ */
+export async function checkRateLimitAsync(
+  key: string,
+  maxRequests: number,
+  windowMs: number,
+  redisOverride?: Pick<RedisLikeClient, "incr" | "pexpire" | "pttl"> | null
+): Promise<RateLimitResult> {
+  const redis = redisOverride !== undefined ? redisOverride : getRedisClient();
+  if (!redis) {
+    return checkRateLimit(key, maxRequests, windowMs);
+  }
+
+  const redisKey = `pivora:rl:${key}`;
+  try {
+    const count = await redis.incr(redisKey);
+    let ttlMs = windowMs;
+    if (count === 1) {
+      await redis.pexpire(redisKey, windowMs);
+    } else {
+      const currentTtl = await redis.pttl(redisKey);
+      if (currentTtl > 0) {
+        ttlMs = currentTtl;
+      } else {
+        await redis.pexpire(redisKey, windowMs);
+      }
+    }
+
+    if (count > maxRequests) {
+      return {
+        allowed: false,
+        remaining: 0,
+        retryAfterSec: Math.max(1, Math.ceil(ttlMs / 1000)),
+      };
+    }
+
+    return {
+      allowed: true,
+      remaining: Math.max(0, maxRequests - count),
+      retryAfterSec: 0,
+    };
+  } catch {
+    return checkRateLimit(key, maxRequests, windowMs);
+  }
 }
 
 export function resetRateLimits(): void {

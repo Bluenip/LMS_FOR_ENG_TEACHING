@@ -4,7 +4,7 @@ import { getAdminTotpStatus } from "@/server/totpService";
 
 export async function GET() {
   try {
-    const user = await requireRole(["ADMIN"]);
+    const user = await requireRole(["ADMIN", "TEACHER"]);
     const status = await getAdminTotpStatus(user.id);
     return NextResponse.json(status);
   } catch (error) {

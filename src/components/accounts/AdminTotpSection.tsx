@@ -167,8 +167,8 @@ export function AdminTotpSection({
           </h2>
           <p className="mt-0.5 text-xs text-[#464555]">
             {tr(
-              "Bảo vệ tài khoản quản trị bằng ứng dụng xác thực (Google Authenticator, 1Password, Authy…).",
-              "Protect your administrator account with an authenticator app (Google Authenticator, 1Password, Authy…)."
+              "Bảo vệ tài khoản giáo viên / quản trị bằng ứng dụng xác thực (Google Authenticator, 1Password, Authy…).",
+              "Protect your teacher or administrator account with an authenticator app (Google Authenticator, 1Password, Authy…)."
             )}
           </p>
         </div>

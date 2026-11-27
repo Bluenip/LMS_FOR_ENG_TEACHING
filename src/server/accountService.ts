@@ -615,3 +615,47 @@ export async function removeOwnAvatar(userId: string) {
   await removeAvatarFile(current?.avatarUrl ?? null);
   return { avatarUrl: null };
 }
+
+export async function listLoginHistory(userId: string) {
+  const rows = await prisma.loginSessionLog.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    take: 15,
+    select: {
+      id: true,
+      provider: true,
+      ipMasked: true,
+      userAgent: true,
+      createdAt: true,
+    },
+  });
+  return rows.map((r) => ({
+    ...r,
+    createdAt: r.createdAt.toISOString(),
+  }));
+}
+
+export async function signOutAllDevices(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true },
+  });
+  if (!user) throw new AppError("Không tìm thấy người dùng.", 404, "NOT_FOUND");
+
+  const now = new Date();
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordChangedAt: now },
+  });
+
+  await logAudit({
+    actorId: userId,
+    action: "SESSIONS_REVOKED_ALL",
+    targetType: "USER",
+    targetId: userId,
+    summary: `Thu hồi toàn bộ phiên đăng nhập khác của ${user.email}`,
+    summaryEn: `Signed out all other active sessions for ${user.email}`,
+  }).catch(() => undefined);
+
+  return { ok: true, revokedAt: now.toISOString() };
+}

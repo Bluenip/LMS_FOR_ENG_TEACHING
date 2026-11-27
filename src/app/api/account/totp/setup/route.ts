@@ -4,7 +4,7 @@ import { beginAdminTotpSetup } from "@/server/totpService";
 
 export async function POST() {
   try {
-    const user = await requireRole(["ADMIN"]);
+    const user = await requireRole(["ADMIN", "TEACHER"]);
     const setup = await beginAdminTotpSetup(user.id);
     return NextResponse.json(setup, {
       headers: { "Cache-Control": "no-store, max-age=0" },

@@ -342,6 +342,15 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
   "Giới thiệu tối đa 300 ký tự": "Bio must not exceed 300 characters.",
   "Nhập mật khẩu hiện tại": "Please enter your current password.",
   "Mật khẩu mới tối thiểu 8 ký tự": "New password must be at least 8 characters.",
+  "Xác thực 2 bước (2FA) chỉ áp dụng cho tài khoản giáo viên và quản trị viên.":
+    "Two-factor authentication is restricted to teachers and administrators.",
+  "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.":
+    "The password reset link is invalid or has expired.",
+  "Liên kết đặt lại mật khẩu đã được sử dụng.":
+    "This password reset link has already been used.",
+  "Liên kết đặt lại mật khẩu không hợp lệ.": "Invalid password reset link.",
+  "Bạn đã gửi quá nhiều yêu cầu đặt lại mật khẩu. Vui lòng thử lại sau 15 phút.":
+    "Too many password reset requests. Please try again in 15 minutes.",
 
   // Submission & proctoring
   "Không tìm thấy bài làm.": "Submission not found.",

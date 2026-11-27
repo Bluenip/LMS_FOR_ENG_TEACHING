@@ -287,6 +287,8 @@ model User {
   contentReportsFiled        ContentReport[]          @relation("ContentReportReporter")
   contentReportsReviewed     ContentReport[]          @relation("ContentReportReviewer")
   aiUsageLogs                AiUsageLog[]
+  passwordResetTokens        PasswordResetToken[]
+  loginSessionLogs           LoginSessionLog[]
 
   @@index([deletedAt])
 }
@@ -1539,4 +1541,33 @@ model PublicAttempt {
   assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
 
   @@index([assignmentId, submittedAt])
+}
+
+/// Phase 26: One-time SHA-256 hashed password reset tokens (30 min TTL).
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// Phase 26: Recent successful login session audit rows per user (IP masked for privacy).
+model LoginSessionLog {
+  id        String   @id @default(cuid())
+  userId    String
+  provider  String
+  ipMasked  String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }

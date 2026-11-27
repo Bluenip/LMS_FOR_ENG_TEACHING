@@ -48,8 +48,8 @@ async function requireAdminRecord(userId: string) {
     },
   });
   if (!user) throw new AppError("Không tìm thấy người dùng.", 404, "NOT_FOUND");
-  if (user.role !== "ADMIN") {
-    throw new AppError("Xác thực 2 bước (2FA) chỉ áp dụng cho tài khoản quản trị viên.", 403, "FORBIDDEN");
+  if (user.role !== "ADMIN" && user.role !== "TEACHER") {
+    throw new AppError("Xác thực 2 bước (2FA) chỉ áp dụng cho tài khoản giáo viên và quản trị viên.", 403, "FORBIDDEN");
   }
   return user;
 }
@@ -170,7 +170,12 @@ export async function verifyAdminTotpOrBackupCode(
       totpLastStep: true,
     },
   });
-  if (!user || user.role !== "ADMIN" || !user.totpEnabled || !user.totpSecretEncrypted) {
+  if (
+    !user ||
+    (user.role !== "ADMIN" && user.role !== "TEACHER") ||
+    !user.totpEnabled ||
+    !user.totpSecretEncrypted
+  ) {
     return { valid: true };
   }
 

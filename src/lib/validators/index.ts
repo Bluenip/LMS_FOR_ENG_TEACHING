@@ -943,3 +943,13 @@ export const submitPublicPracticeSchema = z.object({
     })
   ),
 });
+
+// ===== Phase 26: Password Reset & Security Scaling =====
+export const forgotPasswordSchema = z.object({
+  email: z.string().trim().email("Email không hợp lệ."),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().trim().min(16, "Liên kết đặt lại mật khẩu không hợp lệ."),
+  newPassword: z.string().min(8, "Mật khẩu mới tối thiểu 8 ký tự").max(200),
+});

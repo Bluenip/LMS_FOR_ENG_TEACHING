@@ -470,8 +470,9 @@ describe("Phase 13.3: Bulk Excel import (30 valid + 3 invalid rows + one-time pa
 
 describe("Phase 13.4: Admin 2FA (TOTP) setup, login verification, backup codes & disable", () => {
   it("blocks non-admins, encrypts TOTP secret, verifies 6-digit + backup codes, and logs audit events", async () => {
-    // Non-admin rejected
-    await expect(beginAdminTotpSetup(teacherBId)).rejects.toMatchObject({
+    // Student (non-admin / non-teacher) rejected
+    const student = await prisma.user.findFirstOrThrow({ where: { role: "STUDENT", deletedAt: null } });
+    await expect(beginAdminTotpSetup(student.id)).rejects.toMatchObject({
       statusCode: 403,
       code: "FORBIDDEN",
     });

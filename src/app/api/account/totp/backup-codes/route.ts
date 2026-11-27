@@ -5,7 +5,7 @@ import { regenerateAdminBackupCodes } from "@/server/totpService";
 
 export async function POST(req: Request) {
   try {
-    const user = await requireRole(["ADMIN"]);
+    const user = await requireRole(["ADMIN", "TEACHER"]);
     const { password, code } = totpConfirmWithPasswordSchema.parse(await req.json());
     const result = await regenerateAdminBackupCodes(user.id, password, code);
     return NextResponse.json(result, {

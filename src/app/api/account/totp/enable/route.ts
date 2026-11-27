@@ -5,7 +5,7 @@ import { confirmEnableAdminTotp } from "@/server/totpService";
 
 export async function POST(req: Request) {
   try {
-    const user = await requireRole(["ADMIN"]);
+    const user = await requireRole(["ADMIN", "TEACHER"]);
     const { code } = totpEnableSchema.parse(await req.json());
     const result = await confirmEnableAdminTotp(user.id, code);
     return NextResponse.json(result, {

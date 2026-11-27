@@ -3,10 +3,12 @@ import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import type { Role } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { authConfig } from "@/lib/auth.config";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimitAsync, getClientIp } from "@/lib/rate-limit";
 import { verifyAdminTotpOrBackupCode } from "@/server/totpService";
+import { evaluateGoogleSignIn, recordLoginSession } from "@/server/authSecurityService";
 
 class AccountLockedError extends CredentialsSignin {
   code = "ACCOUNT_LOCKED";
@@ -38,13 +40,13 @@ const providers: NextAuthConfig["providers"] = [
       password: { label: "Mật khẩu", type: "password" },
       totpCode: { label: "Mã xác thực 2 bước", type: "text" },
     },
-    async authorize(credentials) {
+    async authorize(credentials, request) {
       const parsed = credentialsSchema.safeParse(credentials);
       if (!parsed.success) return null;
 
       const { email, password, totpCode } = parsed.data;
 
-      const limit = checkRateLimit(`login:${email}`, 50, 15 * 60 * 1000);
+      const limit = await checkRateLimitAsync(`login:${email}`, 50, 15 * 60 * 1000);
       if (!limit.allowed) {
         throw new RateLimitedError();
       }
@@ -73,8 +75,8 @@ const providers: NextAuthConfig["providers"] = [
       const valid = await bcrypt.compare(password, user.passwordHash);
       if (!valid) return null;
 
-      // Admin 2FA (TOTP) enforcement
-      if (user.role === "ADMIN" && user.totpEnabled) {
+      // Admin & Teacher 2FA (TOTP) enforcement
+      if ((user.role === "ADMIN" || user.role === "TEACHER") && user.totpEnabled) {
         const cleanedCode = (totpCode ?? "").trim();
         if (!cleanedCode) {
           throw new TotpRequiredError();
@@ -88,6 +90,15 @@ const providers: NextAuthConfig["providers"] = [
         }
       }
 
+      const ip = request?.headers ? getClientIp(request.headers) : null;
+      const userAgent = request?.headers?.get("user-agent") ?? null;
+      await recordLoginSession({
+        userId: user.id,
+        provider: "credentials",
+        ip,
+        userAgent,
+      });
+
       return {
         id: user.id,
         email: user.email,
@@ -99,16 +110,39 @@ const providers: NextAuthConfig["providers"] = [
   }),
 ];
 
-if (process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET) {
+if (process.env.AUTH_GOOGLE_ID?.trim() && process.env.AUTH_GOOGLE_SECRET?.trim()) {
   providers.push(
     Google({
-      clientId: process.env.AUTH_GOOGLE_ID,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET,
+      clientId: process.env.AUTH_GOOGLE_ID.trim(),
+      clientSecret: process.env.AUTH_GOOGLE_SECRET.trim(),
     })
   );
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  callbacks: {
+    ...authConfig.callbacks,
+    async signIn({ user, account, profile }) {
+      if (account?.provider === "google") {
+        const emailVerified = Boolean(
+          (profile as { email_verified?: boolean } | undefined)?.email_verified
+        );
+        const res = await evaluateGoogleSignIn({
+          email: profile?.email ?? user.email,
+          emailVerified,
+        });
+        if (!res.ok) {
+          return `/login?error=${res.errorCode}`;
+        }
+        user.id = res.user.id;
+        user.name = res.user.name;
+        user.email = res.user.email;
+        user.image = res.user.avatarUrl;
+        (user as { role?: Role }).role = res.user.role;
+      }
+      return true;
+    },
+  },
   providers,
 });

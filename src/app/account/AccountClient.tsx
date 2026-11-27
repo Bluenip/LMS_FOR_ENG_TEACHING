@@ -1,15 +1,24 @@
 "use client";
 
 import { BackLink } from "@/components/navigation/BackLink";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { LogOut, Monitor } from "lucide-react";
 import { toast } from "sonner";
 import type { OwnProfileDto } from "@/server/accountService";
 import { useI18n } from "@/lib/i18n/client";
-import { getInitials } from "@/lib/utils";
+import { formatDateTime, getInitials } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,7 +34,7 @@ export function AccountClient({
   homeHref: string;
   forced: boolean;
 }) {
-  const { m, tr } = useI18n();
+  const { m, tr, locale } = useI18n();
   const router = useRouter();
   const [me, setMe] = useState<OwnProfileDto>(initialUser);
   const [name, setName] = useState(initialUser.name);
@@ -37,7 +46,55 @@ export function AccountClient({
   const [cur, setCur] = useState("");
   const [next, setNext] = useState("");
   const [busy, setBusy] = useState(false);
+  const [sessions, setSessions] = useState<
+    Array<{
+      id: string;
+      provider: string;
+      ipMasked: string | null;
+      userAgent: string | null;
+      createdAt: string;
+    }>
+  >([]);
+  const [loadingSessions, setLoadingSessions] = useState(true);
+  const [logoutAllOpen, setLogoutAllOpen] = useState(false);
+  const [revokingSessions, setRevokingSessions] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/account/sessions")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json: { sessions?: typeof sessions } | null) => {
+        if (active && json?.sessions) setSessions(json.sessions);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setLoadingSessions(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleSignOutAllDevices = async () => {
+    setRevokingSessions(true);
+    try {
+      const res = await fetch("/api/account/logout-all", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? m.common.errorGeneric);
+      toast.success(
+        tr(
+          "Đã đăng xuất khỏi mọi thiết bị khác! Vui lòng đăng nhập lại khi chuyển thiết bị.",
+          "Signed out all other devices!"
+        )
+      );
+      setLogoutAllOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : m.common.errorGeneric);
+    } finally {
+      setRevokingSessions(false);
+    }
+  };
 
   const todayYmd = new Date().toISOString().slice(0, 10);
 
@@ -369,12 +426,108 @@ export function AccountClient({
 
         <NotificationPreferencesSection />
 
-        {me.role === "ADMIN" && (
+        {(me.role === "ADMIN" || me.role === "TEACHER") && (
           <AdminTotpSection
             initialEnabled={me.totpEnabled}
             onStatusChange={(enabled) => setMe((prev) => ({ ...prev, totpEnabled: enabled }))}
           />
         )}
+
+        {/* Recent Login History & Sign Out All Devices */}
+        <section className="stitch-card space-y-4 p-5" data-testid="login-sessions-section">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="flex items-center gap-2 text-sm font-bold text-[#0B1C30]">
+                <Monitor className="h-4 w-4 text-[#4F46E5]" />
+                {tr("Lịch sử đăng nhập gần đây", "Recent login history")}
+              </h2>
+              <p className="mt-0.5 text-xs text-[#464555]">
+                {tr(
+                  "Theo dõi các lượt đăng nhập gần nhất (IP được ẩn phần cuối để bảo vệ riêng tư).",
+                  "Inspect recent sign-ins (IP addresses are masked for privacy)."
+                )}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-h-[40px] border-rose-200 text-rose-700 hover:bg-rose-50"
+              onClick={() => setLogoutAllOpen(true)}
+              data-testid="logout-all-devices-btn"
+            >
+              <LogOut className="h-4 w-4" />
+              {tr("Đăng xuất khỏi mọi thiết bị khác", "Sign out all other devices")}
+            </Button>
+          </div>
+
+          {loadingSessions ? (
+            <p className="text-xs text-slate-400">{m.common.loading}</p>
+          ) : sessions.length === 0 ? (
+            <p className="text-xs text-slate-400">
+              {tr("Chưa có lịch sử đăng nhập nào được ghi nhận.", "No login sessions recorded yet.")}
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100 text-[#464555]">
+                    <th className="py-2 pr-3 font-semibold">{tr("Phương thức", "Method")}</th>
+                    <th className="py-2 pr-3 font-semibold">IP</th>
+                    <th className="py-2 pr-3 font-semibold">{tr("Thiết bị", "Device")}</th>
+                    <th className="py-2 font-semibold">{tr("Thời gian", "Time")}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {sessions.map((s) => (
+                    <tr key={s.id} data-testid={`login-session-row-${s.id}`}>
+                      <td className="py-2 pr-3">
+                        <Badge variant="indigo">{s.provider}</Badge>
+                      </td>
+                      <td className="py-2 pr-3 font-mono text-[11px] text-slate-600">
+                        {s.ipMasked ?? "—"}
+                      </td>
+                      <td className="py-2 pr-3 max-w-[240px] truncate text-slate-600">
+                        {s.userAgent ?? "—"}
+                      </td>
+                      <td className="py-2 whitespace-nowrap text-slate-500">
+                        {formatDateTime(s.createdAt, locale)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <Dialog open={logoutAllOpen} onOpenChange={setLogoutAllOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>{tr("Đăng xuất tất cả thiết bị?", "Sign out all devices?")}</DialogTitle>
+              <DialogDescription>
+                {tr(
+                  "Mọi phiên đăng nhập đang mở trên máy khác hoặc trình duyệt khác sẽ bị vô hiệu hoá ngay lập tức.",
+                  "All active sessions on other browsers or devices will be invalidated immediately."
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" onClick={() => setLogoutAllOpen(false)}>
+                {m.common.cancel}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={revokingSessions}
+                onClick={() => void handleSignOutAllDevices()}
+                data-testid="confirm-logout-all-btn"
+              >
+                {revokingSessions ? m.common.saving : tr("Xác nhận đăng xuất", "Confirm sign out")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
     </div>
   );
 }

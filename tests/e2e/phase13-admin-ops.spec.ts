@@ -79,9 +79,6 @@ test.describe("Phase 13: Admin Ops, Ownership Transfer, Audit, Bulk Import, 2FA 
         [`/api/admin/users/${tid}/transfer`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ toUserId: tid, transferAll: true }) }],
         ["/api/admin/users/bulk-import/template"],
         ["/api/admin/users/bulk-import/credentials/nonexistent"],
-        ["/api/account/totp"],
-        ["/api/account/totp/setup", { method: "POST" }],
-        ["/api/account/totp/enable", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: "123456" }) }],
       ];
       const out: Record<string, number> = {};
       for (const [url, init] of checks) {
