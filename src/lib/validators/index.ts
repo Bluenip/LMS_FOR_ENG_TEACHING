@@ -331,6 +331,21 @@ export const createAssignmentSchema = z.object({
   weight: z.number().min(0.5).max(10).default(1),
   variantCount: z.number().int().min(1).max(24).optional().default(1),
   targetStudentIds: z.array(z.string().trim().min(1).max(64)).max(500).optional().nullable(),
+  // Phase 31
+  allowedTools: z
+    .object({
+      calculator: z.boolean().optional(),
+      scratchpad: z.boolean().optional(),
+      periodicTable: z.boolean().optional(),
+      formulaSheet: z.boolean().optional(),
+      highlighter: z.boolean().optional(),
+      tts: z.boolean().optional(),
+    })
+    .optional()
+    .nullable(),
+  isGroupAssignment: z.boolean().optional(),
+  peerReviewEnabled: z.boolean().optional(),
+  peerReviewsPerStudent: z.number().int().min(1).max(5).optional(),
 });
 
 /** Editing an assignment after it was given: same settings, but worksheet and class are fixed. */
@@ -1053,4 +1068,47 @@ export const updateOmrSheetSchema = z.object({
 export const updateOmrScanSchema = z.object({
   edits: z.record(z.string().max(20), z.string().max(2).nullable()).optional(),
   studentId: z.string().trim().min(1).nullable().optional(),
+});
+
+// ===== Phase 31: video checkpoints, groups, peer review, doubts =====
+export const videoCheckpointSchema = z.object({
+  timestampSec: z.number().int().min(0).max(86_400),
+  type: z.enum(["MULTIPLE_CHOICE", "TRUE_FALSE", "TEXT"]),
+  prompt: z.string().trim().min(1, "Vui lòng nhập câu hỏi").max(1000),
+  options: z.array(z.object({ id: z.string().trim().min(1).max(8), text: z.string().trim().min(1).max(300) })).max(6).optional().nullable(),
+  answerKey: z.unknown().optional(),
+});
+
+export const videoProgressSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("HEARTBEAT"), currentSec: z.number().min(0).max(86_400), durationSec: z.number().min(0).max(86_400) }),
+  z.object({ kind: z.literal("ANSWER"), checkpointId: z.string().trim().min(1), answer: z.unknown() }),
+]);
+
+export const classGroupSchema = z.object({
+  name: z.string().trim().min(1, "Vui lòng nhập tên nhóm").max(60),
+  studentIds: z.array(z.string().trim().min(1)).max(50),
+  leaderId: z.string().trim().min(1).optional().nullable(),
+});
+
+export const updateClassGroupSchema = classGroupSchema.partial().extend({ groupId: z.string().trim().min(1) });
+
+export const autoAssignGroupsSchema = z.object({ groupSize: z.number().int().min(2).max(10) });
+
+export const peerReviewSubmitSchema = z.object({
+  rubricScores: z.record(z.string(), z.number().min(0).max(100)).optional().nullable(),
+  comment: z.string().trim().max(2000).optional().nullable(),
+});
+
+export const questionDoubtSchema = z.object({
+  fieldId: z.string().trim().min(1),
+  question: z.string().trim().min(3, "Câu hỏi quá ngắn").max(1000),
+});
+
+export const replyDoubtSchema = z.object({
+  reply: z.string().trim().min(1, "Vui lòng nhập câu trả lời").max(2000),
+  isPublicToClass: z.boolean().default(true),
+});
+
+export const memberScoresSchema = z.object({
+  overrides: z.record(z.string().trim().min(1), z.number().min(0).max(1000).nullable()),
 });

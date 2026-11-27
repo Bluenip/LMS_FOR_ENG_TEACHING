@@ -7,6 +7,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { getStorageProvider } from "@/lib/storage";
 import { getServerDeadline } from "@/server/submissionService";
 import { enqueueDriveTrashForKeys } from "@/server/driveService";
+import { isSubmissionParticipant } from "@/server/classGroupService";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB per image / PDF
 
@@ -124,7 +125,7 @@ export async function POST(
       },
     });
 
-    if (!submission || submission.studentId !== user.id || submission.assignment.class.deletedAt) {
+    if (!submission || !(await isSubmissionParticipant(submission, user.id)) || submission.assignment.class.deletedAt) {
       throw new AppError("Không tìm thấy bài làm.", 404, "NOT_FOUND");
     }
     if (submission.status !== "IN_PROGRESS") {
@@ -249,9 +250,9 @@ export async function DELETE(
 
     const submission = await prisma.submission.findUnique({
       where: { id: submissionId },
-      select: { id: true, studentId: true, status: true, lockedAt: true },
+      select: { id: true, studentId: true, groupId: true, status: true, lockedAt: true },
     });
-    if (!submission || submission.studentId !== user.id) {
+    if (!submission || !(await isSubmissionParticipant(submission, user.id))) {
       throw new AppError("Không tìm thấy bài làm.", 404, "NOT_FOUND");
     }
     if (submission.status !== "IN_PROGRESS" || submission.lockedAt) {

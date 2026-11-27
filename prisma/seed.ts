@@ -289,6 +289,12 @@ async function main() {
   await prisma.omrScanResult.deleteMany();
   await prisma.similarityReport.deleteMany();
   await prisma.remedialPlanLog.deleteMany();
+  await prisma.questionDoubt.deleteMany();
+  await prisma.peerReviewAssignment.deleteMany();
+  await prisma.lessonVideoProgress.deleteMany();
+  await prisma.lessonVideoCheckpoint.deleteMany();
+  await prisma.classGroupMember.deleteMany();
+  await prisma.classGroup.deleteMany();
   await prisma.aiGradingSuggestion.deleteMany();
   await prisma.omrExamSheet.deleteMany();
   await prisma.liveQuizAnswer.deleteMany();
@@ -2921,6 +2927,119 @@ async function main() {
       });
     }
   }
+
+  // Phase 31 seed: exam tools on a reading assignment, 2 groups, an interactive video, an answered doubt
+  const toolsWs = await prisma.worksheet.create({
+    data: {
+      ownerId: teacher1.id,
+      title: "Reading: Coral reefs (exam tools demo)",
+      subject: "ENGLISH",
+      passages: [
+        {
+          id: "coral",
+          title: "Coral reefs",
+          content:
+            "Coral reefs cover less than one percent of the ocean floor, yet they support about a quarter of all marine species. Rising sea temperatures cause corals to expel the algae living in their tissues, a process known as bleaching.",
+        },
+      ],
+      fields: {
+        create: [
+          {
+            placement: "ANSWER_SHEET",
+            type: "MULTIPLE_CHOICE",
+            label: "1",
+            prompt: "What share of marine species do reefs support?",
+            order: 1,
+            points: 1,
+            passageId: "coral",
+            options: [
+              { id: "A", text: "About 1%" },
+              { id: "B", text: "About 25%" },
+            ],
+            answerKey: { correct: "B" },
+          },
+          {
+            placement: "ANSWER_SHEET",
+            type: "TEXT",
+            label: "2",
+            prompt: "What is the process called?",
+            order: 2,
+            points: 1,
+            passageId: "coral",
+            answerKey: { accepted: ["bleaching"] },
+          },
+        ],
+      },
+    },
+  });
+  await prisma.assignment.create({
+    data: {
+      classId: class1.id,
+      worksheetId: toolsWs.id,
+      title: "Reading with exam tools (demo)",
+      maxAttempts: null,
+      allowedTools: { calculator: true, scratchpad: true, highlighter: true, periodicTable: true, formulaSheet: true, tts: true },
+    },
+  });
+  for (const [g, members] of [
+    ["Nhóm Sao Mai", [0, 1, 2]],
+    ["Nhóm Bình Minh", [3, 4, 5]],
+  ] as const) {
+    const memberRows: Array<{ studentId: string; isLeader: boolean }> = [];
+    for (const [k, idx] of members.entries()) memberRows.push({ studentId: students[idx]!.id, isLeader: k === 0 });
+    await prisma.classGroup.create({
+      data: { classId: class1.id, name: g, members: { create: memberRows } },
+    });
+  }
+  await prisma.lesson.create({
+    data: {
+      ownerId: teacher1.id,
+      title: "Video tương tác: Present Perfect (demo)",
+      classLinks: { create: { classId: class1.id } },
+      items: {
+        create: {
+          title: "Video có câu hỏi xen giữa",
+          type: "VIDEO",
+          url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+          order: 0,
+          videoCheckpoints: {
+            create: [
+              {
+                timestampSec: 2,
+                type: "MULTIPLE_CHOICE",
+                prompt: "She ___ here since 2020.",
+                options: [
+                  { id: "A", text: "lives" },
+                  { id: "B", text: "has lived" },
+                ],
+                answerKey: { correct: "B" },
+                order: 0,
+              },
+              {
+                timestampSec: 4,
+                type: "TRUE_FALSE",
+                prompt: "'Since' is used with a point in time.",
+                answerKey: { correct: true },
+                order: 1,
+              },
+            ],
+          },
+        },
+      },
+    },
+  });
+  await prisma.questionDoubt.create({
+    data: {
+      assignmentId: masteryAsg.id,
+      fieldId: masteryWs.fields[0]!.id,
+      studentId: students[5]!.id,
+      question: "Vì sao câu 1 chọn A mà không phải B ạ?",
+      teacherReply: "Vì chủ ngữ số ít ở thì hiện tại đơn nên động từ thêm -s.",
+      repliedById: teacher1.id,
+      repliedAt: new Date(),
+      isPublicToClass: true,
+    },
+  });
 
   console.log("Seed completed successfully!");
   console.log("Accounts (password: password123):");

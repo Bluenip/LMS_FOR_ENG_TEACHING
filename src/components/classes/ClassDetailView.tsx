@@ -79,6 +79,8 @@ import { ClassScheduleTab } from "@/components/classes/ClassScheduleTab";
 import { ClassBehaviorTab } from "@/components/classes/ClassBehaviorTab";
 import { ExitTicketDialog } from "@/components/live-quiz/ExitTicketDialog";
 import { MyOmrScansCard } from "@/components/omr/MyOmrScansCard";
+import { InteractiveVideoPlayer, VideoCheckpointEditor } from "@/components/lessons/InteractiveVideoPlayer";
+import { ClassGroupsManager } from "@/components/classes/ClassGroupsManager";
 import { StudentProgressDrawer } from "@/components/classes/StudentProgressDrawer";
 import {
   ClassTeachersSection,
@@ -292,6 +294,7 @@ export function ClassDetailView({
   const [removingLesson, setRemovingLesson] = useState<{ id: string; title: string } | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [exitTicketOpen, setExitTicketOpen] = useState(false);
+  const [checkpointItemId, setCheckpointItemId] = useState<string | null>(null);
   const canEditLesson = (lesson: { ownerId?: string | null }) =>
     isTeacher && (isAdmin || lesson.ownerId === currentUserId);
 
@@ -1372,12 +1375,32 @@ export function ClassDetailView({
                           </div>
                         )}
 
-                        {item.type === "VIDEO" && !ytEmbed && item.fileKey && (
-                          <video
-                            controls
-                            src={`/api/files/${item.fileKey}`}
-                            className="max-h-80 w-full max-w-2xl rounded-xl"
-                          />
+                        {item.type === "VIDEO" && !ytEmbed && (item.fileKey || item.url) && (
+                          <div className="space-y-2">
+                            {isTeacher ? (
+                              <video
+                                controls
+                                src={item.fileKey ? `/api/files/${item.fileKey}` : item.url!}
+                                className="max-h-80 w-full max-w-2xl rounded-xl"
+                              />
+                            ) : (
+                              <InteractiveVideoPlayer
+                                itemId={item.id}
+                                src={item.fileKey ? `/api/files/${item.fileKey}` : item.url!}
+                              />
+                            )}
+                            {canEditLesson(lesson) && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setCheckpointItemId(item.id)}
+                                data-testid={`video-checkpoints-${item.id}`}
+                              >
+                                <Film className="h-3.5 w-3.5" />
+                                {tr("Câu hỏi trong video", "In-video questions")}
+                              </Button>
+                            )}
+                          </div>
                         )}
 
                         {item.type === "AUDIO" && (item.fileKey || item.url) && (
@@ -1398,6 +1421,13 @@ export function ClassDetailView({
 
         {/* TAB 4: STUDENTS ROSTER */}
         <TabsContent value="students" className="space-y-4">
+          {isTeacher && (
+            <ClassGroupsManager
+              classId={cls.id}
+              students={activeStudents.map((e) => ({ id: e.student.id, name: e.student.name }))}
+              canEdit={canEditClass}
+            />
+          )}
           {isTeacher && (
             <div className="stitch-card p-5">
               <CreateAccountForm
@@ -2126,6 +2156,13 @@ export function ClassDetailView({
       )}
       {isTeacher && (
         <ExitTicketDialog classId={cls.id} open={exitTicketOpen} onOpenChange={setExitTicketOpen} />
+      )}
+      {checkpointItemId && (
+        <VideoCheckpointEditor
+          itemId={checkpointItemId}
+          open={Boolean(checkpointItemId)}
+          onOpenChange={(o) => !o && setCheckpointItemId(null)}
+        />
       )}
     </div>
   );

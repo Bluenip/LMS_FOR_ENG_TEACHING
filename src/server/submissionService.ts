@@ -29,6 +29,7 @@ import { recordSubmissionGamification } from "./gamificationService";
 import { verifySebHeaderIfNeeded } from "./assignmentService";
 import { pickExamVariantForNewSubmission } from "./examVariantService";
 import { publishAssignmentLive } from "@/lib/proctor-bus";
+import { getStudentGroupIds, getStudentGroupInClass, isSubmissionParticipant } from "./classGroupService";
 
 function isSafeSubmissionFileKey(submissionId: string, key: unknown): key is string {
   const prefix = `submissions/${submissionId}/`;
@@ -181,8 +182,25 @@ export async function startOrResumeSubmission(
 
   await assertPrerequisiteUnlocked(assignment.unlockAfterAssignmentId, studentId);
 
+  // Phase 31: group assignments share ONE submission per group (stored under the member who started it)
+  let ownerId = studentId;
+  let groupId: string | null = null;
+  if (assignment.isGroupAssignment) {
+    const group = await getStudentGroupInClass(assignment.classId, studentId);
+    if (!group) {
+      throw new AppError("Bạn chưa được xếp vào nhóm nào cho bài tập nhóm này.", 403, "NO_GROUP");
+    }
+    groupId = group.id;
+    const groupSub = await prisma.submission.findFirst({
+      where: { assignmentId, groupId },
+      orderBy: { attemptNo: "desc" },
+      select: { studentId: true },
+    });
+    if (groupSub) ownerId = groupSub.studentId;
+  }
+
   const existingSubmissions = await prisma.submission.findMany({
-    where: { assignmentId, studentId },
+    where: { assignmentId, studentId: ownerId },
     orderBy: { attemptNo: "desc" },
     include: {
       answers: {
@@ -348,7 +366,8 @@ export async function startOrResumeSubmission(
   const created = await prisma.submission.create({
     data: {
       assignmentId,
-      studentId,
+      studentId: ownerId,
+      groupId,
       attemptNo: nextAttemptNo,
       status: "IN_PROGRESS",
       startedAt: now,
@@ -422,6 +441,9 @@ export async function getStudentAssignmentPayload(
       audioMaxPlays: true,
       audioBlockPause: true,
       audioBlockSeek: true,
+      allowedTools: true,
+      isGroupAssignment: true,
+      peerReviewEnabled: true,
       oneQuestionPerPage: true,
       remindBeforeDue: true,
       scoreScale: true,
@@ -474,8 +496,12 @@ export async function getStudentAssignmentPayload(
 
   await assertPrerequisiteUnlocked(assignment.unlockAfterAssignmentId, studentId);
 
+  const myGroupIds = await getStudentGroupIds(studentId);
   const submissions = await prisma.submission.findMany({
-    where: { assignmentId, studentId },
+    where: {
+      assignmentId,
+      OR: [{ studentId }, ...(myGroupIds.length > 0 ? [{ groupId: { in: myGroupIds } }] : [])],
+    },
     orderBy: { attemptNo: "desc" },
     select: {
       id: true,
@@ -850,7 +876,7 @@ export async function autosaveSubmissionAnswers(
     },
   });
 
-  if (!submission || submission.studentId !== studentId) {
+  if (!submission || !(await isSubmissionParticipant(submission, studentId))) {
     throw new AppError("Không tìm thấy bài làm.", 404, "NOT_FOUND");
   }
 
@@ -1166,7 +1192,7 @@ export async function submitByStudent(
     where: { id: submissionId },
     include: { assignment: true },
   });
-  if (!submission || submission.studentId !== studentId) {
+  if (!submission || !(await isSubmissionParticipant(submission, studentId))) {
     throw new AppError("Không tìm thấy bài làm.", 404, "NOT_FOUND");
   }
   if (headers) {

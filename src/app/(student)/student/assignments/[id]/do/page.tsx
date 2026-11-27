@@ -82,6 +82,8 @@ import {
   type WorksheetPageDTO,
   type WorksheetPassageDTO,
 } from "@/components/worksheet/types";
+import { ExamToolsDrawer, type AllowedTools } from "@/components/worksheet/ExamToolsDrawer";
+import { StudentAssignmentExtras } from "@/components/assignments/StudentAssignmentExtras";
 
 interface StudentAssignmentPayload {
   serverNow: string;
@@ -110,6 +112,9 @@ interface StudentAssignmentPayload {
     audioMaxPlays: number | null;
     audioBlockPause: boolean;
     audioBlockSeek: boolean;
+    allowedTools?: AllowedTools | null;
+    isGroupAssignment?: boolean;
+    peerReviewEnabled?: boolean;
     oneQuestionPerPage?: boolean;
     scoreScale?: ScoreScale;
     weight?: number;
@@ -1073,7 +1078,8 @@ export default function StudentDoAssignmentPage() {
   };
 
   return (
-    <div className="space-y-4 pb-20 lg:pb-8">
+    <div className="space-y-4 pb-20 lg:pb-8" data-exam-root>
+      {submission.status === "IN_PROGRESS" && <ExamToolsDrawer tools={assignment.allowedTools} />}
       {/* Teacher Returned for Revision Banner */}
       {isReturned && (
         <div
@@ -1851,6 +1857,15 @@ export default function StudentDoAssignmentPage() {
       )}
 
       {/* Submit Confirmation Modal with Unanswered Warning */}
+      {submission.status !== "IN_PROGRESS" && submission.status !== "RETURNED" && payload.revealResult && (
+        <StudentAssignmentExtras
+          assignmentId={assignment.id}
+          fields={allFields.filter((f) => f.placement === "ANSWER_SHEET" || f.points > 0).map((f) => ({ id: f.id, label: f.label }))}
+          grades={gradeByFieldId}
+          peerReviewEnabled={Boolean(assignment.peerReviewEnabled)}
+        />
+      )}
+
       <Dialog open={confirmSubmitOpen} onOpenChange={setConfirmSubmitOpen}>
         <DialogContent>
           <DialogHeader>

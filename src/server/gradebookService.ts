@@ -17,6 +17,7 @@ import {
 import { loadNotoFonts, wrapText } from "@/lib/pdf/export-printable-pdf";
 import { formatDateTime } from "@/lib/utils";
 import { getBehaviorTotalsByStudent } from "./behaviorPointService";
+import { memberScore } from "./classGroupService";
 import type { Locale } from "@/lib/i18n/config";
 
 export interface GradebookOnlineColumnDTO {
@@ -98,6 +99,8 @@ export async function getClassGradebook(classId: string, range?: GradebookDateRa
           select: {
             id: true,
             studentId: true,
+            groupId: true,
+            memberScoreOverrides: true,
             status: true,
             totalScore: true,
             autoScore: true,
@@ -150,6 +153,14 @@ export async function getClassGradebook(classId: string, range?: GradebookDateRa
   for (const a of filteredAssignments) onlineAcc.set(a.id, []);
   for (const c of filteredOffline) offlineAcc.set(c.id, []);
 
+  const groupMembers = new Map<string, string[]>();
+  for (const m of await prisma.classGroupMember.findMany({
+    where: { group: { classId } },
+    select: { groupId: true, studentId: true },
+  })) {
+    groupMembers.set(m.groupId, [...(groupMembers.get(m.groupId) ?? []), m.studentId]);
+  }
+
   // Pre-compute best completed submission per assignment/student and online targets
   const bestSubByAsg = new Map<
     string,
@@ -167,7 +178,17 @@ export async function getClassGradebook(classId: string, range?: GradebookDateRa
     defaultMaxByAsg.set(a.id, worksheetMax > 0 ? worksheetMax : 10);
 
     const byStudent = new Map<string, (typeof a.submissions)[number]>();
-    for (const sub of a.submissions) {
+    // Phase 31: a group submission counts for every member (teacher override per member wins)
+    const expanded = a.submissions.flatMap((sub) =>
+      sub.groupId
+        ? (groupMembers.get(sub.groupId) ?? [sub.studentId]).map((memberId) => ({
+            ...sub,
+            studentId: memberId,
+            totalScore: memberScore(sub.totalScore, sub.memberScoreOverrides, memberId),
+          }))
+        : [sub]
+    );
+    for (const sub of expanded) {
       const prev = byStudent.get(sub.studentId);
       const subScore = sub.totalScore ?? sub.autoScore ?? 0;
       const prevScore = prev ? (prev.totalScore ?? prev.autoScore ?? 0) : -1;

@@ -9,6 +9,7 @@ import { regradeWorksheetSubmissions } from "./regradeService";
 import { enqueueDriveTrashForKeys, getStorageLocationsForKeys } from "./driveService";
 import { logAudit } from "@/server/auditService";
 import { authorizeOmrFile } from "./omrService";
+import { isSubmissionParticipant } from "./classGroupService";
 
 async function countWorksheetSubmissions(worksheetId: string): Promise<number> {
   return prisma.submission.count({
@@ -961,7 +962,7 @@ export async function authorizeFileDownload(
       },
     });
     if (!sub) return false;
-    if (role === "STUDENT") return sub.studentId === userId;
+    if (role === "STUDENT") return isSubmissionParticipant(sub, userId);
     if (role === "TEACHER") {
       return (
         sub.assignment.class.teacherId === userId ||

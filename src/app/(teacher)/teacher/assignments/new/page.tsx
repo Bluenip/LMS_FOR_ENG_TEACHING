@@ -92,6 +92,10 @@ interface EditableAssignment {
   audioMaxPlays: number | null;
   audioBlockPause: boolean;
   audioBlockSeek: boolean;
+  allowedTools?: Record<string, boolean> | null;
+  isGroupAssignment?: boolean;
+  peerReviewEnabled?: boolean;
+  peerReviewsPerStudent?: number;
   oneQuestionPerPage: boolean;
   remindBeforeDue?: boolean;
   scoreScale?: ScoreScale;
@@ -236,6 +240,10 @@ function NewAssignmentForm() {
   const [audioMaxPlays, setAudioMaxPlays] = useState(2);
   const [audioBlockPause, setAudioBlockPause] = useState(false);
   const [audioBlockSeek, setAudioBlockSeek] = useState(false);
+  const [allowedTools, setAllowedTools] = useState<Record<string, boolean>>({});
+  const [isGroupAssignment, setIsGroupAssignment] = useState(false);
+  const [peerReviewEnabled, setPeerReviewEnabled] = useState(false);
+  const [peerReviewsPerStudent, setPeerReviewsPerStudent] = useState(1);
 
   // Results & Leaderboard
   const [showResult, setShowResult] = useState<ShowResultMode>("AFTER_SUBMIT");
@@ -339,6 +347,10 @@ function NewAssignmentForm() {
     setAudioMaxPlays(editing.audioMaxPlays ?? 2);
     setAudioBlockPause(editing.audioBlockPause);
     setAudioBlockSeek(editing.audioBlockSeek);
+    setAllowedTools(editing.allowedTools ?? {});
+    setIsGroupAssignment(Boolean(editing.isGroupAssignment));
+    setPeerReviewEnabled(Boolean(editing.peerReviewEnabled));
+    setPeerReviewsPerStudent(editing.peerReviewsPerStudent ?? 1);
     setShowResult(editing.showResult);
     setShowAnswerKey(editing.showAnswerKey);
     setShowLeaderboard(editing.showLeaderboard);
@@ -470,6 +482,10 @@ function NewAssignmentForm() {
           audioMaxPlays: limitAudioPlays ? audioMaxPlays : null,
           audioBlockPause,
           audioBlockSeek,
+          allowedTools: Object.values(allowedTools).some(Boolean) ? allowedTools : null,
+          isGroupAssignment,
+          peerReviewEnabled,
+          peerReviewsPerStudent,
           oneQuestionPerPage,
           remindBeforeDue,
           scoreScale,
@@ -902,6 +918,115 @@ function NewAssignmentForm() {
                 </div>
               </FormRow>
             )}
+          </section>
+
+          {/* ===== Phase 31: in-exam tools, group work & peer review ===== */}
+          <section className="stitch-card divide-y divide-slate-100">
+            <FormRow
+              id="step-tools"
+              title={tr("Công cụ & hình thức", "Tools & format")}
+              hint={tr("Công cụ học sinh được mở ngay trong trang làm bài.", "Tools students can open inside the exam page.")}
+            >
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <label key="calculator" className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-[#0B1C30] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(allowedTools.calculator)}
+                      onChange={(e) => setAllowedTools((prev) => ({ ...prev, calculator: e.target.checked }))}
+                      className="h-4 w-4 rounded border-slate-300 text-[#4F46E5]"
+                      data-testid="tool-calculator-checkbox"
+                    />
+                    {tr("Máy tính khoa học", "Scientific calculator")}
+                  </label>
+                  <label key="scratchpad" className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-[#0B1C30] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(allowedTools.scratchpad)}
+                      onChange={(e) => setAllowedTools((prev) => ({ ...prev, scratchpad: e.target.checked }))}
+                      className="h-4 w-4 rounded border-slate-300 text-[#4F46E5]"
+                      data-testid="tool-scratchpad-checkbox"
+                    />
+                    {tr("Bảng nháp vẽ tay", "Scratchpad")}
+                  </label>
+                  <label key="periodicTable" className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-[#0B1C30] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(allowedTools.periodicTable)}
+                      onChange={(e) => setAllowedTools((prev) => ({ ...prev, periodicTable: e.target.checked }))}
+                      className="h-4 w-4 rounded border-slate-300 text-[#4F46E5]"
+                      data-testid="tool-periodicTable-checkbox"
+                    />
+                    {tr("Bảng tuần hoàn", "Periodic table")}
+                  </label>
+                  <label key="formulaSheet" className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-[#0B1C30] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(allowedTools.formulaSheet)}
+                      onChange={(e) => setAllowedTools((prev) => ({ ...prev, formulaSheet: e.target.checked }))}
+                      className="h-4 w-4 rounded border-slate-300 text-[#4F46E5]"
+                      data-testid="tool-formulaSheet-checkbox"
+                    />
+                    {tr("Bảng công thức", "Formula sheet")}
+                  </label>
+                  <label key="highlighter" className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-[#0B1C30] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(allowedTools.highlighter)}
+                      onChange={(e) => setAllowedTools((prev) => ({ ...prev, highlighter: e.target.checked }))}
+                      className="h-4 w-4 rounded border-slate-300 text-[#4F46E5]"
+                      data-testid="tool-highlighter-checkbox"
+                    />
+                    {tr("Bút highlight ngữ liệu", "Passage highlighter")}
+                  </label>
+                  <label key="tts" className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-[#0B1C30] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(allowedTools.tts)}
+                      onChange={(e) => setAllowedTools((prev) => ({ ...prev, tts: e.target.checked }))}
+                      className="h-4 w-4 rounded border-slate-300 text-[#4F46E5]"
+                      data-testid="tool-tts-checkbox"
+                    />
+                    {tr("Đọc đề & cỡ chữ", "Read aloud & font size")}
+                  </label>
+                </div>
+                <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-[#0B1C30] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                  <input
+                    type="checkbox"
+                    checked={isGroupAssignment}
+                    onChange={(e) => setIsGroupAssignment(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-[#4F46E5]"
+                    data-testid="group-assignment-checkbox"
+                  />
+                  {tr("Bài tập nhóm (mỗi nhóm nộp chung 1 bài)", "Group assignment (one shared submission per group)")}
+                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-[#0B1C30] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                    <input
+                      type="checkbox"
+                      checked={peerReviewEnabled}
+                      onChange={(e) => setPeerReviewEnabled(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-[#4F46E5]"
+                      data-testid="peer-review-checkbox"
+                    />
+                    {tr("Chấm chéo ẩn danh", "Anonymous peer review")}
+                  </label>
+                  {peerReviewEnabled && (
+                    <label className="flex items-center gap-2 text-xs">
+                      {tr("Số bài mỗi HS chấm", "Reviews per student")}
+                      <input
+                        type="number"
+                        min={1}
+                        max={5}
+                        value={peerReviewsPerStudent}
+                        onChange={(e) => setPeerReviewsPerStudent(Math.max(1, Math.min(5, Number(e.target.value) || 1)))}
+                        className="h-9 w-16 rounded-lg border border-slate-200 px-2 dark:border-slate-700 dark:bg-slate-900"
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+            </FormRow>
           </section>
 
           {/* ===== Results & leaderboard ===== */}

@@ -1,13 +1,13 @@
 import crypto from "node:crypto";
-import type {
-  CameraSensitivity,
-  LeaderboardMode,
+import {
   Prisma,
-  ProctorMode,
-  ScoreScale,
-  ShowResultMode,
-  ViolationAction,
-  WorksheetSubject,
+  type CameraSensitivity,
+  type LeaderboardMode,
+  type ProctorMode,
+  type ScoreScale,
+  type ShowResultMode,
+  type ViolationAction,
+  type WorksheetSubject,
 } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
@@ -21,6 +21,7 @@ import { formatDateTime } from "@/lib/utils";
 import type { UpdateAssignmentInput } from "@/lib/validators";
 import { logAudit } from "@/server/auditService";
 import { createWorksheetSnapshot } from "./worksheetVersionService";
+import { getStudentGroupIds, memberScore } from "./classGroupService";
 
 export interface CreateAssignmentInput {
   worksheetId: string;
@@ -60,6 +61,10 @@ export interface CreateAssignmentInput {
   weight?: number;
   variantCount?: number;
   targetStudentIds?: string[] | null;
+  allowedTools?: Record<string, boolean | undefined> | null;
+  isGroupAssignment?: boolean;
+  peerReviewEnabled?: boolean;
+  peerReviewsPerStudent?: number;
 }
 
 export async function createAssignmentsForClasses(
@@ -180,6 +185,12 @@ export async function createAssignmentsForClasses(
         audioMaxPlays: input.audioMaxPlays ?? null,
         audioBlockPause: input.audioBlockPause,
         audioBlockSeek: input.audioBlockSeek,
+        ...(input.allowedTools !== undefined
+          ? { allowedTools: input.allowedTools === null ? Prisma.JsonNull : (input.allowedTools as Prisma.InputJsonValue) }
+          : {}),
+        ...(input.isGroupAssignment !== undefined ? { isGroupAssignment: input.isGroupAssignment } : {}),
+        ...(input.peerReviewEnabled !== undefined ? { peerReviewEnabled: input.peerReviewEnabled } : {}),
+        ...(input.peerReviewsPerStudent !== undefined ? { peerReviewsPerStudent: input.peerReviewsPerStudent } : {}),
         oneQuestionPerPage: Boolean(input.oneQuestionPerPage),
         remindBeforeDue: input.remindBeforeDue ?? true,
         scoreScale: input.scoreScale ?? "SCALE_10",
@@ -348,6 +359,12 @@ export async function updateAssignment(
       audioMaxPlays: input.audioMaxPlays ?? null,
       audioBlockPause: input.audioBlockPause,
       audioBlockSeek: input.audioBlockSeek,
+      ...(input.allowedTools !== undefined
+        ? { allowedTools: input.allowedTools === null ? Prisma.JsonNull : (input.allowedTools as Prisma.InputJsonValue) }
+        : {}),
+      ...(input.isGroupAssignment !== undefined ? { isGroupAssignment: input.isGroupAssignment } : {}),
+      ...(input.peerReviewEnabled !== undefined ? { peerReviewEnabled: input.peerReviewEnabled } : {}),
+      ...(input.peerReviewsPerStudent !== undefined ? { peerReviewsPerStudent: input.peerReviewsPerStudent } : {}),
       oneQuestionPerPage: Boolean(input.oneQuestionPerPage),
       ...(input.remindBeforeDue !== undefined ? { remindBeforeDue: input.remindBeforeDue } : {}),
       ...(input.scoreScale !== undefined ? { scoreScale: input.scoreScale } : {}),
@@ -444,6 +461,7 @@ export async function updateAssignment(
 }
 
 export async function listStudentAssignments(studentId: string) {
+  const myGroupIds = await getStudentGroupIds(studentId);
   const assignments = await prisma.assignment.findMany({
     where: {
       class: {
@@ -474,7 +492,9 @@ export async function listStudentAssignments(studentId: string) {
         take: 1,
       },
       submissions: {
-        where: { studentId },
+        where: {
+          OR: [{ studentId }, ...(myGroupIds.length > 0 ? [{ groupId: { in: myGroupIds } }] : [])],
+        },
         orderBy: { attemptNo: "desc" },
         select: {
           id: true,
@@ -483,6 +503,7 @@ export async function listStudentAssignments(studentId: string) {
           startedAt: true,
           submittedAt: true,
           isLate: true,
+          memberScoreOverrides: true,
           totalScore: true,
           maxScore: true,
           lockedAt: true,
@@ -512,9 +533,9 @@ export async function listStudentAssignments(studentId: string) {
       maxAttempts: effective.maxAttempts,
       hasOverride: effective.hasOverride,
       isLockedByPrerequisite,
-      submissions: a.submissions.map((s) => ({
+      submissions: a.submissions.map(({ memberScoreOverrides, ...s }) => ({
         ...s,
-        totalScore: canRevealResult(a, s.status, now) ? s.totalScore : null,
+        totalScore: canRevealResult(a, s.status, now) ? memberScore(s.totalScore, memberScoreOverrides, studentId) : null,
       })),
     };
   });

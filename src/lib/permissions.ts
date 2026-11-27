@@ -350,7 +350,16 @@ export async function requireSubmissionAccess(submissionId: string) {
   if (!submission) {
     throw new AppError("Không tìm thấy bài làm.", 404, "NOT_FOUND");
   }
-  const isOwnerStudent = user.role === "STUDENT" && submission.studentId === user.id;
+  const isOwnerStudent =
+    user.role === "STUDENT" &&
+    (submission.studentId === user.id ||
+      (submission.groupId !== null &&
+        Boolean(
+          await prisma.classGroupMember.findUnique({
+            where: { groupId_studentId: { groupId: submission.groupId, studentId: user.id } },
+            select: { studentId: true },
+          })
+        )));
   const classRole =
     user.role === "ADMIN" || user.role === "TEACHER"
       ? await resolveUserClassRole(

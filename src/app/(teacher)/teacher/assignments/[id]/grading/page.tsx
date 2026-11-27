@@ -23,6 +23,7 @@ import {
   Link2,
   ListChecks,
   ScanSearch,
+  MessageCircleQuestion,
   Mic,
   Radio,
   RotateCcw,
@@ -59,6 +60,7 @@ import { CommentPresetBar } from "@/components/grading/CommentPresetBar";
 import { OverrideDialog, type StudentOverrideInfo } from "@/components/grading/OverrideDialog";
 import { GradeByQuestionPanel } from "@/components/grading/GradeByQuestionPanel";
 import { SimilarityPanel } from "@/components/grading/SimilarityPanel";
+import { DoubtQueue } from "@/components/grading/DoubtQueue";
 import { ItemAnalysisCard } from "@/components/analytics/ItemAnalysisCard";
 import { ScoreHistogramChart } from "@/components/grading/ScoreHistogramChart";
 import type { ScoreHistogramResult } from "@/lib/analytics/score-histogram";
@@ -1036,7 +1038,9 @@ export default function AssignmentGradingPage() {
 
   const [search, setSearch] = useState("");
   const [selectedTopicTag, setSelectedTopicTag] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"overview" | "by-question" | "similarity">("overview");
+  const [viewMode, setViewMode] = useState<"overview" | "by-question" | "similarity" | "doubts">(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "doubts" ? "doubts" : "overview"
+  );
   const [reviewingSubId, setReviewingSubId] = useState<string | null>(null);
   const [overrideTarget, setOverrideTarget] = useState<ReportPayload["studentRows"][number] | null>(
     null
@@ -1242,9 +1246,25 @@ export default function AssignmentGradingPage() {
           <ScanSearch className="h-3.5 w-3.5" />
           {tr("Kiểm tra tương đồng", "Similarity check")}
         </button>
+        <button
+          type="button"
+          onClick={() => setViewMode("doubts")}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition",
+            viewMode === "doubts"
+              ? "bg-[#4F46E5] text-white"
+              : "text-[#464555] hover:text-[#0B1C30]"
+          )}
+          data-testid="tab-doubts"
+        >
+          <MessageCircleQuestion className="h-3.5 w-3.5" />
+          {tr("Hỏi đáp & Chấm chéo", "Q&A & peer review")}
+        </button>
       </div>
 
-      {viewMode === "similarity" ? (
+      {viewMode === "doubts" ? (
+        <DoubtQueue assignmentId={assignmentId} peerReviewEnabled />
+      ) : viewMode === "similarity" ? (
         <SimilarityPanel assignmentId={assignmentId} />
       ) : viewMode === "by-question" ? (
         <GradeByQuestionPanel

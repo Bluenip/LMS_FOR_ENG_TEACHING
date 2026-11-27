@@ -37,7 +37,7 @@ export function PassageCard({
         )}
       </button>
       {open && passage.content && (
-        <div className="border-t border-indigo-100 bg-white px-4 py-3 text-sm leading-relaxed text-[#0B1C30]">
+        <div data-highlightable className="border-t border-indigo-100 bg-white px-4 py-3 text-sm leading-relaxed text-[#0B1C30]">
           <MathText text={passage.content} />
         </div>
       )}
