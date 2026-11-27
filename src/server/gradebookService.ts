@@ -63,6 +63,7 @@ export async function getClassGradebook(classId: string, range?: GradebookDateRa
       id: true,
       name: true,
       deletedAt: true,
+      gradebookLockedAt: true,
       teacher: { select: { id: true, name: true } },
     },
   });
@@ -371,6 +372,7 @@ export async function getClassGradebook(classId: string, range?: GradebookDateRa
       id: cls.id,
       name: cls.name,
       teacherName: cls.teacher.name,
+      gradebookLockedAt: cls.gradebookLockedAt?.toISOString() ?? null,
     },
     range: {
       from: range?.from ? String(range.from) : null,

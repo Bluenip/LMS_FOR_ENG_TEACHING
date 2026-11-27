@@ -16,6 +16,7 @@ import { getRequestLocale } from "@/lib/i18n/server";
 import { localizeApiError } from "@/lib/i18n/api-errors";
 import { getHomeForRole } from "@/lib/utils";
 import { recordError } from "@/server/errorLogService";
+import { isMaintenanceMode } from "@/server/adminSystemOpsService";
 
 export {
   AppError,
@@ -95,6 +96,10 @@ export async function requireLayoutUser(
   if (allowedRoles && !allowedRoles.includes(dbUser.role)) {
     redirect(getHomeForRole(dbUser.role));
   }
+  // Phase 32: maintenance mode (checked here in Node.js — the Edge middleware cannot reach Prisma)
+  if (dbUser.role !== "ADMIN" && (await isMaintenanceMode())) {
+    redirect("/maintenance");
+  }
 
   return {
     id: dbUser.id,
@@ -135,6 +140,9 @@ export async function requireAuth(): Promise<SessionUser> {
   }
   if (session.user.role !== dbUser.role) {
     throw new AppError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.", 401, "UNAUTHORIZED");
+  }
+  if (dbUser.role !== "ADMIN" && (await isMaintenanceMode())) {
+    throw new AppError("Hệ thống đang bảo trì. Vui lòng quay lại sau.", 503, "MAINTENANCE_MODE");
   }
 
   return {

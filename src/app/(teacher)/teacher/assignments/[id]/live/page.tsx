@@ -33,6 +33,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { LiveRescueMenu, PreCheckPanel } from "@/components/assignments/LiveRescueMenu";
 
 interface LiveStudentCard {
   studentId: string;
@@ -463,6 +464,9 @@ export default function TeacherLiveProctorPage() {
                       ) : null}
 
                       {st.liveStatus !== "SUBMITTED" && (
+                        <LiveRescueMenu assignmentId={assignmentId} studentId={st.studentId} studentName={st.studentName} />
+                      )}
+                      {st.liveStatus !== "SUBMITTED" && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -500,6 +504,7 @@ export default function TeacherLiveProctorPage() {
 
         {/* Right: Realtime Alerts Feed & Student Event Timeline */}
         <aside className="lg:col-span-4 space-y-4">
+          <PreCheckPanel assignmentId={assignmentId} />
           <div className="stitch-card p-5 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">

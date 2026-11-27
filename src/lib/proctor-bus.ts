@@ -10,7 +10,9 @@ export interface LiveProctorPayload {
     | "SUBMISSION_UNLOCKED"
     | "SUBMISSION_STARTED"
     | "HEARTBEAT"
-    | "TEACHER_REMINDER";
+    | "TEACHER_REMINDER"
+    | "TEACHER_MESSAGE"
+    | "TIME_EXTENDED";
   assignmentId: string;
   submissionId: string;
   studentId: string;

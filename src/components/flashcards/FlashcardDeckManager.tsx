@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiFetchJson } from "@/lib/api-client";
-import { BookOpen, Layers, Loader2, Plus, Sparkles, Trash2 } from "lucide-react";
+import { BookOpen, Download, Layers, Loader2, Plus, Sparkles, Trash2, Upload } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
@@ -296,6 +296,39 @@ export function FlashcardDeckManager({
                     <span className="text-xs text-slate-400">
                       {d.cardCount} {tr("thẻ từ vựng", "cards")}
                     </span>
+                  )}
+                  <Button type="button" variant="ghost" size="sm" className="min-h-9" asChild>
+                    <a href={`/api/flashcards/${d.id}/anki-csv`} download title={tr("Xuất Anki", "Export to Anki")} data-testid={`anki-export-${d.id}`}>
+                      <Download className="h-4 w-4" />
+                    </a>
+                  </Button>
+                  {canDelete && (
+                    <label className="inline-flex min-h-9 cursor-pointer items-center rounded-lg px-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" title={tr("Nhập thẻ từ Anki (.txt/.csv)", "Import Anki notes (.txt/.csv)")}>
+                      <Upload className="h-4 w-4" />
+                      <input
+                        type="file"
+                        accept=".txt,.csv,.tsv,text/plain,text/csv"
+                        className="hidden"
+                        data-testid={`anki-import-${d.id}`}
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0];
+                          if (!f) return;
+                          try {
+                            const res = await apiFetchJson<{ imported: number }>(`/api/flashcards/${d.id}/anki-csv`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ content: await f.text() }),
+                            });
+                            toast.success(tr(`Đã nhập ${res.imported} thẻ`, `Imported ${res.imported} cards`));
+                            void queryClient.invalidateQueries();
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : tr("Nhập thất bại", "Import failed"));
+                          } finally {
+                            e.target.value = "";
+                          }
+                        }}
+                      />
+                    </label>
                   )}
                   {canDelete && (
                     <Button

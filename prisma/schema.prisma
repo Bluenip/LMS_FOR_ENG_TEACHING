@@ -226,6 +226,12 @@ enum OmrSheetTemplate {
   THPT_2025
 }
 
+enum LeaveRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id                  String    @id @default(cuid())
   email               String    @unique
@@ -323,6 +329,11 @@ model User {
   peerReviewsToDo            PeerReviewAssignment[]   @relation("PeerReviewer")
   questionDoubtsAsked        QuestionDoubt[]          @relation("DoubtStudent")
   questionDoubtsReplied      QuestionDoubt[]          @relation("DoubtRepliedBy")
+  leaveRequestsAsStudent     LeaveRequest[]           @relation("LeaveStudent")
+  leaveRequestsAsParent      LeaveRequest[]           @relation("LeaveParent")
+  leaveRequestsReviewed      LeaveRequest[]           @relation("LeaveReviewer")
+  calendarFeedToken          CalendarFeedToken?
+  systemPreChecks            SystemPreCheckLog[]
 
   @@index([deletedAt])
 }
@@ -393,6 +404,13 @@ model Class {
   remedialPlans       RemedialPlanLog[]
 
   groups ClassGroup[]
+
+  /// Phase 32: academic term + gradebook lock
+  termId              String?
+  gradebookLockedAt   DateTime?
+  gradebookLockedById String?
+  term                AcademicTerm?  @relation(fields: [termId], references: [id], onDelete: SetNull)
+  leaveRequests       LeaveRequest[]
 
   @@index([teacherId])
 }
@@ -1335,6 +1353,8 @@ model ClassSession {
   attendanceRecords AttendanceRecord[]
   behaviorPoints    StudentBehaviorPoint[]
 
+  leaveRequests LeaveRequest[]
+
   @@unique([ruleId, startsAt])
   @@index([classId, startsAt])
 }
@@ -1952,4 +1972,86 @@ model QuestionDoubt {
   repliedBy  User?      @relation("DoubtRepliedBy", fields: [repliedById], references: [id], onDelete: SetNull)
 
   @@index([assignmentId, fieldId])
+}
+
+/// Phase 32: school term (classes are grouped by term; gradebooks can be locked at term end).
+model AcademicTerm {
+  id        String   @id @default(cuid())
+  name      String
+  startsAt  DateTime
+  endsAt    DateTime
+  isLocked  Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  classes Class[]
+
+  @@index([isActive, startsAt])
+}
+
+/// Phase 32: parent request to excuse a child from one upcoming class session.
+model LeaveRequest {
+  id           String             @id @default(cuid())
+  classId      String
+  sessionId    String
+  studentId    String
+  parentId     String
+  reason       String
+  status       LeaveRequestStatus @default(PENDING)
+  reviewedById String?
+  reviewNote   String?
+  reviewedAt   DateTime?
+  createdAt    DateTime           @default(now())
+
+  class      Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  session    ClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student    User         @relation("LeaveStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  parent     User         @relation("LeaveParent", fields: [parentId], references: [id], onDelete: Cascade)
+  reviewedBy User?        @relation("LeaveReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, studentId])
+  @@index([classId, status])
+}
+
+/// Phase 32: secret token (SHA-256 hashed) for the personal .ics calendar feed.
+model CalendarFeedToken {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  tokenHash String   @unique
+  createdAt DateTime @default(now())
+  rotatedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Phase 32: result of a student's device check before an exam.
+model SystemPreCheckLog {
+  id           String   @id @default(cuid())
+  userId       String
+  assignmentId String?
+  browserInfo  String
+  pingMs       Int?
+  cameraOk     Boolean
+  micOk        Boolean
+  batteryPct   Int?
+  passed       Boolean
+  checkedAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([assignmentId, userId])
+}
+
+/// Phase 32: system-wide banner and maintenance switch (single active row).
+model SystemBanner {
+  id              String    @id @default(cuid())
+  message         String
+  level           String    @default("INFO")
+  maintenanceMode Boolean   @default(false)
+  startsAt        DateTime?
+  endsAt          DateTime?
+  active          Boolean   @default(false)
+  updatedById     String?
+  updatedAt       DateTime  @updatedAt
 }

@@ -12,6 +12,9 @@ import {
   Save,
   Trash2,
   Upload,
+  Archive,
+  Lock,
+  LockOpen,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
@@ -28,7 +31,7 @@ import {
 } from "@/components/ui/dialog";
 
 export interface ClassGradebookDTO {
-  class: { id: string; name: string; teacherName: string };
+  class: { id: string; name: string; teacherName: string; gradebookLockedAt?: string | null };
   range: { from: string | null; to: string | null };
   onlineColumns: Array<{
     id: string;
@@ -145,6 +148,21 @@ export function ClassGradebookTab({
         tr("Không tải được sổ điểm", "Could not load gradebook")
       ),
   });
+
+  const toggleLock = async () => {
+    const lock = !gradebook?.class.gradebookLockedAt;
+    try {
+      await apiFetchJson(`/api/classes/${classId}/gradebook/lock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lock }),
+      });
+      toast.success(lock ? tr("Đã khoá sổ điểm cuối kỳ", "Gradebook locked") : tr("Đã mở khoá sổ điểm", "Gradebook unlocked"));
+      await queryClient.invalidateQueries({ queryKey: ["class-gradebook", classId] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : tr("Thao tác thất bại", "Action failed"));
+    }
+  };
 
   // Draft offline score edits keyed by `${columnId}::${studentId}`
   const [draftScores, setDraftScores] = useState<Record<string, string>>({});
@@ -398,6 +416,24 @@ export function ClassGradebookTab({
             >
               <Plus className="h-4 w-4 text-[#4F46E5]" />
               {tr("+ Cột điểm giấy", "+ Paper grade column")}
+            </Button>
+          )}
+          <Button variant="outline" className="min-h-10" asChild>
+            <a href={`/api/classes/${classId}/gradebook/archive-zip`} data-testid="gradebook-archive-zip">
+              <Archive className="h-4 w-4 text-[#4F46E5]" />
+              {tr("Gói tổng kết ZIP", "Term archive ZIP")}
+            </a>
+          </Button>
+          {canManageColumns && (
+            <Button
+              type="button"
+              variant={gradebook?.class.gradebookLockedAt ? "destructive" : "outline"}
+              className="min-h-10"
+              data-testid="gradebook-lock-btn"
+              onClick={() => void toggleLock()}
+            >
+              {gradebook?.class.gradebookLockedAt ? <LockOpen className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+              {gradebook?.class.gradebookLockedAt ? tr("Mở khoá sổ (Admin)", "Unlock (admin)") : tr("Khoá sổ điểm", "Lock gradebook")}
             </Button>
           )}
           <Button variant="outline" className="min-h-10" asChild>

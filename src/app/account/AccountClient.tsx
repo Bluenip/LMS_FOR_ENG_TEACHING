@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { AdminTotpSection } from "@/components/accounts/AdminTotpSection";
 import { NotificationPreferencesSection } from "@/components/accounts/NotificationPreferencesSection";
+import { CalendarSyncCard } from "@/components/schedule/CalendarSyncCard";
 
 export function AccountClient({
   initialUser,
@@ -528,6 +529,7 @@ export function AccountClient({
             </DialogFooter>
           </DialogContent>
         </Dialog>
+      <CalendarSyncCard />
     </div>
   );
 }

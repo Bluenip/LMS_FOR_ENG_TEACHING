@@ -16,6 +16,7 @@ import {
   Star,
   Trash2,
   Wand2,
+  FileUp,
 } from "lucide-react";
 import type { FieldType, SkillTag, WorksheetSubject } from "@prisma/client";
 import { WORKSHEET_SUBJECTS, getSubjectMeta } from "@/lib/subjects";
@@ -36,6 +37,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { StandardImportDialog } from "@/components/library/StandardImportDialog";
 
 interface BankItemDTO {
   id: string;
@@ -411,6 +413,8 @@ export default function TeacherQuestionBankPage() {
   const items = data?.items ?? [];
   const topicOptions = data?.facets.topicTags ?? [];
 
+  const [importOpen, setImportOpen] = useState(false);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -428,6 +432,10 @@ export default function TeacherQuestionBankPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          <Button type="button" variant="outline" className="min-h-10" data-testid="open-standard-import" onClick={() => setImportOpen(true)}>
+            <FileUp className="h-4 w-4 text-[#4F46E5]" />
+            {tr("Nhập Aiken / Moodle / Quizizz", "Import Aiken / Moodle / Quizizz")}
+          </Button>
           <Button
             type="button"
             variant="secondary"
@@ -1090,6 +1098,12 @@ export default function TeacherQuestionBankPage() {
           </form>
         </DialogContent>
       </Dialog>
+      <StandardImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        target="BANK"
+        onDone={() => void queryClient.invalidateQueries({ queryKey: ["question-bank"] })}
+      />
     </div>
   );
 }

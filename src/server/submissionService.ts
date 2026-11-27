@@ -30,6 +30,7 @@ import { verifySebHeaderIfNeeded } from "./assignmentService";
 import { pickExamVariantForNewSubmission } from "./examVariantService";
 import { publishAssignmentLive } from "@/lib/proctor-bus";
 import { getStudentGroupIds, getStudentGroupInClass, isSubmissionParticipant } from "./classGroupService";
+import { assertGradebookUnlocked } from "./gradebookLock";
 
 function isSafeSubmissionFileKey(submissionId: string, key: unknown): key is string {
   const prefix = `submissions/${submissionId}/`;
@@ -1307,6 +1308,7 @@ export async function saveTeacherManualGrading(
   if (!submission) {
     throw new AppError("Không tìm thấy bài làm.", 404, "NOT_FOUND");
   }
+  await assertGradebookUnlocked(submission.assignment.classId);
 
   if (submission.status === "IN_PROGRESS") {
     throw new AppError(
@@ -1470,6 +1472,7 @@ export async function saveSingleFieldGrade(
   if (!submission) {
     throw new AppError("Không tìm thấy bài làm.", 404, "NOT_FOUND");
   }
+  await assertGradebookUnlocked(submission.assignment.classId);
   if (submission.status === "IN_PROGRESS") {
     throw new AppError(
       "Học sinh chưa nộp bài, chưa thể chấm điểm.",

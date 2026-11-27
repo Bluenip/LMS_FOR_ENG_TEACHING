@@ -81,6 +81,7 @@ import { ExitTicketDialog } from "@/components/live-quiz/ExitTicketDialog";
 import { MyOmrScansCard } from "@/components/omr/MyOmrScansCard";
 import { InteractiveVideoPlayer, VideoCheckpointEditor } from "@/components/lessons/InteractiveVideoPlayer";
 import { ClassGroupsManager } from "@/components/classes/ClassGroupsManager";
+import { ClassLeaveRequestsPanel } from "@/components/schedule/LeaveRequests";
 import { StudentProgressDrawer } from "@/components/classes/StudentProgressDrawer";
 import {
   ClassTeachersSection,
@@ -1643,6 +1644,7 @@ export function ClassDetailView({
 
         {/* SCHEDULE & ATTENDANCE TAB */}
         <TabsContent value="schedule">
+          {isTeacher && <ClassLeaveRequestsPanel classId={cls.id} />}
           <ClassScheduleTab
             classId={cls.id}
             className={cls.name}

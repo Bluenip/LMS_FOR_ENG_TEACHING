@@ -230,6 +230,7 @@ export default function StudentDoAssignmentPage() {
   const [attemptVersion, setAttemptVersion] = useState(0);
   const [violationCount, setViolationCount] = useState(0);
   const [isLocked, setIsLocked] = useState(false);
+  const [teacherMessage, setTeacherMessage] = useState<string | null>(null);
   const [restartedBanner, setRestartedBanner] = useState<string | null>(null);
   const [leftOverlay, setLeftOverlay] = useState<{ visible: boolean; at: string } | null>(null);
   // Exam requires fullscreen but the page is not in fullscreen (e.g. the browser refused the
@@ -351,6 +352,37 @@ export default function StudentDoAssignmentPage() {
   useEffect(() => {
     void fetchPayload();
   }, [fetchPayload]);
+
+  // Phase 32: live rescue events from the teacher (private message, extra time, device unlock)
+  const liveSubmissionId = payload?.submission?.status === "IN_PROGRESS" ? payload.submission.id : null;
+  useEffect(() => {
+    if (!liveSubmissionId) return;
+    const es = new EventSource(`/api/submissions/${liveSubmissionId}/events`);
+    const refreshTimer = async () => {
+      const res = await fetch(`/api/assignments/${assignmentId}`, { cache: "no-store" }).catch(() => null);
+      const json = res && res.ok ? await res.json().catch(() => null) : null;
+      if (json?.submission?.remainingSeconds !== undefined) setRemainingSeconds(json.submission.remainingSeconds);
+    };
+    es.addEventListener("teacher", (ev) => {
+      let data: { kind: string; message: string | null } | null = null;
+      try {
+        data = JSON.parse((ev as MessageEvent<string>).data);
+      } catch {
+        return;
+      }
+      if (!data) return;
+      if (data.kind === "TEACHER_MESSAGE" || data.kind === "TEACHER_REMINDER") setTeacherMessage(data.message ?? "");
+      if (data.kind === "TIME_EXTENDED") {
+        toast.success(tr(`Giáo viên đã cộng thêm ${data.message ?? ""} phút`, `Your teacher added ${data.message ?? ""} minutes`));
+        void refreshTimer();
+      }
+      if (data.kind === "SUBMISSION_UNLOCKED") {
+        setIsLocked(false);
+        void refreshTimer();
+      }
+    });
+    return () => es.close();
+  }, [liveSubmissionId, assignmentId, tr]);
 
   const pdfUrl = payload?.assignment.worksheet.pdfFileKey
     ? `/api/files/${payload.assignment.worksheet.pdfFileKey}`
@@ -1865,6 +1897,18 @@ export default function StudentDoAssignmentPage() {
           peerReviewEnabled={Boolean(assignment.peerReviewEnabled)}
         />
       )}
+
+      <Dialog open={teacherMessage !== null} onOpenChange={(o) => !o && setTeacherMessage(null)}>
+        <DialogContent data-testid="teacher-message-dialog">
+          <DialogHeader>
+            <DialogTitle>{tr("Tin nhắn từ giáo viên", "Message from your teacher")}</DialogTitle>
+            <DialogDescription>{teacherMessage}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setTeacherMessage(null)}>{tr("Đã hiểu", "OK")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={confirmSubmitOpen} onOpenChange={setConfirmSubmitOpen}>
         <DialogContent>

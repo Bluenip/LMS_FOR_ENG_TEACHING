@@ -4,6 +4,7 @@ import { getAppName } from "@/lib/utils";
 import { getI18n } from "@/lib/i18n/server";
 import type { LayoutUser } from "@/lib/permissions";
 import { AppNavbar, type NavLinkItem } from "./AppNavbar";
+import { SystemBanner } from "./SystemBanner";
 
 /** Which area of the app the page belongs to — decides the navbar links. */
 export type ShellSection = "admin" | "teacher" | "student" | "parent";
@@ -48,6 +49,8 @@ export async function RoleShell({
         { href: "/admin/moderation", label: tr("Kiểm duyệt", "Moderation") },
         { href: "/admin/audit", label: tr("Nhật ký hoạt động", "Audit log") },
         { href: "/admin/errors", label: tr("Nhật ký lỗi", "Error log") },
+        { href: "/admin/terms", label: tr("Học kỳ", "Terms") },
+        { href: "/admin/system", label: tr("Hệ thống", "System") },
         { href: "/teacher", label: tr("Giao diện Giáo viên", "Teacher view") },
       ];
       break;
@@ -94,6 +97,7 @@ export async function RoleShell({
 
   return (
     <div className="flex min-h-screen flex-col bg-[#F8F9FF]">
+      <SystemBanner />
       <AppNavbar
         appName={getAppName()}
         user={{

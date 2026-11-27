@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { assertGradebookUnlocked } from "./gradebookLock";
 
 const MAX_EXCEL_BYTES = 5 * 1024 * 1024;
 
@@ -57,6 +58,7 @@ export async function createOfflineGradeColumn(
     note?: string | null;
   }
 ) {
+  await assertGradebookUnlocked(classId);
   const date = parseColumnDate(input.date) ?? new Date();
   const col = await prisma.offlineGradeColumn.create({
     data: {
@@ -94,6 +96,7 @@ export async function updateOfflineGradeColumn(
     note?: string | null;
   }
 ) {
+  await assertGradebookUnlocked(classId);
   const existing = await prisma.offlineGradeColumn.findFirst({
     where: { id: columnId, classId },
     select: { id: true },
@@ -126,6 +129,7 @@ export async function updateOfflineGradeColumn(
 }
 
 export async function deleteOfflineGradeColumn(classId: string, columnId: string) {
+  await assertGradebookUnlocked(classId);
   const existing = await prisma.offlineGradeColumn.findFirst({
     where: { id: columnId, classId },
     select: { id: true },
@@ -142,6 +146,7 @@ export async function saveOfflineGradeEntries(
   columnId: string,
   entries: Array<{ studentId: string; score: number | null; note?: string | null }>
 ) {
+  await assertGradebookUnlocked(classId);
   const col = await prisma.offlineGradeColumn.findFirst({
     where: { id: columnId, classId },
     select: { id: true, maxScore: true },
@@ -250,6 +255,7 @@ export async function importOfflineGradesFromExcel(
   buffer: Buffer,
   opts?: { commit?: boolean }
 ) {
+  await assertGradebookUnlocked(classId);
   const col = await prisma.offlineGradeColumn.findFirst({
     where: { id: columnId, classId },
     select: { id: true, title: true, maxScore: true },

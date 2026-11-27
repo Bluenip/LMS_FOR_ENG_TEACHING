@@ -290,6 +290,10 @@ async function main() {
   await prisma.similarityReport.deleteMany();
   await prisma.remedialPlanLog.deleteMany();
   await prisma.questionDoubt.deleteMany();
+  await prisma.leaveRequest.deleteMany();
+  await prisma.calendarFeedToken.deleteMany();
+  await prisma.systemPreCheckLog.deleteMany();
+  await prisma.systemBanner.deleteMany();
   await prisma.peerReviewAssignment.deleteMany();
   await prisma.lessonVideoProgress.deleteMany();
   await prisma.lessonVideoCheckpoint.deleteMany();
@@ -355,6 +359,7 @@ async function main() {
   await prisma.parentInviteCode.deleteMany();
   await prisma.parentLink.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.academicTerm.deleteMany();
 
   // 1 Admin
   const admin = await prisma.user.create({
@@ -3038,6 +3043,33 @@ async function main() {
       repliedById: teacher1.id,
       repliedAt: new Date(),
       isPublicToClass: true,
+    },
+  });
+
+  // Phase 32 seed: default term for every demo class + one pending leave request
+  const term = await prisma.academicTerm.create({
+    data: {
+      name: "Năm học 2026–2027 — Học kỳ 1",
+      startsAt: new Date("2026-09-05T00:00:00+07:00"),
+      endsAt: new Date("2027-01-15T23:59:59+07:00"),
+    },
+  });
+  await prisma.class.updateMany({ where: { deletedAt: null }, data: { termId: term.id } });
+  const upcomingSession = await prisma.classSession.create({
+    data: {
+      classId: class1.id,
+      title: "Buổi ôn tập đặc biệt (demo đơn nghỉ)",
+      startsAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+      endsAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000),
+    },
+  });
+  await prisma.leaveRequest.create({
+    data: {
+      classId: class1.id,
+      sessionId: upcomingSession.id,
+      studentId: students[1]!.id,
+      parentId: parent1.id,
+      reason: "Cháu đi khám răng theo lịch hẹn.",
     },
   });
 

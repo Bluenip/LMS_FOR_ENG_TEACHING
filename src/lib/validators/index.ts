@@ -1112,3 +1112,59 @@ export const replyDoubtSchema = z.object({
 export const memberScoresSchema = z.object({
   overrides: z.record(z.string().trim().min(1), z.number().min(0).max(1000).nullable()),
 });
+
+// ===== Phase 32: exam ops, leave requests, terms, imports, system =====
+export const liveRescueSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("MESSAGE"), studentId: z.string().trim().min(1), message: z.string().trim().min(1, "Vui lòng nhập nội dung tin nhắn.").max(500) }),
+  z.object({ action: z.literal("EXTEND_TIME"), studentId: z.string().trim().min(1), extraMin: z.number().int().min(1).max(60) }),
+  z.object({ action: z.literal("UNLOCK_DEVICE"), studentId: z.string().trim().min(1) }),
+]);
+
+export const preCheckSchema = z.object({
+  assignmentId: z.string().trim().min(1).optional().nullable(),
+  browserInfo: z.string().trim().min(1).max(300),
+  pingMs: z.number().int().min(0).max(60_000).optional().nullable(),
+  cameraOk: z.boolean(),
+  micOk: z.boolean(),
+  batteryPct: z.number().int().min(0).max(100).optional().nullable(),
+});
+
+export const leaveRequestSchema = z.object({
+  studentId: z.string().trim().min(1),
+  sessionId: z.string().trim().min(1),
+  reason: z.string().trim().min(3, "Vui lòng ghi rõ lý do xin nghỉ").max(500),
+});
+
+export const reviewLeaveSchema = z.object({
+  classId: z.string().trim().min(1),
+  status: z.enum(["APPROVED", "REJECTED"]),
+  note: z.string().trim().max(300).optional().nullable(),
+});
+
+export const termSchema = z.object({
+  id: z.string().trim().min(1).optional(),
+  name: z.string().trim().min(2, "Tên học kỳ tối thiểu 2 ký tự").max(100),
+  startsAt: z.string().min(8),
+  endsAt: z.string().min(8),
+  isActive: z.boolean().optional(),
+  isLocked: z.boolean().optional(),
+  classIds: z.array(z.string().trim().min(1)).max(500).optional(),
+});
+
+export const standardImportSchema = z.object({
+  format: z.enum(["AIKEN", "MOODLE_XML", "QUIZIZZ_CSV"]),
+  content: z.string().min(1).max(2_000_000),
+  target: z.enum(["WORKSHEET", "BANK"]),
+  worksheetId: z.string().trim().min(1).optional().nullable(),
+  subject: z.nativeEnum(WorksheetSubject).optional().nullable(),
+  dryRun: z.boolean().optional(),
+});
+
+export const bannerSchema = z.object({
+  message: z.string().max(500).default(""),
+  level: z.enum(["INFO", "WARNING", "CRITICAL"]).default("INFO"),
+  maintenanceMode: z.boolean().default(false),
+  active: z.boolean(),
+  startsAt: z.string().datetime().optional().nullable(),
+  endsAt: z.string().datetime().optional().nullable(),
+});

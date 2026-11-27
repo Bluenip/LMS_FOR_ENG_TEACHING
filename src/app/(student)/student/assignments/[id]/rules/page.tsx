@@ -303,7 +303,14 @@ export default function StudentAssignmentRulesPage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl py-4">
+    <div className="mx-auto max-w-2xl space-y-3 py-4">
+      <Link
+        href={`/student/precheck?assignmentId=${assignmentId}`}
+        className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-white text-sm font-semibold text-[#4F46E5] hover:bg-indigo-50 dark:border-indigo-900 dark:bg-slate-900"
+        data-testid="precheck-link"
+      >
+        {tr("Kiểm tra thiết bị trước khi thi (mạng, camera, micro, pin)", "Check your device first (network, camera, mic, battery)")}
+      </Link>
       <div className="overflow-hidden rounded-3xl border border-slate-200/90 bg-white shadow-xl shadow-indigo-950/5">
         {/* Top gradient bar matching Stitch */}
         <div className="h-1.5 w-full bg-gradient-to-r from-[#3525CD] via-[#4F46E5] to-[#F97316]" />
