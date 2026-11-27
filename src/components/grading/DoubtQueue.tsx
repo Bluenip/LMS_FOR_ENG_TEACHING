@@ -21,11 +21,16 @@ interface DoubtDTO {
 }
 
 /** Teacher queue of students' questions about graded items (unanswered first) + peer-review launcher. */
-export function DoubtQueue({ assignmentId, peerReviewEnabled }: { assignmentId: string; peerReviewEnabled?: boolean }) {
+export function DoubtQueue({ assignmentId }: { assignmentId: string }) {
   const { tr } = useI18n();
   const qc = useQueryClient();
   const key = ["doubts", assignmentId];
   const { data, isLoading } = useQuery<{ doubts: DoubtDTO[] }>({ queryKey: key, queryFn: () => apiFetchJson(`/api/assignments/${assignmentId}/doubts`) });
+  const { data: peer } = useQuery<{ enabled: boolean }>({
+    queryKey: ["peer-reviews-enabled", assignmentId],
+    queryFn: () => apiFetchJson(`/api/assignments/${assignmentId}/peer-reviews`),
+  });
+  const peerReviewEnabled = Boolean(peer?.enabled);
   const [replies, setReplies] = useState<Record<string, string>>({});
   const [publicFlags, setPublicFlags] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<string | null>(null);

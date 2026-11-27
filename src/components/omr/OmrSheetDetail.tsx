@@ -167,7 +167,9 @@ export function OmrSheetDetail({ sheetId }: { sheetId: string }) {
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
                     {s.needsReview && <Badge variant="orange">{tr("Cần duyệt", "Review")}</Badge>}
-                    {s.confirmedAt && !s.needsReview && <Badge variant="mint">{tr("Đã vào sổ", "In gradebook")}</Badge>}
+                    {s.confirmedAt && !s.needsReview && (
+                      <Badge variant="mint">{sheet.offlineColumnId ? tr("Đã vào sổ", "In gradebook") : tr("Đã duyệt", "Confirmed")}</Badge>
+                    )}
                     <span className="font-mono font-bold">
                       {s.score}/{s.maxScore}
                     </span>

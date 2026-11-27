@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Target, TrendingUp } from "lucide-react";
 import { apiFetchJson } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n/client";
-import type { MasteryCell } from "@/lib/analytics/mastery";
+import { masteryTagLabel, type MasteryCell } from "@/lib/analytics/mastery";
 
 interface Profile {
   strengths: MasteryCell[];
@@ -16,7 +16,7 @@ const pct = (v: number | null) => (v === null ? "—" : `${Math.round(v * 100)}%
 
 /** "Điểm mạnh & Chủ đề cần ôn" for the student dashboard (no studentId) or the parent portal. */
 export function MasteryProfileCard({ studentId }: { studentId?: string }) {
-  const { tr } = useI18n();
+  const { tr, locale } = useI18n();
   const url = studentId ? `/api/parent/children/${studentId}/mastery` : "/api/student/mastery";
   const { data } = useQuery<Profile>({
     queryKey: ["mastery-profile", studentId ?? "me"],
@@ -33,7 +33,7 @@ export function MasteryProfileCard({ studentId }: { studentId?: string }) {
           : "rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-950 dark:text-rose-300"
       }
     >
-      {c.tag} · {pct(c.accuracy)}
+      {masteryTagLabel(c.tag, locale).label} · {pct(c.accuracy)}
     </li>
   );
 

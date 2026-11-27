@@ -8,7 +8,7 @@ import { Loader2, Wand2 } from "lucide-react";
 import { apiFetchJson } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n/client";
 import { cn } from "@/lib/utils";
-import type { MasteryLevel } from "@/lib/analytics/mastery";
+import { masteryTagLabel, type MasteryLevel } from "@/lib/analytics/mastery";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,8 +43,9 @@ const pct = (v: number | null) => (v === null ? "—" : `${Math.round(v * 100)}`
  * it; "Create remedial work" assigns bank questions on the selected topics to the students who are red.
  */
 export function MasteryHeatmap({ classId, canAssign }: { classId: string; canAssign: boolean }) {
-  const { tr } = useI18n();
+  const { tr, locale } = useI18n();
   const router = useRouter();
+  const tagText = (tag: string) => masteryTagLabel(tag, locale);
   const { data, isLoading } = useQuery<MatrixDTO>({
     queryKey: ["class-mastery", classId],
     queryFn: () => apiFetchJson(`/api/classes/${classId}/mastery`),
@@ -146,9 +147,9 @@ export function MasteryHeatmap({ classId, canAssign }: { classId: string; canAss
                         on ? "bg-[#4F46E5] text-white" : "hover:bg-slate-200 dark:hover:bg-slate-700"
                       )}
                       data-testid={`mastery-tag-${t.tag}`}
-                      title={t.tag}
+                      title={tagText(t.tag).label}
                     >
-                      <span className="line-clamp-2">{t.tag}</span>
+                      <span className="line-clamp-2">{tagText(t.tag).label}</span>
                       <span className="block font-mono text-[10px] opacity-80">{pct(t.classAccuracy)}%</span>
                     </button>
                   </th>
@@ -168,7 +169,7 @@ export function MasteryHeatmap({ classId, canAssign }: { classId: string; canAss
                     <td key={t.tag} className="border-t border-slate-100 p-1 dark:border-slate-800">
                       <div
                         className={cn("rounded-md py-1.5 text-center font-mono font-semibold", LEVEL_CLASS[c.level])}
-                        title={`${r.student.name} · ${t.tag}: ${pct(c.accuracy)}% (${c.attemptsCount})`}
+                        title={`${r.student.name} · ${tagText(t.tag).label}: ${pct(c.accuracy)}% (${c.attemptsCount})`}
                         data-testid={`mastery-cell-${r.student.id}-${t.tag}`}
                         data-level={c.level}
                       >
@@ -189,8 +190,8 @@ export function MasteryHeatmap({ classId, canAssign }: { classId: string; canAss
             <DialogTitle>{tr("Tạo bài ôn bù", "Create remedial work")}</DialogTitle>
             <DialogDescription>
               {tr(
-                `Chủ đề: ${selectedTags.join(", ")}. Câu hỏi tự chấm lấy từ ngân hàng câu hỏi, chỉ giao cho ${weakStudents.length} học sinh dưới 50%.`,
-                `Topics: ${selectedTags.join(", ")}. Auto-graded questions from the bank, assigned only to the ${weakStudents.length} students under 50%.`
+                `Chủ đề: ${selectedTags.map((t) => tagText(t).label).join(", ")}. Câu hỏi tự chấm lấy từ ngân hàng câu hỏi, chỉ giao cho ${weakStudents.length} học sinh dưới 50%.`,
+                `Topics: ${selectedTags.map((t) => tagText(t).label).join(", ")}. Auto-graded questions from the bank, assigned only to the ${weakStudents.length} students under 50%.`
               )}
             </DialogDescription>
           </DialogHeader>

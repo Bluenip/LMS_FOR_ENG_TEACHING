@@ -79,3 +79,23 @@ export function summarizeStudentMastery(cells: MasteryCell[]) {
     developing: withData.filter((c) => c.level === "DEVELOPING"),
   };
 }
+
+export const SKILL_TAGS = ["GRAMMAR", "VOCABULARY", "READING", "LISTENING", "WRITING", "SPEAKING"] as const;
+
+const SKILL_LABELS: Record<string, { vi: string; en: string }> = {
+  GRAMMAR: { vi: "Kỹ năng Ngữ pháp", en: "Grammar skill" },
+  VOCABULARY: { vi: "Kỹ năng Từ vựng", en: "Vocabulary skill" },
+  READING: { vi: "Kỹ năng Đọc", en: "Reading skill" },
+  LISTENING: { vi: "Kỹ năng Nghe", en: "Listening skill" },
+  WRITING: { vi: "Kỹ năng Viết", en: "Writing skill" },
+  SPEAKING: { vi: "Kỹ năng Nói", en: "Speaking skill" },
+};
+
+/**
+ * Display label of a mastery tag: skill enums get an explicit "… skill" name so they never look like a
+ * teacher topic of the same name (e.g. topic "Đọc hiểu" vs skill READING); topics stay as written.
+ */
+export function masteryTagLabel(tag: string, locale: string): { label: string; isSkill: boolean } {
+  const skill = SKILL_LABELS[tag];
+  return skill ? { label: locale === "en" ? skill.en : skill.vi, isSkill: true } : { label: tag, isSkill: false };
+}

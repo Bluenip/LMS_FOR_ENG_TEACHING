@@ -1263,7 +1263,7 @@ export default function AssignmentGradingPage() {
       </div>
 
       {viewMode === "doubts" ? (
-        <DoubtQueue assignmentId={assignmentId} peerReviewEnabled />
+        <DoubtQueue assignmentId={assignmentId} />
       ) : viewMode === "similarity" ? (
         <SimilarityPanel assignmentId={assignmentId} />
       ) : viewMode === "by-question" ? (
@@ -1275,7 +1275,6 @@ export default function AssignmentGradingPage() {
         />
       ) : (
       <>
-      <ItemAnalysisCard assignmentId={assignmentId} />
       {/* Stitch 4 KPI Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="stitch-card p-5">
@@ -1334,6 +1333,8 @@ export default function AssignmentGradingPage() {
           <p className="mt-1 text-xs text-slate-500">{tr("Nhấn vào từng học sinh để chấm tay", "Click a student to grade manually")}</p>
         </div>
       </div>
+
+      <ItemAnalysisCard assignmentId={assignmentId} />
 
       {/* Phase 20: Score Histogram & Percentiles */}
       <ScoreHistogramChart histogram={report.histogram} />

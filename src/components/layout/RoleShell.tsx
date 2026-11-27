@@ -63,7 +63,7 @@ export async function RoleShell({
         { href: "/teacher", label: m.nav.classes, exact: true, activePrefixes: ["/teacher/classes"] },
         { href: "/teacher/schedule", label: tr("Lịch dạy", "Schedule") },
         { href: "/teacher/worksheets", label: m.nav.worksheets },
-        { href: "/teacher/question-bank", label: tr("Ngân hàng câu", "Question bank") },
+        { href: "/teacher/question-bank", label: tr("Ngân hàng câu hỏi", "Question bank") },
         { href: "/discover", label: tr("Khám phá", "Discover") },
         { href: "/teacher/assignments", label: m.nav.assignments },
         { href: "/teacher/exams", label: tr("Kỳ thi", "Exams") },

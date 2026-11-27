@@ -5,7 +5,7 @@ import { hasMinClassRole } from "@/lib/class-roles";
 import { createAssignmentSchema } from "@/lib/validators";
 import { isManualFieldType } from "@/lib/grading";
 import { detectAtRiskStudents, type StudentRiskStats } from "@/lib/analytics/at-risk";
-import { computeMasteryMatrix, summarizeStudentMastery, type TaggedAnswer } from "@/lib/analytics/mastery";
+import { computeMasteryMatrix, masteryTagLabel, summarizeStudentMastery, type TaggedAnswer } from "@/lib/analytics/mastery";
 import { createAssignmentsForClasses } from "./assignmentService";
 import { resolveUserClassRole } from "./classRoleHelper";
 
@@ -308,7 +308,7 @@ export async function createRemedialAssignmentFromWeakTopics(
     );
   }
 
-  const title = `[Ôn bù] ${topicTags.join(", ")}`.slice(0, 190);
+  const title = `[Ôn bù] ${topicTags.map((t) => masteryTagLabel(t, "vi").label).join(", ")}`.slice(0, 190);
   const ws = await prisma.worksheet.create({
     data: {
       ownerId: actor.id,

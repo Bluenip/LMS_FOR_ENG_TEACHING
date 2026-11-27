@@ -14,6 +14,7 @@ import {
   Menu,
   MessageSquare,
   X,
+  ChevronDown,
 } from "lucide-react";
 import type { Role } from "@prisma/client";
 import { ThemeLangToggle } from "./ThemeLangToggle";
@@ -52,11 +53,16 @@ interface AppNavbarProps {
   topBanner?: React.ReactNode;
 }
 
+/** How many links fit before the rest move into the "More" menu (lg ≥ 1024px, xl ≥ 1280px; all from 2xl). */
+const VISIBLE_LG = 3;
+const VISIBLE_XL = 6;
+
 export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
   const { m: vi, tr, locale } = useI18n();
   const pathname = usePathname();
   const [notifOpen, setNotifOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const handleSignOut = async () => {
@@ -73,6 +79,7 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
       if (e.key === "Escape") {
         setNotifOpen(false);
         setMobileOpen(false);
+        setMoreOpen(false);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -148,8 +155,8 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
         {topBanner}
         <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between gap-2 px-3 sm:h-16 sm:gap-4 sm:px-6 lg:px-8">
         {/* Logo + Nav */}
-        <div className="flex min-w-0 items-center gap-6">
-          <Link href={homeHref} className="flex min-w-0 items-center gap-2.5">
+        <div className="flex min-w-0 items-center gap-4 xl:gap-6">
+          <Link href={homeHref} className="flex shrink-0 items-center gap-2.5">
             <PivoraLogo
               name={appName}
               className="gap-2"
@@ -158,15 +165,17 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
             />
           </Link>
 
-          <nav className="hidden items-center gap-1 md:flex" aria-label={tr("Điều hướng chính", "Main navigation")}>
-            {links.map((link) => {
+          {/* Desktop nav: first links always visible; the rest collapse into "More" on narrower screens */}
+          <nav className="hidden min-w-0 items-center gap-0.5 lg:flex" aria-label={tr("Điều hướng chính", "Main navigation")}>
+            {links.map((link, i) => {
               const active = isActive(link);
               return (
                 <Link
                   key={link.href}
                   href={link.href}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold transition-all",
+                    "items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1.5 text-sm font-semibold transition-all 2xl:px-3",
+                    i < VISIBLE_LG ? "inline-flex" : i < VISIBLE_XL ? "hidden xl:inline-flex" : "hidden 2xl:inline-flex",
                     active
                       ? "bg-[#4F46E5] text-white shadow-sm"
                       : "text-[#464555] hover:bg-[#EFF4FF] hover:text-[#3525CD]"
@@ -179,6 +188,51 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
                 </Link>
               );
             })}
+            {links.length > VISIBLE_LG && (
+              <div className="relative 2xl:hidden">
+                <button
+                  type="button"
+                  onClick={() => setMoreOpen((v) => !v)}
+                  aria-expanded={moreOpen}
+                  className={cn(
+                    "mr-2 inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1.5 text-sm font-semibold transition-all",
+                    // highlight only while the active page is actually hidden inside this menu
+                    links.slice(VISIBLE_XL).some((l) => isActive(l))
+                      ? "bg-[#EFF4FF] text-[#3525CD]"
+                      : links.slice(VISIBLE_LG, VISIBLE_XL).some((l) => isActive(l))
+                        ? "bg-[#EFF4FF] text-[#3525CD] xl:bg-transparent xl:text-[#464555]"
+                        : "text-[#464555] hover:bg-[#EFF4FF] hover:text-[#3525CD]"
+                  )}
+                  data-testid="navbar-more"
+                >
+                  {tr("Thêm", "More")}
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+                {moreOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setMoreOpen(false)} />
+                    <div className="absolute left-0 top-full z-50 mt-2 min-w-[220px] rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
+                      {links.map((link, i) =>
+                        i < VISIBLE_LG ? null : (
+                          <Link
+                            key={link.href}
+                            href={link.href}
+                            onClick={() => setMoreOpen(false)}
+                            className={cn(
+                              "flex whitespace-nowrap rounded-xl px-3 py-2.5 text-sm font-semibold",
+                              i < VISIBLE_XL ? "xl:hidden" : "",
+                              isActive(link) ? "bg-[#4F46E5] text-white" : "text-[#464555] hover:bg-[#EFF4FF]"
+                            )}
+                          >
+                            {link.label}
+                          </Link>
+                        )
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </nav>
         </div>
 
@@ -298,8 +352,8 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
             title={tr("Tài khoản của tôi", "My account")}
             className="flex items-center gap-2.5 rounded-full p-0.5 transition hover:bg-[#EFF4FF] sm:pl-3"
           >
-            <div className="hidden text-right leading-tight sm:block">
-              <p className="text-sm font-semibold text-[#0B1C30]">{user.name}</p>
+            <div className="hidden text-right leading-tight sm:block lg:hidden xl:block">
+              <p className="whitespace-nowrap text-sm font-semibold text-[#0B1C30]">{user.name}</p>
               <p className="text-xs text-[#464555]">{vi.roles[user.role]}</p>
             </div>
             {user.avatarUrl ? (
@@ -329,7 +383,7 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
 
           <button
             type="button"
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100 md:hidden"
+            className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100 lg:hidden"
             onClick={() => {
               setMobileOpen((v) => !v);
               setNotifOpen(false);
@@ -347,10 +401,10 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
       {mobileOpen && (
         <>
           <div
-            className="fixed inset-0 z-30 bg-slate-900/20 md:hidden"
+            className="fixed inset-0 z-30 bg-slate-900/20 lg:hidden"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="relative z-40 max-h-[calc(100dvh-3.5rem-env(safe-area-inset-top))] overflow-y-auto border-t border-slate-100 bg-white px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 md:hidden">
+          <div className="relative z-40 max-h-[calc(100dvh-3.5rem-env(safe-area-inset-top))] overflow-y-auto border-t border-slate-100 bg-white px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 lg:hidden">
             <Link
               href="/account"
               onClick={() => setMobileOpen(false)}

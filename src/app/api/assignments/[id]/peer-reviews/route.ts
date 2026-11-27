@@ -12,8 +12,8 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
       const [mine, received] = await Promise.all([getMyPeerReviews(id, user.id), getReceivedPeerFeedback(id, user.id)]);
       return NextResponse.json({ ...mine, received });
     }
-    await requireTeacherOfAssignment(id);
-    return NextResponse.json({ reviews: await listPeerReviewsForTeacher(id) });
+    const { assignment } = await requireTeacherOfAssignment(id);
+    return NextResponse.json({ enabled: assignment.peerReviewEnabled, reviews: await listPeerReviewsForTeacher(id) });
   } catch (error) {
     return handleApiError(error);
   }
