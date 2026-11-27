@@ -14,6 +14,8 @@ import {
 } from "@/lib/grading";
 import { convertScoreToScale, scoreScaleLabel } from "@/lib/score-scale";
 import { computeScoreHistogram } from "@/lib/analytics/score-histogram";
+import { analyzeItems, type ExamineeResponses, type ItemInput } from "@/lib/analytics/item-analysis";
+import { asOptionList } from "@/lib/grading";
 import { compareQuestionLabels, formatDateTime } from "@/lib/utils";
 
 export type WrongAnswerCode = "BLANK" | "TRUE" | "FALSE";
@@ -571,5 +573,65 @@ export async function getAssignmentQuestionGradingData(
     fields: fieldsMeta,
     selectedField,
     items,
+  };
+}
+
+/**
+ * Phase 30 — classical item analysis of one assignment (latest finished attempt per student):
+ * difficulty, discrimination (27 % groups), corrected point-biserial and distractor shares.
+ */
+export async function getAssignmentItemAnalysis(assignmentId: string) {
+  const assignment = await prisma.assignment.findUnique({
+    where: { id: assignmentId },
+    select: {
+      id: true,
+      title: true,
+      worksheet: {
+        select: {
+          fields: {
+            orderBy: { order: "asc" },
+            select: { id: true, label: true, type: true, points: true, options: true, answerKey: true },
+          },
+        },
+      },
+    },
+  });
+  if (!assignment) throw new AppError("Không tìm thấy bài tập.", 404, "NOT_FOUND");
+  const fields = assignment.worksheet.fields.filter((f) => f.points > 0);
+
+  const subs = await prisma.submission.findMany({
+    where: { assignmentId, status: { in: ["SUBMITTED", "GRADED", "RETURNED"] } },
+    orderBy: { attemptNo: "desc" },
+    select: { id: true, studentId: true, answers: { select: { fieldId: true, score: true, value: true } } },
+  });
+  const seen = new Set<string>();
+  const latest = subs.filter((s) => (seen.has(s.studentId) ? false : (seen.add(s.studentId), true)));
+
+  const items: ItemInput[] = fields.map((f) => {
+    const single = f.type === "MULTIPLE_CHOICE" || f.type === "DROPDOWN";
+    const key = (f.answerKey ?? {}) as { correct?: unknown };
+    return {
+      fieldId: f.id,
+      label: f.label,
+      type: f.type,
+      maxPoints: f.points,
+      options: single ? asOptionList(f.options).map((o) => ({ id: o.id, text: o.text })) : null,
+      correctOption: single && typeof key.correct === "string" ? key.correct : null,
+    };
+  });
+  const examinees: ExamineeResponses[] = latest.map((s) => {
+    const responses: ExamineeResponses["responses"] = {};
+    for (const f of fields) {
+      const a = s.answers.find((x) => x.fieldId === f.id);
+      // a blank auto-graded answer is worth 0; an ungraded manual answer is left out
+      const score = a ? a.score : isManualFieldType(f.type) ? null : 0;
+      responses[f.id] = { score, choice: typeof a?.value === "string" ? a.value : null };
+    }
+    return { submissionId: s.id, responses };
+  });
+  return {
+    assignment: { id: assignment.id, title: assignment.title },
+    examineeCount: examinees.length,
+    items: analyzeItems(items, examinees),
   };
 }

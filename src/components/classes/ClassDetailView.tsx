@@ -1650,6 +1650,7 @@ export function ClassDetailView({
               <ClassAnalyticsTab
                 classId={cls.id}
                 workbooks={cls.workbooks ?? []}
+                canAssign={canEditClass}
               />
             </TabsContent>
           </>

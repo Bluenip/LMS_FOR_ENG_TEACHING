@@ -24,6 +24,7 @@ import {
 import type { SkillTag } from "@prisma/client";
 import { cn, formatDateTime, getInitials } from "@/lib/utils";
 import { OmrScanViewerDialog } from "@/components/omr/OmrScanViewerDialog";
+import { MasteryProfileCard } from "@/components/analytics/MasteryProfileCard";
 import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -790,6 +791,8 @@ function ParentPortalContent() {
               </div>
             )}
           </div>
+
+          {selectedChildId && <MasteryProfileCard studentId={selectedChildId} />}
 
           <OmrScanViewerDialog scanId={omrScanId} onOpenChange={(o) => !o && setOmrScanId(null)} />
 

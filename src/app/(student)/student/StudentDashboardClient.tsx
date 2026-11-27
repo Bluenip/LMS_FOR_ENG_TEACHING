@@ -33,6 +33,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { MasteryProfileCard } from "@/components/analytics/MasteryProfileCard";
 
 interface StudentDashboardProps {
   studentName: string;
@@ -182,6 +183,8 @@ export function StudentDashboardClient({
           </form>
         </div>
       </div>
+
+      <MasteryProfileCard />
 
       {/* Gamification Streak & Badges + Quick Study Shortcuts */}
       {gamification?.enabled && gamification.streak && (

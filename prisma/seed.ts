@@ -288,6 +288,7 @@ async function main() {
   await prisma.loginSessionLog.deleteMany();
   await prisma.omrScanResult.deleteMany();
   await prisma.similarityReport.deleteMany();
+  await prisma.remedialPlanLog.deleteMany();
   await prisma.aiGradingSuggestion.deleteMany();
   await prisma.omrExamSheet.deleteMany();
   await prisma.liveQuizAnswer.deleteMany();
@@ -2834,6 +2835,92 @@ async function main() {
       matchedSpans: sim.matchedSpans as unknown as object,
     },
   });
+
+  // Phase 30 seed: graded quiz tagged by topic → mastery heatmap has green / amber / red,
+  // and student6 has low scores + 2 overdue unsubmitted assignments (at-risk)
+  const masteryTopics = englishTopics.slice(0, 3);
+  const masteryOptions = ["A", "B", "C", "D"].map((id) => ({ id, text: `Option ${id}` }));
+  const masteryWs = await prisma.worksheet.create({
+    data: {
+      ownerId: teacher1.id,
+      title: "Mini test: Grammar · Vocabulary · Reading (mastery demo)",
+      subject: "ENGLISH",
+      fields: {
+        create: masteryTopics.flatMap((topic, t) =>
+          [0, 1].map((k) => ({
+            placement: "ANSWER_SHEET" as const,
+            type: "MULTIPLE_CHOICE" as const,
+            label: String(t * 2 + k + 1),
+            prompt: `(${topic}) Question ${t * 2 + k + 1}`,
+            order: t * 2 + k + 1,
+            points: 1,
+            options: masteryOptions,
+            answerKey: { correct: "A" },
+            topicTag: topic,
+          }))
+        ),
+      },
+    },
+    include: { fields: { orderBy: { order: "asc" } } },
+  });
+  const masteryAsg = await prisma.assignment.create({
+    data: {
+      classId: class1.id,
+      worksheetId: masteryWs.id,
+      title: "Mini test (mastery demo)",
+      dueAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+    },
+  });
+  // correctness pattern per student over the 6 questions (1 = right)
+  const masteryPatterns = ["111111", "111110", "110101", "100100", "101000", "000010"];
+  for (const [i, pattern] of masteryPatterns.entries()) {
+    const right = pattern.split("").filter((c) => c === "1").length;
+    await prisma.submission.create({
+      data: {
+        assignmentId: masteryAsg.id,
+        studentId: students[i]!.id,
+        attemptNo: 1,
+        status: "GRADED",
+        submittedAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
+        maxScore: 6,
+        autoScore: right,
+        totalScore: right,
+        answers: {
+          create: masteryWs.fields.map((f, k) => ({
+            fieldId: f.id,
+            value: pattern[k] === "1" ? "A" : "B",
+            isCorrect: pattern[k] === "1",
+            score: pattern[k] === "1" ? 1 : 0,
+          })),
+        },
+      },
+    });
+  }
+  for (const d of [2, 3]) {
+    const overdue = await prisma.assignment.create({
+      data: {
+        classId: class1.id,
+        worksheetId: masteryWs.id,
+        title: `Ôn tập tuần (quá hạn ${d} ngày)`,
+        dueAt: new Date(Date.now() - d * 24 * 60 * 60 * 1000),
+      },
+    });
+    // everyone except student6 submitted
+    for (let i = 0; i < 5; i++) {
+      await prisma.submission.create({
+        data: {
+          assignmentId: overdue.id,
+          studentId: students[i]!.id,
+          attemptNo: 1,
+          status: "GRADED",
+          submittedAt: new Date(Date.now() - (d + 1) * 24 * 60 * 60 * 1000),
+          maxScore: 6,
+          autoScore: 5,
+          totalScore: 5,
+        },
+      });
+    }
+  }
 
   console.log("Seed completed successfully!");
   console.log("Accounts (password: password123):");

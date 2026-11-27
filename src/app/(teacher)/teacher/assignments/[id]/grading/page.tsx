@@ -59,6 +59,7 @@ import { CommentPresetBar } from "@/components/grading/CommentPresetBar";
 import { OverrideDialog, type StudentOverrideInfo } from "@/components/grading/OverrideDialog";
 import { GradeByQuestionPanel } from "@/components/grading/GradeByQuestionPanel";
 import { SimilarityPanel } from "@/components/grading/SimilarityPanel";
+import { ItemAnalysisCard } from "@/components/analytics/ItemAnalysisCard";
 import { ScoreHistogramChart } from "@/components/grading/ScoreHistogramChart";
 import type { ScoreHistogramResult } from "@/lib/analytics/score-histogram";
 import {
@@ -1254,6 +1255,7 @@ export default function AssignmentGradingPage() {
         />
       ) : (
       <>
+      <ItemAnalysisCard assignmentId={assignmentId} />
       {/* Stitch 4 KPI Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="stitch-card p-5">

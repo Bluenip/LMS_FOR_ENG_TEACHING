@@ -317,6 +317,7 @@ model User {
   omrScansConfirmed          OmrScanResult[]          @relation("OmrScanConfirmedBy")
   aiGradingSuggestions       AiGradingSuggestion[]    @relation("AiSuggestionCreatedBy")
   similarityReviews          SimilarityReport[]       @relation("SimilarityReviewedBy")
+  remedialPlansCreated       RemedialPlanLog[]        @relation("RemedialPlanCreator")
 
   @@index([deletedAt])
 }
@@ -350,18 +351,21 @@ model ParentInviteCode {
 }
 
 model Class {
-  id                 String    @id @default(cuid())
-  name               String
-  description        String?
-  joinCode           String    @unique
-  teacherId          String
-  archived           Boolean   @default(false)
+  id                   String    @id @default(cuid())
+  name                 String
+  description          String?
+  joinCode             String    @unique
+  teacherId            String
+  archived             Boolean   @default(false)
   /// Trash: set when the teacher deletes the class; purged (with assignments, submissions, posts) after 30 days
-  deletedAt          DateTime?
-  requireApproval    Boolean   @default(false)
-  enableGamification Boolean   @default(true)
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  deletedAt            DateTime?
+  requireApproval      Boolean   @default(false)
+  enableGamification   Boolean   @default(true)
+  /// Phase 30: early-warning thresholds
+  atRiskScoreThreshold Float     @default(5.0)
+  atRiskMissingCount   Int       @default(2)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   teacher             User                   @relation("TeacherClasses", fields: [teacherId], references: [id], onDelete: Cascade)
   enrollments         Enrollment[]
@@ -381,6 +385,7 @@ model Class {
   behaviorPresets     ClassBehaviorPreset[]
   behaviorPoints      StudentBehaviorPoint[]
   omrSheets           OmrExamSheet[]
+  remedialPlans       RemedialPlanLog[]
 
   @@index([teacherId])
 }
@@ -1805,4 +1810,20 @@ model SimilarityReport {
 
   @@unique([assignmentId, fieldId, submissionAId, submissionBId])
   @@index([assignmentId, similarity])
+}
+
+/// Phase 30: remedial assignment generated from a class's weak topics.
+model RemedialPlanLog {
+  id               String   @id @default(cuid())
+  classId          String
+  createdById      String
+  topicTags        Json
+  targetStudentIds Json
+  assignmentId     String
+  createdAt        DateTime @default(now())
+
+  class     Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  createdBy User  @relation("RemedialPlanCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([classId, createdAt])
 }

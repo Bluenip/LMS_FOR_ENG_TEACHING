@@ -1157,3 +1157,17 @@ _(Agent ghi vào đây sau mỗi Phase: đã làm gì, còn thiếu gì, quyết
   - Thêm `GET` cho `/api/submissions/[id]/ai-suggest-grade` và `/api/assignments/[id]/similarity/[reportId]` (để mở hộp so sánh), cùng hành động `DISMISS`.
   - E2E: Gemini được gọi từ server nên không chặn được trên trình duyệt; E2E mock ở mức API của app (OCR và bước gọi AI gợi ý), còn bước **Áp dụng** và quét tương đồng chạy thật. Lời gọi Gemini thật được kiểm ở integration test bằng `fetch` giả.
 - **Kết quả kiểm tra (bộ nhẹ):** `pnpm db:seed` pass (x2); `pnpm lint` 0 lỗi / 0 cảnh báo; `pnpm typecheck` 0 lỗi; `pnpm test` 47/47 files (248/248 tests) pass; E2E Phase 29 3/3 pass. Chưa chạy: toàn bộ `pnpm test:e2e`, `pnpm build:check`. Chưa thử với `GEMINI_API_KEY` thật. Nhánh `phase-27-32`.
+
+### Phase 30 — Bản Đồ Năng Lực (Mastery), Cảnh Báo Sớm & Phân Tích Khảo Thí (Đã hoàn tất, chờ merge cùng Phase 31–32)
+- **Database & Migration:** `20261127061004_phase30_mastery_analytics_psychometrics` (chỉ thêm): `Class.atRiskScoreThreshold` (5.0), `Class.atRiskMissingCount` (2), bảng `RemedialPlanLog`.
+- **Đã làm:**
+  - **Pure libs (`src/lib/analytics/*`):** `mastery.ts` (ma trận HS × chủ đề theo `topicTag`/`skillTag`, 4 mức, chủ đề yếu nhất xếp trước, `summarizeStudentMastery`), `at-risk.ts` (3 tín hiệu: điểm TB 3 bài gần nhất < ngưỡng hoặc tụt liên tục ≥ 1.5; chưa nộp ≥ N bài quá hạn 30 ngày; vắng không phép ≥ 2 buổi; HIGH/MEDIUM kèm lý do VI/EN), `item-analysis.ts` (độ khó p, độ phân biệt D theo nhóm 27%, point-biserial hiệu chỉnh, phân bố phương án nhiễu, cờ GOOD/TOO_EASY/TOO_HARD/CHECK_KEY/LOW_DISCRIMINATION).
+  - **`masteryAnalyticsService.ts`:** heatmap lớp (cache 60s), hồ sơ năng lực HS (HS tự xem, PH đã xác minh, GV của lớp — chống IDOR), HS cần quan tâm theo lớp và tổng hợp cho GV, tạo **bài ôn bù 1 chạm** (lấy câu tự chấm từ ngân hàng theo chủ đề yếu, chia đều theo chủ đề → phiếu `[Ôn bù] ...` → giao kèm `AssignmentTarget` chỉ cho HS dưới 50% → `RemedialPlanLog`). `reportService.getAssignmentItemAnalysis`.
+  - **API:** `/api/classes/[id]/mastery`, `/remedial`, `/at-risk` (GET + PATCH ngưỡng), `/api/teacher/at-risk`, `/api/student/mastery`, `/api/parent/children/[studentId]/mastery`, `/api/assignments/[id]/item-analysis`.
+  - **UI:** tab Thống kê của lớp có 2 chế độ **Tổng quan** (thêm thẻ *Học sinh cần quan tâm*) và **Bản đồ năng lực** (heatmap cuộn ngang, cột tên cố định, bấm chủ đề → **Tạo bài ôn bù cho nhóm này**); thẻ cần quan tâm ở đầu `/teacher`; bảng **Phân tích câu hỏi** ở trang chấm (cờ đỏ *Kiểm tra lại đáp án* khi D < 0, mở xem phương án nhiễu nhóm cao/thấp); thẻ **Điểm mạnh & Chủ đề cần ôn** ở `/student` và `/parent`.
+  - **Seed & Kiểm thử:** bài mini test gắn 3 chủ đề cho 12A1 với 6 mẫu đúng/sai (đủ Xanh/Vàng/Đỏ) + 2 bài quá hạn mà student6 chưa nộp (At-Risk); `tests/unit/phase30-analytics.test.ts`, `tests/integration/phase30-mastery-analytics.test.ts`, `tests/e2e/phase30-mastery.spec.ts`.
+- **Quyết định khác plan:**
+  - Bài ôn bù chỉ lấy câu **tự chấm** không kèm ảnh/âm thanh (tránh phải chép file media sang phiếu mới), mỗi câu 1 điểm.
+  - Thêm `PATCH /api/classes/[id]/at-risk` để GV chỉnh ngưỡng cảnh báo (chưa có giao diện chỉnh, dùng mặc định 5.0 điểm / 2 bài).
+  - Mastery tính trên lượt nộp mới nhất của mỗi HS cho mỗi bài.
+- **Kết quả kiểm tra (bộ nhẹ):** `pnpm db:seed` pass (x2); `pnpm lint` 0 lỗi / 0 cảnh báo; `pnpm typecheck` 0 lỗi; `pnpm test` 49/49 files (255/255 tests) pass; E2E Phase 30 2/2 pass. Nhánh `phase-27-32`.

@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { MasteryHeatmap } from "@/components/analytics/MasteryHeatmap";
+import { AtRiskCard } from "@/components/analytics/AtRiskCard";
 import { BarChart3, Grid3X3, TrendingUp, Users } from "lucide-react";
 import { apiFetchJson } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n/client";
@@ -32,11 +35,14 @@ interface ClassAnalyticsPayload {
 export function ClassAnalyticsTab({
   classId,
   workbooks,
+  canAssign = false,
 }: {
   classId: string;
   workbooks: Array<{ id: string; title: string; assignmentCount: number }>;
+  canAssign?: boolean;
 }) {
   const { tr } = useI18n();
+  const [view, setView] = useState<"overview" | "mastery">("overview");
   const { data, isLoading } = useQuery<ClassAnalyticsPayload>({
     queryKey: ["class-analytics", classId],
     queryFn: () => apiFetchJson(`/api/classes/${classId}/analytics`),
@@ -52,8 +58,39 @@ export function ClassAnalyticsTab({
 
   const { summary, weeklyTrend, mostUnsubmittedStudents } = data.analytics;
 
+  const switcher = (
+    <div className="inline-flex flex-wrap rounded-xl border border-slate-200 bg-white p-1 text-xs font-semibold dark:border-slate-700 dark:bg-slate-900">
+      {(["overview", "mastery"] as const).map((v) => (
+        <button
+          key={v}
+          type="button"
+          onClick={() => setView(v)}
+          data-testid={`analytics-view-${v}`}
+          className={
+            view === v
+              ? "rounded-lg bg-[#4F46E5] px-3 py-1.5 text-white"
+              : "rounded-lg px-3 py-1.5 text-[#464555] hover:text-[#0B1C30] dark:text-slate-300"
+          }
+        >
+          {v === "overview" ? tr("Tổng quan", "Overview") : tr("Bản đồ năng lực", "Mastery map")}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (view === "mastery") {
+    return (
+      <div className="space-y-5" data-testid="class-analytics-tab">
+        {switcher}
+        <MasteryHeatmap classId={classId} canAssign={canAssign} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5" data-testid="class-analytics-tab">
+      {switcher}
+      <AtRiskCard classId={classId} />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div className="stitch-card p-4">
           <div className="flex items-center justify-between text-xs font-semibold text-[#464555] dark:text-slate-400">

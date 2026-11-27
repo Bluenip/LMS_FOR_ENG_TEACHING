@@ -408,6 +408,11 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
   "Chỉ kiểm tra tương đồng được câu tự luận hoặc lập trình.": "Similarity checks only work on essay or code questions.",
   "Không tìm thấy báo cáo tương đồng.": "Similarity report not found.",
 
+  // Phase 30: mastery & remedial work
+  "Hãy chọn ít nhất 1 chủ đề.": "Pick at least one topic.",
+  "Ngân hàng câu hỏi chưa có câu tự chấm nào cho các chủ đề này.": "The question bank has no auto-graded questions for these topics yet.",
+  "Không thể giao bài ôn bù.": "Could not assign the remedial work.",
+
   // Submission & proctoring
   "Không tìm thấy bài làm.": "Submission not found.",
   "Không tìm thấy bài làm trong ca thi này.": "Submission not found in this exam session.",
