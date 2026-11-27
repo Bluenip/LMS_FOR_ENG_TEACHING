@@ -1201,3 +1201,8 @@ _(Agent ghi vào đây sau mỗi Phase: đã làm gì, còn thiếu gì, quyết
   - Học kỳ chỉ dùng để gom lớp và đóng/mở; khoá sổ điểm làm theo từng lớp (cờ `AcademicTerm.isLocked` chưa tự khoá sổ các lớp).
   - "Sao lưu gần nhất" lấy từ `DriveFile` loại `BACKUP`; bản backup DB của `scripts/auto-deploy.sh` trên server chưa được đọc.
 - **Kết quả kiểm tra (bộ nhẹ):** `pnpm db:seed` pass (x2); `pnpm lint` 0 lỗi / 0 cảnh báo; `pnpm typecheck` 0 lỗi; `pnpm test` 53/53 files (272/272 tests) pass; E2E Phase 32 4/4 pass. Nhánh `phase-27-32`.
+
+### Kiểm tra đầy đủ sau Phase 27–32 (nhánh `phase-27-32`, trước khi merge)
+- `pnpm db:seed` pass (x2); `pnpm lint` 0 lỗi / 0 cảnh báo; `pnpm typecheck` 0 lỗi; `pnpm test` 53/53 files (272/272 tests) pass; `pnpm test:e2e` **56/56 pass** (11.8 phút); `pnpm build:check` pass (chỉ còn cảnh báo Edge Runtime có sẵn từ `jose`/`next-auth`).
+- 6 migration mới (Phase 27–32) đều chỉ thêm bảng/cột/enum, không xoá hay đổi tên cột cũ. Dependency mới: `fast-xml-parser`.
+- Chưa merge vào `main` / chưa push / chưa deploy production — chờ chủ dự án đồng ý.
