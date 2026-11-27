@@ -27,6 +27,7 @@ import {
   Search,
   Send,
   Radio,
+  ScanText,
   Sparkles,
   Trash2,
   Upload,
@@ -59,6 +60,8 @@ import type { ParsedWordExamField } from "@/lib/worksheet/word-exam-parser";
 import { getSubjectMeta, WORKSHEET_SUBJECTS } from "@/lib/subjects";
 import { PromptText } from "@/components/worksheet/PromptText";
 import { StartLiveQuizDialog } from "@/components/live-quiz/StartLiveQuizDialog";
+import { AiOcrDialog } from "@/components/worksheet/AiOcrDialog";
+import type { AiGeneratedQuestionDraft } from "@/lib/ai/gemini-prompt";
 import { SubjectBadge, SubjectPicker } from "@/components/worksheet/SubjectPicker";
 
 interface WorksheetRow {
@@ -162,6 +165,44 @@ export default function TeacherWorksheetsPage() {
 
   const [tab, setTab] = useState<"mine" | "shared">("mine");
   const [liveWs, setLiveWs] = useState<{ id: string; title: string } | null>(null);
+  const [ocrOpen, setOcrOpen] = useState(false);
+
+  /** OCR drafts → new answer-sheet worksheet → open it in the editor. */
+  const createWorksheetFromOcr = async (drafts: AiGeneratedQuestionDraft[]) => {
+    if (drafts.length === 0) return;
+    try {
+      const title = `${tr("Đề quét từ ảnh", "Scanned exam")} ${new Date().toLocaleDateString(locale === "en" ? "en-GB" : "vi-VN")}`;
+      const created = await apiFetchJson<{ worksheet: { id: string } }>("/api/worksheets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, subject: "GENERAL", instructions: null }),
+      });
+      const wsId = created.worksheet.id;
+      await apiFetchJson(`/api/worksheets/${wsId}/fields`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fields: drafts.map((q, idx) => ({
+            placement: "ANSWER_SHEET" as const,
+            type: q.type,
+            label: String(idx + 1),
+            prompt: q.prompt,
+            explanation: q.explanation,
+            topicTag: q.topicTag,
+            order: idx,
+            points: q.points,
+            options: q.options ?? null,
+            answerKey: q.answerKey,
+          })),
+        }),
+      });
+      toast.success(tr(`Đã tạo phiếu với ${drafts.length} câu hỏi`, `Created a worksheet with ${drafts.length} questions`));
+      router.push(`/teacher/worksheets/${wsId}/edit`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : tr("Tạo thất bại", "Creation failed"));
+      throw e;
+    }
+  };
   // Library tab lives in the URL (?tab=lessons|workbooks|flashcards|trash) so links from class pages open it directly
   const [libraryTab, setLibraryTab] = useState<"worksheets" | "workbooks" | "lessons" | "flashcards" | "trash">("worksheets");
   useEffect(() => {
@@ -769,6 +810,10 @@ export default function TeacherWorksheetsPage() {
               e.target.value = "";
             }}
           />
+          <Button variant="outline" size="sm" data-testid="open-ocr-btn" onClick={() => setOcrOpen(true)}>
+            <ScanText className="h-4 w-4 text-[#F97316]" />
+            {tr("Quét ảnh đề giấy (AI OCR)", "Scan paper exam (AI OCR)")}
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -1802,6 +1847,12 @@ export default function TeacherWorksheetsPage() {
           onOpenChange={(o) => !o && setLiveWs(null)}
         />
       )}
+      <AiOcrDialog
+        open={ocrOpen}
+        onOpenChange={setOcrOpen}
+        insertLabel={tr("Tạo phiếu mới từ các câu đã chọn", "Create a worksheet from selected questions")}
+        onInsert={(drafts) => createWorksheetFromOcr(drafts)}
+      />
     </div>
   );
 }

@@ -1142,3 +1142,18 @@ _(Agent ghi vào đây sau mỗi Phase: đã làm gì, còn thiếu gì, quyết
   - Đã kiểm thêm thủ công: phiếu PDF thật được raster hoá (110 dpi), xoay 7° trên nền tối → đọc đúng SBD, không ô nào cần duyệt.
   - Sửa luôn chỗ chờ không chặt trong E2E Phase 27 (chờ đúng thông báo thành công thay vì chữ trùng nhãn nút).
 - **Kết quả kiểm tra (bộ nhẹ):** `pnpm db:seed` pass (x2); `pnpm lint` 0 lỗi / 0 cảnh báo; `pnpm typecheck` 0 lỗi; `pnpm test` 45/45 files (236/236 tests) pass; E2E Phase 28 1/1 và Phase 27 2/2 pass. Chưa chạy: toàn bộ `pnpm test:e2e`, `pnpm build:check`. Nhánh `phase-27-32`.
+
+### Phase 29 — AI Chấm Bài Nâng Cao, OCR Ảnh Đề Thi & Chống Đạo Văn (Đã hoàn tất, chờ merge cùng Phase 30–32)
+- **Database & Migration:** `20261127052637_phase29_ai_ocr_grading_plagiarism` (chỉ thêm): `AiGradingSuggestion`, `SimilarityReport`.
+- **Đã làm:**
+  - **`src/lib/plagiarism/winnowing.ts` (100% nội bộ):** chuẩn hoá văn bản tiếng Việt/Anh giữ dấu và vị trí ký tự gốc; chuẩn hoá code JS/Python/C++/Pascal (bỏ comment, tên biến → `ID`, chuỗi → `S`, số → `N`); Winnowing k=5 từ / k=7 token, w=4; Jaccard + Containment; `matchedSpans` để tô vàng 2 cột.
+  - **`src/lib/ai/ocr-prompt.ts`** (Gemini Vision, JSON thuần, 4 loại câu, chuẩn hoá `\(\)`/`\[\]` → `$...$`/`$$...$$`) và **`rubric-grade-prompt.ts`** (kiểu dữ liệu `AnonymousGradingContext` không có chỗ cho tên/email/lớp; `redactPii` che tên HS có/không dấu + email trong bài; kẹp điểm qua `computeRubricTotal`).
+  - **Services:** `aiGeminiClient.ts` (dùng chung: hạn mức `AiUsageLog`, timeout 45s, API key gửi qua header), `aiOcrService.ts`, `aiGradingService.ts` (ESSAY/PHOTO_UPLOAD/CODE, chỉ lưu gợi ý; **Áp dụng** mới gọi `saveSingleFieldGrade` và ghi `appliedAt`), `similarityService.ts` (so lượt nộp mới nhất của 2 HS khác nhau, bỏ bài < 25 từ / < 40 ký tự code, giữ quyết định Xác nhận/Bỏ qua khi quét lại, xoá báo cáo OPEN đã hết giống).
+  - **API:** `POST /api/ai/ocr-worksheet`; `/api/submissions/[id]/ai-suggest-grade` (GET/POST/PATCH APPLY|DISMISS); `/api/assignments/[id]/similarity` (GET), `/scan` (POST), `/[reportId]` (GET/PATCH).
+  - **UI:** nút **Quét ảnh đề giấy (AI OCR)** ở `/teacher/worksheets` (tạo phiếu mới) và trong `WorksheetEditor` (thêm vào đề); hỗ trợ ảnh chụp và PDF scan (pdf.js chuyển trang thành ảnh), xem trước KaTeX, sửa câu chữ, chọn câu. Nút **AI gợi ý chấm** trong `GradeByQuestionPanel` kèm nhãn *Gợi ý từ AI — giáo viên cần kiểm duyệt*. Tab **Kiểm tra tương đồng** trên trang chấm (danh sách giảm dần, so sánh 2 cột tô vàng, Xác nhận / Bỏ qua).
+  - **Seed & Kiểm thử:** bài viết tiếng Anh demo với 2 bài làm giống nhau + 1 `SimilarityReport`; `tests/unit/phase29-plagiarism-ai.test.ts`, `tests/integration/phase29-ai-similarity.test.ts` (mock `fetch` Gemini), `tests/e2e/phase29-ai-similarity.spec.ts`.
+- **Quyết định khác plan:**
+  - Nút trong hộp gợi ý là **Áp dụng & lưu điểm** (lưu luôn qua `saveSingleFieldGrade`, đúng mục C) thay vì chỉ điền vào form; GV vẫn sửa và lưu lại được như thường.
+  - Thêm `GET` cho `/api/submissions/[id]/ai-suggest-grade` và `/api/assignments/[id]/similarity/[reportId]` (để mở hộp so sánh), cùng hành động `DISMISS`.
+  - E2E: Gemini được gọi từ server nên không chặn được trên trình duyệt; E2E mock ở mức API của app (OCR và bước gọi AI gợi ý), còn bước **Áp dụng** và quét tương đồng chạy thật. Lời gọi Gemini thật được kiểm ở integration test bằng `fetch` giả.
+- **Kết quả kiểm tra (bộ nhẹ):** `pnpm db:seed` pass (x2); `pnpm lint` 0 lỗi / 0 cảnh báo; `pnpm typecheck` 0 lỗi; `pnpm test` 47/47 files (248/248 tests) pass; E2E Phase 29 3/3 pass. Chưa chạy: toàn bộ `pnpm test:e2e`, `pnpm build:check`. Chưa thử với `GEMINI_API_KEY` thật. Nhánh `phase-27-32`.

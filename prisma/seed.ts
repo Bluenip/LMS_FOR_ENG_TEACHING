@@ -9,6 +9,7 @@ import { readBubbles } from "../src/lib/omr/bubble-reader";
 import { gradeOmrAnswers } from "../src/lib/omr/grader";
 import { warpToCanonical } from "../src/lib/omr/perspective-warp";
 import { encodeGrayPng } from "../src/lib/omr/png";
+import { compareEssays } from "../src/lib/plagiarism/winnowing";
 import { studentSbd } from "../src/lib/omr/sbd";
 import { idMarks, marksFromValues, renderSyntheticSheet } from "../src/lib/omr/synthetic";
 
@@ -286,6 +287,8 @@ async function main() {
   await prisma.passwordResetToken.deleteMany();
   await prisma.loginSessionLog.deleteMany();
   await prisma.omrScanResult.deleteMany();
+  await prisma.similarityReport.deleteMany();
+  await prisma.aiGradingSuggestion.deleteMany();
   await prisma.omrExamSheet.deleteMany();
   await prisma.liveQuizAnswer.deleteMany();
   await prisma.liveQuizParticipant.deleteMany();
@@ -2767,6 +2770,70 @@ async function main() {
       },
     });
   }
+
+  // Phase 29 seed: essay assignment with two near-identical answers + a similarity report
+  const essayWs = await prisma.worksheet.create({
+    data: {
+      ownerId: teacher1.id,
+      title: "Writing: Protecting the environment (demo tương đồng)",
+      subject: "ENGLISH",
+      fields: {
+        create: [
+          {
+            placement: "ANSWER_SHEET",
+            type: "ESSAY",
+            label: "1",
+            prompt: "Write a paragraph (60–80 words) about how students can protect the environment.",
+            explanation: "Mention at least two concrete actions and one reason.",
+            order: 1,
+            points: 4,
+            answerKey: {},
+            rubric: [
+              { id: "content", title: "Content", maxPoints: 2 },
+              { id: "language", title: "Language", maxPoints: 2 },
+            ],
+          },
+        ],
+      },
+    },
+    include: { fields: true },
+  });
+  const essayField = essayWs.fields[0]!;
+  const essayAsg = await prisma.assignment.create({
+    data: { classId: class1.id, worksheetId: essayWs.id, title: "Writing: Protecting the environment" },
+  });
+  const essayA =
+    "Students can protect the environment in many simple ways. First, we should reduce plastic waste by bringing our own bottles and bags to school. Second, we can plant more trees in the schoolyard and take care of them every week. Finally, we must save electricity and water at home because these resources are limited and important for our future.";
+  const essayB =
+    "In my opinion, students can protect the environment in many simple ways. First, we should reduce plastic waste by bringing our own bottles and bags to school. Second, we can plant more trees in the schoolyard. We also need to turn off the lights when leaving the classroom.";
+  const essaySubs = [];
+  for (const [i, text] of [essayA, essayB].entries()) {
+    essaySubs.push(
+      await prisma.submission.create({
+        data: {
+          assignmentId: essayAsg.id,
+          studentId: students[i]!.id,
+          attemptNo: 1,
+          status: "SUBMITTED",
+          submittedAt: new Date(Date.now() - (i + 1) * 60 * 60 * 1000),
+          maxScore: 4,
+          answers: { create: { fieldId: essayField.id, value: text } },
+        },
+      })
+    );
+  }
+  const [subX, subY] = essaySubs[0]!.id < essaySubs[1]!.id ? [essaySubs[0]!, essaySubs[1]!] : [essaySubs[1]!, essaySubs[0]!];
+  const sim = compareEssays(subX.id === essaySubs[0]!.id ? essayA : essayB, subX.id === essaySubs[0]!.id ? essayB : essayA);
+  await prisma.similarityReport.create({
+    data: {
+      assignmentId: essayAsg.id,
+      fieldId: essayField.id,
+      submissionAId: subX.id,
+      submissionBId: subY.id,
+      similarity: sim.similarity,
+      matchedSpans: sim.matchedSpans as unknown as object,
+    },
+  });
 
   console.log("Seed completed successfully!");
   console.log("Accounts (password: password123):");

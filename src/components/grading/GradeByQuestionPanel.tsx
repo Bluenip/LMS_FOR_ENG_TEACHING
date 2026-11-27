@@ -28,6 +28,7 @@ import { PhotoAnnotatorModal } from "@/components/worksheet/PhotoAnnotatorModal"
 import { InteractiveAnswerReview } from "@/components/worksheet/interactive/InteractiveAnswerReview";
 import { isInteractiveFieldType } from "@/components/worksheet/interactive/InteractiveQuestionInput";
 import { CommentPresetBar } from "./CommentPresetBar";
+import { AiGradeSuggestion } from "./AiGradeSuggestion";
 
 interface QuestionMeta {
   id: string;
@@ -482,6 +483,28 @@ export function GradeByQuestionPanel({
                     </Button>
                   </div>
                 </div>
+
+                {(field.type === "ESSAY" || field.type === "PHOTO_UPLOAD" || field.type === "CODE") && item.answer && (
+                  <AiGradeSuggestion
+                    submissionId={item.submissionId}
+                    fieldId={field.id}
+                    maxPoints={field.points}
+                    rubric={rubricCriteria}
+                    onApplied={() => {
+                      // drop unsaved edits of this answer so the form shows the applied grade
+                      const drop = <T,>(prev: Record<string, T>) => {
+                        const next = { ...prev };
+                        delete next[key];
+                        return next;
+                      };
+                      setScoreEdits(drop);
+                      setRubricEdits(drop);
+                      setNoteEdits(drop);
+                      void queryClient.invalidateQueries({ queryKey: ["assignment-question-grading", assignmentId] });
+                      onGraded();
+                    }}
+                  />
+                )}
 
                 <CommentPresetBar
                   compact

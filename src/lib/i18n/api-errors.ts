@@ -396,6 +396,18 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
   "Đáp án trả lời ngắn chỉ gồm số, dấu - và dấu phẩy (tối đa 4 ký tự).": "Short answers may only contain digits, '-' and ',' (max 4 characters).",
   "Vui lòng nhập tiêu đề": "Please enter a title",
 
+  // Phase 29: AI OCR, AI grading suggestions & similarity
+  "Hãy chọn từ 1 đến 5 ảnh đề.": "Pick 1 to 5 photos of the exam.",
+  "Mỗi ảnh đề tối đa 6MB.": "Each exam photo must be 6MB or smaller.",
+  "AI không đọc được câu hỏi nào từ ảnh. Hãy chụp rõ, thẳng và đủ sáng hơn.": "AI could not read any question. Take a sharper, straighter, brighter photo.",
+  "Dịch vụ AI phản hồi quá lâu. Vui lòng thử lại.": "The AI service took too long. Please try again.",
+  "AI chỉ gợi ý chấm câu tự luận, ảnh bài làm và lập trình.": "AI suggestions are only available for essay, photo and code answers.",
+  "Bài làm câu này đang bỏ trống, không có gì để AI chấm.": "This answer is blank; there is nothing for AI to grade.",
+  "AI trả về kết quả không hợp lệ. Vui lòng thử lại.": "AI returned an invalid result. Please try again.",
+  "Không tìm thấy gợi ý AI cho câu này.": "No AI suggestion for this question.",
+  "Chỉ kiểm tra tương đồng được câu tự luận hoặc lập trình.": "Similarity checks only work on essay or code questions.",
+  "Không tìm thấy báo cáo tương đồng.": "Similarity report not found.",
+
   // Submission & proctoring
   "Không tìm thấy bài làm.": "Submission not found.",
   "Không tìm thấy bài làm trong ca thi này.": "Submission not found in this exam session.",

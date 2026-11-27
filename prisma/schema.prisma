@@ -315,6 +315,8 @@ model User {
   omrSheetsOwned             OmrExamSheet[]           @relation("OmrSheetOwner")
   omrScansAsStudent          OmrScanResult[]          @relation("OmrScanStudent")
   omrScansConfirmed          OmrScanResult[]          @relation("OmrScanConfirmedBy")
+  aiGradingSuggestions       AiGradingSuggestion[]    @relation("AiSuggestionCreatedBy")
+  similarityReviews          SimilarityReport[]       @relation("SimilarityReviewedBy")
 
   @@index([deletedAt])
 }
@@ -591,6 +593,8 @@ model Field {
   bankItemId String?
   bankItem   QuestionBankItem? @relation(fields: [bankItemId], references: [id], onDelete: SetNull)
 
+  aiGradingSuggestions AiGradingSuggestion[]
+
   @@index([worksheetId, order])
 }
 
@@ -677,6 +681,8 @@ model Assignment {
   reminders             AssignmentReminderSent[]
   publicAttempts        PublicAttempt[]
 
+  similarityReports SimilarityReport[]
+
   @@index([classId])
   @@index([worksheetId])
   @@index([workbookId])
@@ -722,6 +728,8 @@ model Submission {
   audioPlays    AudioPlay[]
   driveFiles    DriveFile[]
   revisions     SubmissionRevision[]
+
+  aiGradingSuggestions AiGradingSuggestion[]
 
   @@unique([assignmentId, studentId, attemptNo])
   @@index([studentId])
@@ -1755,4 +1763,46 @@ model OmrScanResult {
 
   @@index([sheetId, createdAt])
   @@index([studentId])
+}
+
+/// Phase 29: AI-suggested manual grade for one answer. Never overwrites Answer.score until a teacher applies it.
+model AiGradingSuggestion {
+  id                    String    @id @default(cuid())
+  submissionId          String
+  fieldId               String
+  suggestedScore        Float
+  suggestedRubricScores Json?
+  suggestedComment      String
+  model                 String
+  appliedAt             DateTime?
+  createdById           String
+  createdAt             DateTime  @default(now())
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  field      Field      @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  createdBy  User       @relation("AiSuggestionCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, fieldId])
+}
+
+/// Phase 29: Pairwise similarity (Winnowing) between two students' answers to the same question.
+model SimilarityReport {
+  id            String    @id @default(cuid())
+  assignmentId  String
+  fieldId       String
+  submissionAId String
+  submissionBId String
+  similarity    Float
+  matchedSpans  Json
+  /// OPEN | DISMISSED | CONFIRMED
+  status        String    @default("OPEN")
+  reviewedById  String?
+  reviewedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  reviewedBy User?      @relation("SimilarityReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([assignmentId, fieldId, submissionAId, submissionBId])
+  @@index([assignmentId, similarity])
 }

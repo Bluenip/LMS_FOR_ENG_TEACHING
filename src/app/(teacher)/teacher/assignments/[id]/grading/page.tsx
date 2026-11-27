@@ -22,6 +22,7 @@ import {
   History,
   Link2,
   ListChecks,
+  ScanSearch,
   Mic,
   Radio,
   RotateCcw,
@@ -57,6 +58,7 @@ import { isInteractiveFieldType } from "@/components/worksheet/interactive/Inter
 import { CommentPresetBar } from "@/components/grading/CommentPresetBar";
 import { OverrideDialog, type StudentOverrideInfo } from "@/components/grading/OverrideDialog";
 import { GradeByQuestionPanel } from "@/components/grading/GradeByQuestionPanel";
+import { SimilarityPanel } from "@/components/grading/SimilarityPanel";
 import { ScoreHistogramChart } from "@/components/grading/ScoreHistogramChart";
 import type { ScoreHistogramResult } from "@/lib/analytics/score-histogram";
 import {
@@ -1033,7 +1035,7 @@ export default function AssignmentGradingPage() {
 
   const [search, setSearch] = useState("");
   const [selectedTopicTag, setSelectedTopicTag] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"overview" | "by-question">("overview");
+  const [viewMode, setViewMode] = useState<"overview" | "by-question" | "similarity">("overview");
   const [reviewingSubId, setReviewingSubId] = useState<string | null>(null);
   const [overrideTarget, setOverrideTarget] = useState<ReportPayload["studentRows"][number] | null>(
     null
@@ -1196,7 +1198,7 @@ export default function AssignmentGradingPage() {
       </div>
 
       {/* Mode Switcher */}
-      <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 text-xs font-semibold">
+      <div className="inline-flex flex-wrap rounded-xl border border-slate-200 bg-white p-1 text-xs font-semibold dark:border-slate-700 dark:bg-slate-900">
         <button
           type="button"
           onClick={() => setViewMode("overview")}
@@ -1225,9 +1227,25 @@ export default function AssignmentGradingPage() {
           <ListChecks className="h-3.5 w-3.5" />
           {tr("Chấm theo câu", "Grade by question")}
         </button>
+        <button
+          type="button"
+          onClick={() => setViewMode("similarity")}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition",
+            viewMode === "similarity"
+              ? "bg-[#4F46E5] text-white"
+              : "text-[#464555] hover:text-[#0B1C30]"
+          )}
+          data-testid="tab-similarity"
+        >
+          <ScanSearch className="h-3.5 w-3.5" />
+          {tr("Kiểm tra tương đồng", "Similarity check")}
+        </button>
       </div>
 
-      {viewMode === "by-question" ? (
+      {viewMode === "similarity" ? (
+        <SimilarityPanel assignmentId={assignmentId} />
+      ) : viewMode === "by-question" ? (
         <GradeByQuestionPanel
           assignmentId={assignmentId}
           onGraded={() => {

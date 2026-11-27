@@ -47,6 +47,7 @@ import {
   Send,
   Share2,
   Sigma,
+  ScanText,
   Sparkles,
   Trash2,
   Type,
@@ -106,6 +107,8 @@ import { OverlayFieldInput } from "./OverlayFieldInput";
 import { AnswerSheetPanel } from "./AnswerSheetPanel";
 import { LimitedAudioPlayer } from "./LimitedAudioPlayer";
 import { MathText, hasMathSyntax } from "./MathText";
+import { AiOcrDialog } from "./AiOcrDialog";
+import type { AiGeneratedQuestionDraft } from "@/lib/ai/gemini-prompt";
 import { PromptText } from "./PromptText";
 import { PassagesEditorPanel } from "./PassagesEditorPanel";
 import { RubricEditor } from "./RubricEditor";
@@ -512,6 +515,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
 
   // AI Question Generator modal state
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [ocrDialogOpen, setOcrDialogOpen] = useState(false);
   const [aiSourceText, setAiSourceText] = useState("");
   const [aiCount, setAiCount] = useState(5);
   const [aiLevel, setAiLevel] = useState("B1");
@@ -1224,7 +1228,13 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
   };
 
   const handleInsertAiQuestions = () => {
-    const picked = aiDrafts.filter((_, idx) => selectedAiIndices.includes(idx));
+    insertDraftQuestions(aiDrafts.filter((_, idx) => selectedAiIndices.includes(idx)));
+    setAiDialogOpen(false);
+    setAiDrafts([]);
+  };
+
+  /** Appends AI drafts (generator or OCR) as answer-sheet questions and saves them. */
+  const insertDraftQuestions = (picked: AiGeneratedQuestionDraft[]) => {
     if (picked.length === 0) return;
     const startNum = nextQuestionNumber(fields);
     const nextFields: EditorFieldDTO[] = picked.map((q, idx) => ({
@@ -1238,7 +1248,7 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
       topicTag: q.topicTag,
       order: fields.length + idx,
       points: q.points,
-      options: q.options,
+      options: q.options as EditorFieldDTO["options"],
       answerKey: q.answerKey,
       gradingOpts: null,
       style: { fontSize: 13, align: "left", transparentBg: false },
@@ -1246,8 +1256,6 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
     const merged = [...fields, ...nextFields];
     setFields(merged);
     setStudioView("sheet");
-    setAiDialogOpen(false);
-    setAiDrafts([]);
     void persistFields(merged);
     toast.success(tr(`Đã chèn ${nextFields.length} câu hỏi AI vào phiếu!`, `Inserted ${nextFields.length} AI questions!`));
   };
@@ -2377,6 +2385,17 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
             >
               <History className="h-4 w-4 text-[#4F46E5]" />
               <span className="hidden 2xl:inline">{tr("Phiên bản", "Versions")}</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setOcrDialogOpen(true)}
+              data-testid="ai-ocr-btn"
+              title={tr("Quét ảnh đề giấy (AI OCR)", "Scan a paper exam (AI OCR)")}
+            >
+              <ScanText className="h-4 w-4 text-[#F97316]" />
+              <span className="hidden 2xl:inline">OCR</span>
             </Button>
             <Button
               type="button"
@@ -4349,6 +4368,13 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AiOcrDialog
+        open={ocrDialogOpen}
+        onOpenChange={setOcrDialogOpen}
+        subject={subject}
+        onInsert={(drafts) => insertDraftQuestions(drafts)}
+      />
 
       {/* Publish to Discover & Tags Dialog */}
       <Dialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen}>
