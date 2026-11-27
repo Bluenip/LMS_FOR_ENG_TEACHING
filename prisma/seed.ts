@@ -281,13 +281,16 @@ async function main() {
   await prisma.answer.deleteMany();
   await prisma.submissionRevision.deleteMany();
   await prisma.submission.deleteMany();
+  await prisma.examVariant.deleteMany();
   await prisma.assignment.updateMany({ data: { unlockAfterAssignmentId: null } });
   await prisma.assignment.deleteMany();
+  await prisma.examSession.deleteMany();
   await prisma.offlineGradeEntry.deleteMany();
   await prisma.offlineGradeColumn.deleteMany();
   await prisma.workbookItem.deleteMany();
   await prisma.workbook.deleteMany();
   await prisma.field.deleteMany();
+  await prisma.questionBankItem.deleteMany();
   await prisma.worksheetAudio.deleteMany();
   await prisma.worksheetPage.deleteMany();
   await prisma.worksheet.deleteMany();
@@ -421,7 +424,19 @@ async function main() {
     },
   });
 
-  // Enroll students 1..6 into Class 1, students 7..10 into Class 2
+  // Second class for teacher1 (older createdAt so ENG12A remains classes[0]!) for multi-class ExamSession demo
+  const class1B = await prisma.class.create({
+    data: {
+      name: "English 12 - Lớp 12A2",
+      description: "Lớp luyện thi THPT Quốc Gia 12A2 — liên kết kỳ thi cùng 12A1.",
+      joinCode: "ENG12B",
+      teacherId: teacher1.id,
+      requireApproval: false,
+      createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  // Enroll students 1..6 into Class 1, students 7..10 into Class 2, and students 7..8 into Class 1B
   for (let i = 0; i < 6; i++) {
     await prisma.enrollment.create({
       data: { classId: class1.id, studentId: students[i]!.id, status: "ACTIVE" },
@@ -430,6 +445,11 @@ async function main() {
   for (let i = 6; i < 10; i++) {
     await prisma.enrollment.create({
       data: { classId: class2.id, studentId: students[i]!.id, status: "ACTIVE" },
+    });
+  }
+  for (let i = 6; i < 8; i++) {
+    await prisma.enrollment.create({
+      data: { classId: class1B.id, studentId: students[i]!.id, status: "ACTIVE" },
     });
   }
 
@@ -1851,6 +1871,155 @@ async function main() {
       })),
     ],
   });
+
+  // Phase 22 seed: 25 QuestionBankItems (15 English + 10 Math) + 1 Multi-class ExamSession (ENG12A & ENG12B)
+  const englishTopics = ["Ngữ pháp", "Từ vựng", "Đọc hiểu"];
+  const bankEnglishData = Array.from({ length: 15 }).map((_, idx) => {
+    const topicTag = englishTopics[idx % 3]!;
+    const difficulty = (idx % 5) + 1;
+    const isText = idx % 5 === 4;
+    return {
+      ownerId: idx === 14 ? teacher2.id : teacher1.id,
+      subject: "ENGLISH" as const,
+      type: isText ? ("TEXT" as const) : ("MULTIPLE_CHOICE" as const),
+      prompt: isText
+        ? `[Bank EN #${idx + 1}] Complete the sentence (${topicTag}): She ______ in Hanoi since 2020.`
+        : `[Bank EN #${idx + 1}] Choose the best option (${topicTag}) for sentence #${idx + 1}.`,
+      options: isText
+        ? undefined
+        : [
+            { id: "A", text: "Option A" },
+            { id: "B", text: "Option B" },
+            { id: "C", text: "Option C" },
+            { id: "D", text: "Option D" },
+          ],
+      answerKey: isText ? { accepted: ["has lived", "lived"] } : { correct: "A" },
+      skillTag:
+        topicTag === "Ngữ pháp"
+          ? ("GRAMMAR" as const)
+          : topicTag === "Từ vựng"
+            ? ("VOCABULARY" as const)
+            : ("READING" as const),
+      topicTag,
+      level: difficulty <= 2 ? "B1" : difficulty <= 4 ? "B2" : "C1",
+      difficulty,
+      tags: ["thpt", topicTag.toLowerCase()],
+      isShared: idx < 12 || idx === 14,
+    };
+  });
+
+  const mathTopics = ["Đại số", "Hình học", "Giải tích"];
+  const bankMathData = Array.from({ length: 10 }).map((_, idx) => {
+    const topicTag = mathTopics[idx % 3]!;
+    const difficulty = (idx % 5) + 1;
+    const isNum = idx % 3 === 2;
+    return {
+      ownerId: teacher1.id,
+      subject: "MATH" as const,
+      type: isNum ? ("NUMBER" as const) : ("MULTIPLE_CHOICE" as const),
+      prompt: isNum
+        ? `[Bank Math #${idx + 1}] Tính giá trị biểu thức $f(${idx + 2}) = ${idx + 2}^2$ (${topicTag}).`
+        : `[Bank Math #${idx + 1}] Chọn mệnh đề đúng về ${topicTag} (mẫu #${idx + 1}).`,
+      options: isNum
+        ? undefined
+        : [
+            { id: "A", text: `$x = ${idx + 1}$` },
+            { id: "B", text: `$x = ${idx + 2}$` },
+            { id: "C", text: `$x = ${idx + 3}$` },
+            { id: "D", text: `$x = 0$` },
+          ],
+      answerKey: isNum ? { value: (idx + 2) ** 2 } : { correct: "A" },
+      topicTag,
+      level: "THPT",
+      difficulty,
+      tags: ["toan12", topicTag.toLowerCase()],
+      isShared: idx < 8,
+    };
+  });
+
+  await prisma.questionBankItem.createMany({
+    data: [...bankEnglishData, ...bankMathData],
+  });
+
+  const examSheetIds = wsUnit6.fields
+    .filter((f) => f.placement === "ANSWER_SHEET")
+    .map((f) => f.id);
+  const demoExamSession = await prisma.examSession.create({
+    data: {
+      ownerId: teacher1.id,
+      title: "Kỳ thi Giữa kỳ Liên lớp 12A1 & 12A2 (Phase 22)",
+      worksheetId: wsUnit6.id,
+      openAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      dueAt: nextWeek,
+      timeLimitMin: 30,
+      proctorConfig: {
+        proctorMode: "MONITOR",
+        violationAction: "WARN",
+        maxViolations: 3,
+        variantCount: 4,
+      },
+    },
+  });
+
+  for (const targetCls of [class1, class1B]) {
+    const examAsg = await prisma.assignment.create({
+      data: {
+        classId: targetCls.id,
+        worksheetId: wsUnit6.id,
+        examSessionId: demoExamSession.id,
+        title: `Kỳ thi Giữa kỳ Phase 22 — ${targetCls.name}`,
+        openAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        dueAt: nextWeek,
+        timeLimitMin: 30,
+        maxAttempts: 1,
+        shuffle: true,
+        shuffleOptions: true,
+        showResult: "AFTER_SUBMIT",
+        showAnswerKey: false,
+        proctorMode: "MONITOR",
+        violationAction: "WARN",
+        maxViolations: 3,
+      },
+    });
+    const createdVariants = [];
+    for (let v = 0; v < 4; v++) {
+      const order = [...examSheetIds.slice(v), ...examSheetIds.slice(0, v)];
+      const ev = await prisma.examVariant.create({
+        data: {
+          assignmentId: examAsg.id,
+          code: String(101 + v),
+          questionOrder: order,
+          optionOrder: {},
+        },
+      });
+      createdVariants.push(ev);
+    }
+    const sampleStu = targetCls.id === class1.id ? students[1]! : students[6]!;
+    const sampleVariant = targetCls.id === class1.id ? createdVariants[0]! : createdVariants[1]!;
+    await prisma.submission.create({
+      data: {
+        assignmentId: examAsg.id,
+        studentId: sampleStu.id,
+        attemptNo: 1,
+        status: "GRADED",
+        examVariantId: sampleVariant.id,
+        startedAt: new Date(Date.now() - 60 * 60 * 1000),
+        submittedAt: new Date(Date.now() - 40 * 60 * 1000),
+        autoScore: 9,
+        manualScore: 0,
+        totalScore: 9,
+        maxScore: 10,
+        answers: {
+          create: wsUnit6.fields.map((f, idx) => ({
+            fieldId: f.id,
+            value: idx < 5 ? (idx === 4 ? true : ["A", "B", "A", "C"][idx]!) : "wrong",
+            isCorrect: idx < 5,
+            score: idx < 5 ? f.points : 0,
+          })),
+        },
+      },
+    });
+  }
 
   // Phase 13 seed: sample AuditLog & ErrorLog entries for /admin/audit and /admin/errors
   await prisma.auditLog.createMany({

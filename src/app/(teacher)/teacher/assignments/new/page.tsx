@@ -226,6 +226,7 @@ function NewAssignmentForm() {
   const [remindBeforeDue, setRemindBeforeDue] = useState(true);
   const [scoreScale, setScoreScale] = useState<ScoreScale>("SCALE_10");
   const [weight, setWeight] = useState<number>(1);
+  const [variantCount, setVariantCount] = useState<number>(1);
   const [targetMode, setTargetMode] = useState<"ALL" | "SELECTED">("ALL");
   const [targetStudentIds, setTargetStudentIds] = useState<string[]>([]);
   const [studentFilter, setStudentFilter] = useState("");
@@ -473,6 +474,7 @@ function NewAssignmentForm() {
           remindBeforeDue,
           scoreScale,
           weight,
+          variantCount,
           targetStudentIds:
             selectedClassIds.length === 1 && targetMode === "SELECTED"
               ? targetStudentIds
@@ -976,6 +978,30 @@ function NewAssignmentForm() {
                       }
                       className="h-9 w-20 text-xs tabular-nums"
                       data-testid="score-weight-input"
+                    />
+                  </div>
+                </Field>
+              </div>
+              <div className="mt-3">
+                <Field label={tr("Sinh nhiều mã đề (N mã)", "Generate exam variants (N codes)")} htmlFor="variant-count">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {[1, 2, 4, 6].map((n) => (
+                      <ChipButton key={n} active={variantCount === n} onClick={() => setVariantCount(n)}>
+                        {n === 1 ? tr("1 mã (không trộn)", "1 code") : tr(`${n} mã đề`, `${n} codes`)}
+                      </ChipButton>
+                    ))}
+                    <Input
+                      id="variant-count"
+                      type="number"
+                      min={1}
+                      max={24}
+                      step={1}
+                      value={variantCount}
+                      onChange={(e) =>
+                        setVariantCount(Math.max(1, Math.min(24, Math.floor(Number(e.target.value) || 1))))
+                      }
+                      className="h-9 w-20 text-xs tabular-nums"
+                      data-testid="variant-count-input"
                     />
                   </div>
                 </Field>

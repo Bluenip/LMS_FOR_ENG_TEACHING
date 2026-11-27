@@ -142,6 +142,7 @@ interface StudentAssignmentPayload {
     id: string;
     attemptNo: number;
     status: "IN_PROGRESS" | "SUBMITTED" | "GRADED" | "RETURNED";
+    examVariantCode?: string | null;
     startedAt: string;
     submittedAt: string | null;
     isLate: boolean;
@@ -1192,9 +1193,16 @@ export default function StudentDoAssignmentPage() {
                 </span>
               )}
             </div>
-            <p className="text-[11px] text-slate-400">
-              {assignment.class.name} {tr("• Lượt", "• Attempt")}{" "}
-              {formatAttemptsProgress(submission.attemptNo, assignment.maxAttempts)}
+            <p className="text-[11px] text-slate-400 flex flex-wrap items-center gap-2">
+              <span>
+                {assignment.class.name} {tr("• Lượt", "• Attempt")}{" "}
+                {formatAttemptsProgress(submission.attemptNo, assignment.maxAttempts)}
+              </span>
+              {submission.examVariantCode && (
+                <Badge variant="indigo" data-testid="exam-variant-badge" className="text-[10px] py-0">
+                  {tr("Mã đề", "Exam code")} {submission.examVariantCode}
+                </Badge>
+              )}
             </p>
           </div>
         </div>

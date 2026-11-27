@@ -12,6 +12,7 @@ import {
   AlignStartHorizontal,
   AlignStartVertical,
   BookOpen,
+  BookmarkPlus,
   Camera,
   CheckCircle2,
   CheckSquare,
@@ -3117,6 +3118,49 @@ export function WorksheetEditor({ initialWorksheet }: WorksheetEditorProps) {
                     />
                   </div>
                 </div>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="w-full justify-center text-xs"
+                  data-testid="save-field-to-bank-btn"
+                  onClick={async () => {
+                    if (!selectedField.isPersisted) {
+                      toast.info(
+                        tr(
+                          "Vui lòng lưu phiếu bài tập trước khi đưa câu hỏi vào ngân hàng.",
+                          "Please save the worksheet before adding this question to the bank."
+                        )
+                      );
+                      return;
+                    }
+                    try {
+                      const res = await fetch("/api/question-bank/from-field", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          fieldId: selectedField.id,
+                          topicTag: selectedField.topicTag ?? null,
+                        }),
+                      });
+                      const json = await res.json();
+                      if (!res.ok) {
+                        throw new Error(json.error ?? tr("Lưu câu hỏi thất bại", "Could not save question"));
+                      }
+                      toast.success(
+                        tr("Đã lưu câu hỏi vào Ngân hàng câu hỏi!", "Saved question to Question Bank!")
+                      );
+                    } catch (err) {
+                      toast.error(
+                        err instanceof Error ? err.message : tr("Lưu câu hỏi thất bại", "Could not save question")
+                      );
+                    }
+                  }}
+                >
+                  <BookmarkPlus className="h-3.5 w-3.5 text-[#4F46E5]" />
+                  {tr("Lưu vào ngân hàng câu", "Save to question bank")}
+                </Button>
 
                 {/* Optional Shared Passage link */}
                 {passages.length > 0 && (

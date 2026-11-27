@@ -248,6 +248,8 @@ model User {
   postReactions              PostReaction[]           @relation("UserPostReactions")
   offlineGradeColumnsCreated OfflineGradeColumn[]     @relation("OfflineGradeColumnsCreated")
   offlineGradeEntries        OfflineGradeEntry[]      @relation("StudentOfflineGrades")
+  questionBankItems          QuestionBankItem[]       @relation("QuestionBankOwner")
+  examSessions               ExamSession[]            @relation("ExamSessionOwner")
 
   @@index([deletedAt])
 }
@@ -440,6 +442,7 @@ model Worksheet {
   assignments   Assignment[]
   workbookItems WorkbookItem[]
   driveFiles    DriveFile[]
+  examSessions  ExamSession[]
 
   @@index([ownerId])
   @@index([subject])
@@ -492,6 +495,10 @@ model Field {
   // Optional link to a worksheet audio track (listening / dictation)
   audioId String?
   audio   WorksheetAudio? @relation(fields: [audioId], references: [id], onDelete: SetNull)
+
+  // Phase 22: Optional link back to QuestionBankItem
+  bankItemId String?
+  bankItem   QuestionBankItem? @relation(fields: [bankItemId], references: [id], onDelete: SetNull)
 
   @@index([worksheetId, order])
 }
@@ -556,6 +563,9 @@ model Assignment {
   promptText      String?
   attachmentKeys  Json?
 
+  // Phase 22: Multi-class ExamSession
+  examSessionId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -564,6 +574,8 @@ model Assignment {
   workbook              Workbook?                @relation(fields: [workbookId], references: [id], onDelete: SetNull)
   unlockAfterAssignment Assignment?              @relation("AssignmentUnlockChain", fields: [unlockAfterAssignmentId], references: [id], onDelete: SetNull)
   unlockedAssignments   Assignment[]             @relation("AssignmentUnlockChain")
+  examSession           ExamSession?             @relation(fields: [examSessionId], references: [id], onDelete: SetNull)
+  examVariants          ExamVariant[]
   submissions           Submission[]
   overrides             AssignmentOverride[]
   targets               AssignmentTarget[]
@@ -572,6 +584,7 @@ model Assignment {
   @@index([classId])
   @@index([worksheetId])
   @@index([workbookId])
+  @@index([examSessionId])
 }
 
 model Submission {
@@ -602,10 +615,12 @@ model Submission {
   unlockedById    String?
   attemptToken    String?
   lastHeartbeatAt DateTime?
+  examVariantId   String?
 
   assignment    Assignment     @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   student       User           @relation("StudentSubmissions", fields: [studentId], references: [id], onDelete: Cascade)
   unlockedBy    User?          @relation("UnlockedByTeacher", fields: [unlockedById], references: [id], onDelete: SetNull)
+  examVariant   ExamVariant?   @relation(fields: [examVariantId], references: [id], onDelete: SetNull)
   answers       Answer[]
   proctorEvents ProctorEvent[]
   audioPlays    AudioPlay[]
@@ -1076,4 +1091,69 @@ model OfflineGradeEntry {
 
   @@unique([columnId, studentId])
   @@index([studentId])
+}
+
+/// Phase 22: Reusable question bank with multi-dimensional tagging & sharing.
+model QuestionBankItem {
+  id          String           @id @default(cuid())
+  ownerId     String
+  subject     WorksheetSubject @default(GENERAL)
+  type        FieldType
+  prompt      String
+  options     Json?
+  answerKey   Json
+  explanation String?
+  rubric      Json?
+  skillTag    SkillTag?
+  topicTag    String?
+  level       String?
+  difficulty  Int              @default(3)
+  tags        String[]         @default([])
+  audioKey    String?
+  imageKey    String?
+  isShared    Boolean          @default(false)
+  deletedAt   DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  owner  User    @relation("QuestionBankOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  fields Field[]
+
+  @@index([ownerId, subject])
+  @@index([isShared, subject])
+}
+
+/// Phase 22: Pre-generated exam paper codes (101, 102, ...) for an assignment.
+model ExamVariant {
+  id            String   @id @default(cuid())
+  assignmentId  String
+  code          String
+  questionOrder Json
+  optionOrder   Json
+  createdAt     DateTime @default(now())
+
+  assignment  Assignment   @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  submissions Submission[]
+
+  @@unique([assignmentId, code])
+}
+
+/// Phase 22: Multi-class synchronized exam session sharing one worksheet & proctoring config.
+model ExamSession {
+  id            String    @id @default(cuid())
+  ownerId       String
+  title         String
+  worksheetId   String
+  openAt        DateTime?
+  dueAt         DateTime?
+  timeLimitMin  Int?
+  proctorConfig Json
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  owner       User         @relation("ExamSessionOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  worksheet   Worksheet    @relation(fields: [worksheetId], references: [id], onDelete: Cascade)
+  assignments Assignment[]
+
+  @@index([ownerId])
 }

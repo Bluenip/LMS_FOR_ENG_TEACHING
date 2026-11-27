@@ -26,6 +26,7 @@ import { STUDENT_FIELD_SELECT } from "./worksheetService";
 import { createNotificationsBulk } from "./notificationService";
 import { invalidateLeaderboardCache } from "./leaderboardService";
 import { verifySebHeaderIfNeeded } from "./assignmentService";
+import { pickExamVariantForNewSubmission } from "./examVariantService";
 import { publishAssignmentLive } from "@/lib/proctor-bus";
 
 function isSafeSubmissionFileKey(submissionId: string, key: unknown): key is string {
@@ -291,37 +292,52 @@ export async function startOrResumeSubmission(
 
   const maxScore = assignment.worksheet.fields.reduce((sum, f) => sum + f.points, 0);
 
-  // Shuffle only ANSWER_SHEET fields when assignment.shuffle = true
+  // Check if pre-generated ExamVariants exist first (Phase 22); else fall back to ad-hoc shuffle
+  const chosenVariant = await pickExamVariantForNewSubmission(assignmentId);
   let questionOrder: string[] | null = null;
-  if (assignment.shuffle) {
-    const answerSheetIds = assignment.worksheet.fields
-      .filter((f) => f.placement === "ANSWER_SHEET")
-      .map((f) => f.id);
-    if (answerSheetIds.length > 1) {
-      questionOrder = shuffleArray(answerSheetIds);
-    }
-  }
-
-  // Shuffle A/B/C/D options per question when assignment.shuffleOptions = true
   let optionOrder: Record<string, string[]> | null = null;
-  if (assignment.shuffleOptions) {
-    const orderMap: Record<string, string[]> = {};
-    for (const f of assignment.worksheet.fields) {
-      if (
-        (f.type === "MULTIPLE_CHOICE" || f.type === "MULTI_SELECT") &&
-        Array.isArray(f.options) &&
-        f.options.length > 1
-      ) {
-        const ids = (f.options as Array<{ id?: unknown }>)
-          .map((o) => (typeof o?.id === "string" ? o.id : null))
-          .filter((id): id is string => Boolean(id));
-        if (ids.length > 1) {
-          orderMap[f.id] = shuffleArray(ids);
-        }
+
+  if (chosenVariant) {
+    questionOrder = Array.isArray(chosenVariant.questionOrder)
+      ? (chosenVariant.questionOrder as string[])
+      : null;
+    optionOrder =
+      chosenVariant.optionOrder &&
+      typeof chosenVariant.optionOrder === "object" &&
+      !Array.isArray(chosenVariant.optionOrder)
+        ? (chosenVariant.optionOrder as Record<string, string[]>)
+        : null;
+  } else {
+    // Shuffle only ANSWER_SHEET fields when assignment.shuffle = true
+    if (assignment.shuffle) {
+      const answerSheetIds = assignment.worksheet.fields
+        .filter((f) => f.placement === "ANSWER_SHEET")
+        .map((f) => f.id);
+      if (answerSheetIds.length > 1) {
+        questionOrder = shuffleArray(answerSheetIds);
       }
     }
-    if (Object.keys(orderMap).length > 0) {
-      optionOrder = orderMap;
+
+    // Shuffle A/B/C/D options per question when assignment.shuffleOptions = true
+    if (assignment.shuffleOptions) {
+      const orderMap: Record<string, string[]> = {};
+      for (const f of assignment.worksheet.fields) {
+        if (
+          (f.type === "MULTIPLE_CHOICE" || f.type === "MULTI_SELECT") &&
+          Array.isArray(f.options) &&
+          f.options.length > 1
+        ) {
+          const ids = (f.options as Array<{ id?: unknown }>)
+            .map((o) => (typeof o?.id === "string" ? o.id : null))
+            .filter((id): id is string => Boolean(id));
+          if (ids.length > 1) {
+            orderMap[f.id] = shuffleArray(ids);
+          }
+        }
+      }
+      if (Object.keys(orderMap).length > 0) {
+        optionOrder = orderMap;
+      }
     }
   }
 
@@ -336,6 +352,7 @@ export async function startOrResumeSubmission(
       status: "IN_PROGRESS",
       startedAt: now,
       maxScore: Math.round(maxScore * 100) / 100,
+      examVariantId: chosenVariant?.id ?? null,
       questionOrder: questionOrder ? (questionOrder as Prisma.InputJsonValue) : undefined,
       optionOrder: optionOrder ? (optionOrder as Prisma.InputJsonValue) : undefined,
       rulesAcceptedAt: opts?.rulesAccepted ? now : null,
@@ -480,6 +497,7 @@ export async function getStudentAssignmentPayload(
       rulesAcceptedAt: true,
       cameraConsentAt: true,
       attemptToken: true,
+      examVariant: { select: { id: true, code: true } },
       answers: {
         select: {
           id: true,
@@ -602,6 +620,7 @@ export async function getStudentAssignmentPayload(
         id: activeSubmission.id,
         attemptNo: activeSubmission.attemptNo,
         status: activeSubmission.status,
+        examVariantCode: activeSubmission.examVariant?.code ?? null,
         startedAt: activeSubmission.startedAt.toISOString(),
         submittedAt: activeSubmission.submittedAt?.toISOString() ?? null,
         isLate: activeSubmission.isLate,

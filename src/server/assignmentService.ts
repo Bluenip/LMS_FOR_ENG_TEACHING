@@ -16,6 +16,7 @@ import { detectImageMeta } from "@/lib/image-meta";
 import { getStorageProvider } from "@/lib/storage";
 import { createNotificationsBulk } from "./notificationService";
 import { canRevealResult } from "./submissionService";
+import { generateVariantsForAssignment } from "./examVariantService";
 import { formatDateTime } from "@/lib/utils";
 import type { UpdateAssignmentInput } from "@/lib/validators";
 import { logAudit } from "@/server/auditService";
@@ -56,6 +57,7 @@ export interface CreateAssignmentInput {
   remindBeforeDue?: boolean;
   scoreScale?: ScoreScale;
   weight?: number;
+  variantCount?: number;
   targetStudentIds?: string[] | null;
 }
 
@@ -180,6 +182,9 @@ export async function createAssignmentsForClasses(
           : {}),
       },
     });
+    if (input.variantCount && input.variantCount > 1) {
+      await generateVariantsForAssignment(assignment.id, input.variantCount);
+    }
     createdAssignments.push(assignment);
 
     const notifications: Array<{
@@ -262,6 +267,7 @@ export async function updateAssignment(
     | "remindBeforeDue"
     | "scoreScale"
     | "weight"
+    | "variantCount"
     | "shuffleOptions"
     | "cameraSensitivity"
     | "cameraCountLookAway"
@@ -270,6 +276,7 @@ export async function updateAssignment(
     remindBeforeDue?: boolean;
     scoreScale?: ScoreScale;
     weight?: number;
+    variantCount?: number;
     shuffleOptions?: boolean;
     cameraSensitivity?: CameraSensitivity;
     cameraCountLookAway?: boolean;
@@ -340,6 +347,10 @@ export async function updateAssignment(
       ...(input.weight !== undefined ? { weight: input.weight } : {}),
     },
   });
+
+  if (input.variantCount && input.variantCount > 1) {
+    await generateVariantsForAssignment(updated.id, input.variantCount);
+  }
 
   let targetSet: Set<string> | null = null;
   if (input.targetStudentIds !== undefined) {

@@ -112,6 +112,7 @@ interface ReportPayload {
     studentName: string;
     studentEmail: string;
     submissionId: string | null;
+    examVariantCode?: string | null;
     attemptNo: number | null;
     status: "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED" | "GRADED" | "RETURNED";
     isLate: boolean;
@@ -1435,7 +1436,14 @@ export default function AssignmentGradingPage() {
                         {getInitials(row.studentName)}
                       </span>
                       <div>
-                        <p className="font-semibold text-[#0B1C30]">{row.studentName}</p>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <p className="font-semibold text-[#0B1C30]">{row.studentName}</p>
+                          {row.examVariantCode && (
+                            <Badge variant="indigo" className="text-[10px]">
+                              {tr("Mã đề", "Code")} {row.examVariantCode}
+                            </Badge>
+                          )}
+                        </div>
                         <p className="text-xs text-slate-400">{row.studentEmail}</p>
                         {row.override && (row.override.extraAttempts > 0 || row.override.dueAt || row.override.timeLimitMin) && (
                           <div className="mt-1 flex flex-wrap gap-1">

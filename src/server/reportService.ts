@@ -111,10 +111,12 @@ export async function getAssignmentReport(assignmentId: string, locale: Locale =
           fields: { orderBy: { order: "asc" } },
         },
       },
+      examVariants: { select: { id: true, code: true }, orderBy: { code: "asc" } },
       submissions: {
         orderBy: [{ attemptNo: "desc" }],
         include: {
           student: { select: { id: true, name: true, email: true } },
+          examVariant: { select: { id: true, code: true } },
           answers: true,
         },
       },
@@ -177,6 +179,7 @@ export async function getAssignmentReport(assignmentId: string, locale: Locale =
       studentName: enr.student.name,
       studentEmail: enr.student.email,
       submissionId: best?.id ?? null,
+      examVariantCode: best?.examVariant?.code ?? null,
       attemptCount: list.length,
       attemptNo: best?.attemptNo ?? null,
       status: best ? best.status : ("NOT_STARTED" as const),
@@ -318,6 +321,7 @@ export async function getAssignmentReport(assignmentId: string, locale: Locale =
       targetCount: assignment.targets.length,
       totalQuestions: fields.length,
       maxScore: Math.round(maxPossibleScore * 100) / 100,
+      examVariants: assignment.examVariants.map((v) => v.code),
     },
     summary: {
       totalStudents,

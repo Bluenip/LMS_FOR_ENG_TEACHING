@@ -171,6 +171,14 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
   "Vui lòng tải file Excel (.xlsx) lên để nhập điểm.":
     "Please upload an Excel (.xlsx) file to import grades.",
   "Không có điểm hợp lệ nào để lưu.": "No valid grade entries to save.",
+  "Không tìm thấy câu hỏi trong ngân hàng.": "Question not found in the bank.",
+  "Bạn không có quyền chỉnh sửa câu hỏi này.": "You do not have permission to edit this question.",
+  "Bạn không có quyền xoá câu hỏi này.": "You do not have permission to delete this question.",
+  "Không tìm thấy câu hỏi nguồn.": "Source question field not found.",
+  "Kho câu hỏi không đủ câu cho ma trận đề.": "Not enough questions in the bank to match this matrix.",
+  "Tên kỳ thi tối thiểu 2 ký tự": "Exam session title must be at least 2 characters.",
+  "Không tìm thấy kỳ thi.": "Exam session not found.",
+  "Bạn không có quyền xem kỳ thi này.": "You do not have permission to access this exam session.",
 
   // Parent & admin
   "Chỉ học sinh xem được danh sách mã liên kết của mình.":

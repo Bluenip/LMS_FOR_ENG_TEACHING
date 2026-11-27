@@ -322,6 +322,7 @@ export const createAssignmentSchema = z.object({
   remindBeforeDue: z.boolean().default(true),
   scoreScale: z.nativeEnum(ScoreScale).default("SCALE_10"),
   weight: z.number().min(0.5).max(10).default(1),
+  variantCount: z.number().int().min(1).max(24).optional().default(1),
   targetStudentIds: z.array(z.string().trim().min(1).max(64)).max(500).optional().nullable(),
 });
 
@@ -671,4 +672,84 @@ export const saveOfflineGradeEntriesSchema = z.object({
     )
     .min(1)
     .max(500),
+});
+
+// ===== Phase 22: Question Bank, Matrix Generator, Variants & Multi-class Exams =====
+export const createQuestionBankItemSchema = z.object({
+  subject: z.nativeEnum(WorksheetSubject).default("GENERAL"),
+  type: z.nativeEnum(FieldType),
+  prompt: z.string().trim().min(1, "Vui lòng nhập nội dung câu hỏi.").max(5000),
+  options: z
+    .union([z.array(fieldOptionSchema), z.record(z.unknown())])
+    .optional()
+    .nullable(),
+  answerKey: z.record(z.unknown()),
+  explanation: z.string().trim().max(3000).optional().nullable(),
+  rubric: z.array(rubricCriterionSchema).max(20).optional().nullable(),
+  skillTag: z.nativeEnum(SkillTag).optional().nullable(),
+  topicTag: z.string().trim().max(80).optional().nullable(),
+  level: z.string().trim().max(60).optional().nullable(),
+  difficulty: z.number().int().min(1).max(5).default(3),
+  tags: z.array(z.string().trim().min(1).max(40)).max(20).optional().default([]),
+  audioKey: z.string().trim().max(300).optional().nullable(),
+  imageKey: z.string().trim().max(300).optional().nullable(),
+  isShared: z.boolean().optional().default(false),
+});
+
+export const updateQuestionBankItemSchema = createQuestionBankItemSchema.partial();
+
+export const saveFieldToBankSchema = z.object({
+  fieldId: z.string().trim().min(1),
+  difficulty: z.number().int().min(1).max(5).optional(),
+  level: z.string().trim().max(60).optional().nullable(),
+  topicTag: z.string().trim().max(80).optional().nullable(),
+  tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
+  isShared: z.boolean().optional(),
+});
+
+export const matrixRowSchema = z.object({
+  subject: z.nativeEnum(WorksheetSubject).optional(),
+  type: z.nativeEnum(FieldType).optional(),
+  topicTag: z.string().trim().max(80).optional(),
+  skillTag: z.nativeEnum(SkillTag).optional(),
+  level: z.string().trim().max(60).optional(),
+  difficultyMin: z.number().int().min(1).max(5).optional(),
+  difficultyMax: z.number().int().min(1).max(5).optional(),
+  tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
+  count: z.number().int().min(1).max(100),
+  points: z.number().min(0.25).max(100).optional(),
+});
+
+export const generateWorksheetFromMatrixSchema = z.object({
+  title: z.string().trim().min(2, "Tiêu đề tối thiểu 2 ký tự").max(200),
+  subject: z.nativeEnum(WorksheetSubject).default("GENERAL"),
+  instructions: z.string().trim().max(3000).optional().nullable(),
+  includeShared: z.boolean().optional().default(true),
+  preview: z.boolean().optional().default(false),
+  rows: z.array(matrixRowSchema).min(1).max(30),
+});
+
+export const createExamSessionSchema = z.object({
+  title: z.string().trim().min(2, "Tên kỳ thi tối thiểu 2 ký tự").max(200),
+  worksheetId: z.string().trim().min(1),
+  classIds: z.array(z.string().trim().min(1)).min(1, "Vui lòng chọn ít nhất 1 lớp"),
+  openAt: z.string().datetime().optional().nullable().or(z.literal("")),
+  dueAt: z.string().datetime().optional().nullable().or(z.literal("")),
+  timeLimitMin: z.number().int().min(1).max(600).optional().nullable(),
+  maxAttempts: z.number().int().min(1).max(20).nullable().optional().default(1),
+  variantCount: z.number().int().min(1).max(24).optional().default(4),
+  showResult: z.nativeEnum(ShowResultMode).optional().default("AFTER_DUE"),
+  showAnswerKey: z.boolean().optional().default(false),
+  allowLate: z.boolean().optional().default(false),
+  proctorMode: z.nativeEnum(ProctorMode).optional().default("MONITOR"),
+  violationAction: z.nativeEnum(ViolationAction).optional().default("WARN"),
+  maxViolations: z.number().int().min(1).max(20).optional().default(3),
+  requireFullscreen: z.boolean().optional().default(false),
+  blockCopyPaste: z.boolean().optional().default(true),
+  requireCamera: z.boolean().optional().default(false),
+  cameraEnforce: z.boolean().optional().default(false),
+  cameraSnapshots: z.boolean().optional().default(true),
+  requireMicMonitor: z.boolean().optional().default(false),
+  scoreScale: z.nativeEnum(ScoreScale).optional().default("SCALE_10"),
+  weight: z.number().min(0.5).max(10).optional().default(2),
 });
