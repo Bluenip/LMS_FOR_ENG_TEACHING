@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { AdminTotpSection } from "@/components/accounts/AdminTotpSection";
+import { NotificationPreferencesSection } from "@/components/accounts/NotificationPreferencesSection";
 
 export function AccountClient({
   initialUser,
@@ -365,6 +366,8 @@ export function AccountClient({
             </div>
           </form>
         </section>
+
+        <NotificationPreferencesSection />
 
         {me.role === "ADMIN" && (
           <AdminTotpSection

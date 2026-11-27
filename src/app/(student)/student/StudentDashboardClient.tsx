@@ -6,13 +6,17 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   ArrowRight,
+  Award,
   BookOpen,
   CheckCircle2,
   Clock,
   Copy,
+  Flame,
   KeyRound,
+  Layers,
   Lock,
   PlusCircle,
+  RotateCcw,
   ShieldAlert,
   Trophy,
 } from "lucide-react";
@@ -68,14 +72,28 @@ interface StudentDashboardProps {
       submittedAt: string | null;
     } | null;
   }>;
+  gamification?: {
+    enabled: boolean;
+    streak: {
+      currentStreak: number;
+      longestStreak: number;
+      lastActivityDate: string | null;
+    } | null;
+    badges: Array<{
+      code: string;
+      earnedAt: string;
+      meta: { nameVi: string; nameEn: string; descVi: string; descEn: string } | null;
+    }>;
+  };
 }
 
 export function StudentDashboardClient({
   studentName,
   classes,
   assignments,
+  gamification,
 }: StudentDashboardProps) {
-  const { m: vi, tr } = useI18n();
+  const { m: vi, tr, locale } = useI18n();
   const router = useRouter();
   const [joinCode, setJoinCode] = useState("");
   const [joining, setJoining] = useState(false);
@@ -164,6 +182,58 @@ export function StudentDashboardClient({
           </form>
         </div>
       </div>
+
+      {/* Gamification Streak & Badges + Quick Study Shortcuts */}
+      {gamification?.enabled && gamification.streak && (
+        <section
+          data-testid="student-gamification-card"
+          className="stitch-card p-5 flex flex-wrap items-center justify-between gap-4 bg-gradient-to-r from-[#EEF2FF] via-white to-orange-50/60 dark:from-indigo-950/50 dark:via-slate-900 dark:to-orange-950/20"
+        >
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-3 rounded-2xl bg-white dark:bg-slate-900 px-4 py-2.5 shadow-sm border border-orange-200 dark:border-orange-900/40">
+              <Flame className="h-7 w-7 text-[#F97316]" />
+              <div>
+                <p className="text-xl font-extrabold text-[#0B1C30] dark:text-slate-100 tabular-nums">
+                  {gamification.streak.currentStreak} {tr("ngày liên tiếp", "day streak")}
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  {tr("Kỷ lục:", "Best:")} {gamification.streak.longestStreak} {tr("ngày", "days")}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              {gamification.badges.length === 0 ? (
+                <span className="text-xs text-slate-500">
+                  {tr("Hoàn thành bài tập đầu tiên để mở khoá huy hiệu!", "Finish your first assignment to unlock badges!")}
+                </span>
+              ) : (
+                gamification.badges.map((b) => (
+                  <Badge key={b.code} variant="indigo" className="gap-1 py-1">
+                    <Award className="h-3.5 w-3.5 text-[#4F46E5]" />
+                    {locale === "en" ? b.meta?.nameEn ?? b.code : b.meta?.nameVi ?? b.code}
+                  </Badge>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" className="min-h-9" asChild>
+              <Link href="/student/flashcards">
+                <Layers className="h-4 w-4 text-[#4F46E5]" />
+                {tr("Học Flashcard", "Flashcards")}
+              </Link>
+            </Button>
+            <Button variant="outline" size="sm" className="min-h-9" asChild>
+              <Link href="/student/mistakes">
+                <RotateCcw className="h-4 w-4 text-[#F97316]" />
+                {tr("Ôn câu sai", "Mistakes")}
+              </Link>
+            </Button>
+          </div>
+        </section>
+      )}
 
       {/* Pending / Upcoming Assignments */}
       <section className="space-y-4">

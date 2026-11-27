@@ -67,7 +67,10 @@ export async function RoleShell({
       break;
     case "parent":
       fallbackName = tr("Phụ huynh", "Parent");
-      links = [{ href: "/parent", label: m.nav.parentOverview, exact: true }];
+      links = [
+        { href: "/parent", label: m.nav.parentOverview, exact: true },
+        { href: "/messages", label: tr("Tin nhắn", "Messages") },
+      ];
       topBanner = (
         <div className="flex items-center justify-center gap-2 bg-[#EFF4FF] px-4 py-1.5 text-center text-xs font-medium text-[#3525CD]">
           <Eye className="h-3.5 w-3.5 shrink-0" />
@@ -81,6 +84,8 @@ export async function RoleShell({
         { href: "/student", label: m.nav.dashboard, exact: true },
         { href: "/student/classes", label: m.nav.classes },
         { href: "/student/schedule", label: tr("Lịch học", "Schedule") },
+        { href: "/student/flashcards", label: tr("Flashcard", "Flashcards") },
+        { href: "/student/mistakes", label: tr("Ôn câu sai", "Mistakes") },
       ];
   }
 

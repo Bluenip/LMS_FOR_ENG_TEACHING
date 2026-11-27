@@ -36,6 +36,21 @@ export async function register() {
     setTimeout(runDueReminders, 5 * 60 * 1000).unref();
     setInterval(runDueReminders, 60 * 60 * 1000).unref();
 
+    // Phase 24: Sunday 19:00 Asia/Ho_Chi_Minh weekly parent reports (checked every 30 min)
+    const runWeeklyReports = async () => {
+      try {
+        const { runWeeklyParentReports } = await import("./server/weeklyReportService");
+        await runWeeklyParentReports();
+      } catch (err) {
+        console.error(
+          "[WeeklyReport] Scheduled check failed:",
+          err instanceof Error ? err.message : "unknown"
+        );
+      }
+    };
+    setTimeout(runWeeklyReports, 6 * 60 * 1000).unref();
+    setInterval(runWeeklyReports, 30 * 60 * 1000).unref();
+
     if (!process.env.GOOGLE_CLIENT_ID?.trim()) return;
 
     const pruneMinutes = Number(process.env.DRIVE_PRUNE_INTERVAL_MINUTES ?? 60);

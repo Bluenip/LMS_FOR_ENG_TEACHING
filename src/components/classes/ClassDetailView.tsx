@@ -92,6 +92,7 @@ export interface ClassDetailData {
   joinCode: string;
   archived: boolean;
   requireApproval: boolean;
+  enableGamification?: boolean;
   teacher: { id: string; name: string; email: string };
   classTeachers?: ClassTeacherItem[];
   enrollments: Array<{
@@ -299,6 +300,9 @@ export function ClassDetailView({
   const [editName, setEditName] = useState(cls.name);
   const [editDesc, setEditDesc] = useState(cls.description ?? "");
   const [editRequireApproval, setEditRequireApproval] = useState(cls.requireApproval);
+  const [editEnableGamification, setEditEnableGamification] = useState(
+    cls.enableGamification ?? true
+  );
   const [importingExcel, setImportingExcel] = useState(false);
   const [generatedParentCode, setGeneratedParentCode] = useState<{
     studentName: string;
@@ -447,6 +451,7 @@ export function ClassDetailView({
         name: editName,
         description: editDesc,
         requireApproval: editRequireApproval,
+        enableGamification: editEnableGamification,
       }),
     });
     if (res.ok) {
@@ -1649,6 +1654,21 @@ export function ClassDetailView({
                 <Switch
                   checked={editRequireApproval}
                   onCheckedChange={setEditRequireApproval}
+                  disabled={!canEditClass}
+                />
+              </label>
+              <label className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+                <div>
+                  <p className="text-sm font-semibold text-[#0B1C30] dark:text-slate-100">
+                    {tr("Chuỗi học tập & Huy hiệu (Gamification)", "Study Streak & Badges (Gamification)")}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {tr("Hiển thị chuỗi ngày học và huy hiệu khích lệ học sinh trên bảng điều khiển.", "Display study streak and motivational badges on the student dashboard.")}
+                  </p>
+                </div>
+                <Switch
+                  checked={editEnableGamification}
+                  onCheckedChange={setEditEnableGamification}
                   disabled={!canEditClass}
                 />
               </label>

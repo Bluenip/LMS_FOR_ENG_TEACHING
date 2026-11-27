@@ -5,6 +5,7 @@ import {
   describeProctorRuleSummary,
   listStudentAssignments,
 } from "@/server/assignmentService";
+import { getStudentGamificationSummary } from "@/server/gamificationService";
 import { StudentDashboardClient } from "./StudentDashboardClient";
 import { getI18n } from "@/lib/i18n/server";
 
@@ -13,9 +14,10 @@ export default async function StudentDashboardPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const [classes, assignments] = await Promise.all([
+  const [classes, assignments, gamification] = await Promise.all([
     listStudentClasses(session.user.id),
     listStudentAssignments(session.user.id),
+    getStudentGamificationSummary(session.user.id),
   ]);
 
   const serializedClasses = classes.map((c) => ({
@@ -66,6 +68,7 @@ export default async function StudentDashboardPage() {
       studentName={session.user.name ?? tr("Học sinh", "Student")}
       classes={serializedClasses}
       assignments={serializedAssignments}
+      gamification={gamification}
     />
   );
 }

@@ -285,6 +285,16 @@ async function main() {
   await prisma.assignment.updateMany({ data: { unlockAfterAssignmentId: null } });
   await prisma.assignment.deleteMany();
   await prisma.examSession.deleteMany();
+  await prisma.weeklyReportSent.deleteMany();
+  await prisma.parentMessage.deleteMany();
+  await prisma.parentThread.deleteMany();
+  await prisma.flashcardReview.deleteMany();
+  await prisma.flashcard.deleteMany();
+  await prisma.flashcardDeck.deleteMany();
+  await prisma.studentBadge.deleteMany();
+  await prisma.studentStreak.deleteMany();
+  await prisma.pushSubscription.deleteMany();
+  await prisma.notificationPreference.deleteMany();
   await prisma.attendanceRecord.deleteMany();
   await prisma.classSession.deleteMany();
   await prisma.classScheduleRule.deleteMany();
@@ -2158,6 +2168,137 @@ async function main() {
         studentId: students[5]!.id,
         status: "PRESENT",
         markedById: teacher1.id,
+      },
+    ],
+  });
+
+  // Phase 24 seed: Flashcard deck (10 vocab cards), streak/badges for student1, and 1 ParentThread
+  const { getVnDayKey } = await import("../src/lib/streak");
+  const todayVnKey = getVnDayKey(new Date());
+
+  await prisma.flashcardDeck.create({
+    data: {
+      ownerId: teacher1.id,
+      classId: class1.id,
+      title: "Từ vựng Unit 7 — Artificial Intelligence (10 thẻ)",
+      description: "Bộ từ vựng trọng tâm Unit 7 ôn tập theo thuật toán lặp ngắt quãng SM-2.",
+      cards: {
+        create: [
+          {
+            front: "artificial intelligence",
+            back: "trí tuệ nhân tạo",
+            phonetic: "/ˌɑː.tɪˈfɪʃ.əl ɪnˈtel.ɪ.dʒəns/",
+            example: "Artificial intelligence is transforming modern education.",
+            order: 0,
+          },
+          {
+            front: "capable",
+            back: "có khả năng, đủ năng lực",
+            phonetic: "/ˈkeɪ.pə.bəl/",
+            example: "Robots are capable of performing repetitive tasks.",
+            order: 1,
+          },
+          {
+            front: "interact",
+            back: "tương tác",
+            phonetic: "/ˌɪn.təˈrækt/",
+            example: "Students interact with the tutor in real time.",
+            order: 2,
+          },
+          {
+            front: "virtual",
+            back: "ảo, mô phỏng",
+            phonetic: "/ˈvɜː.tʃu.əl/",
+            example: "A virtual classroom helps remote learners collaborate.",
+            order: 3,
+          },
+          {
+            front: "analyse",
+            back: "phân tích",
+            phonetic: "/ˈæn.ə.laɪz/",
+            example: "Teachers analyse assessment data every week.",
+            order: 4,
+          },
+          {
+            front: "personalized",
+            back: "cá nhân hoá",
+            phonetic: "/ˈpɜː.sən.ə.laɪzd/",
+            example: "Personalized study plans boost retention.",
+            order: 5,
+          },
+          {
+            front: "activate",
+            back: "kích hoạt",
+            phonetic: "/ˈæk.tɪ.veɪt/",
+            example: "Tap the button to activate voice recognition.",
+            order: 6,
+          },
+          {
+            front: "autonomous",
+            back: "tự động, tự chủ",
+            phonetic: "/ɔːˈtɒn.ə.məs/",
+            example: "Autonomous vehicles rely on sensor fusion.",
+            order: 7,
+          },
+          {
+            front: "recognition",
+            back: "sự nhận dạng, ghi nhận",
+            phonetic: "/ˌrek.əɡˈnɪʃ.ən/",
+            example: "Speech recognition helps check pronunciation.",
+            order: 8,
+          },
+          {
+            front: "cybersecurity",
+            back: "an ninh mạng",
+            phonetic: "/ˌsaɪ.bə.sɪˈkjʊə.rə.ti/",
+            example: "Strong passwords improve school cybersecurity.",
+            order: 9,
+          },
+        ],
+      },
+    },
+  });
+
+  await prisma.studentStreak.create({
+    data: {
+      userId: students[0]!.id,
+      currentStreak: 4,
+      longestStreak: 6,
+      lastActivityDate: todayVnKey,
+    },
+  });
+
+  await prisma.studentBadge.createMany({
+    data: [
+      { userId: students[0]!.id, code: "FIRST_SUBMIT" },
+      { userId: students[0]!.id, code: "PERFECT_10" },
+    ],
+  });
+
+  const p24Thread = await prisma.parentThread.create({
+    data: {
+      classId: class1.id,
+      parentId: parent1.id,
+      studentId: students[0]!.id,
+      lastMessageAt: new Date(Date.now() - 3600_000),
+    },
+  });
+
+  await prisma.parentMessage.createMany({
+    data: [
+      {
+        threadId: p24Thread.id,
+        senderId: teacher1.id,
+        content: "Chào phụ huynh bé Minh, tuần này con học phần Ngữ pháp rất tập trung ạ.",
+        readAt: new Date(Date.now() - 3000_000),
+        createdAt: new Date(Date.now() - 3600_000),
+      },
+      {
+        threadId: p24Thread.id,
+        senderId: parent1.id,
+        content: "Cảm ơn cô đã quan tâm và gửi nhận xét cho gia đình ạ.",
+        readAt: null,
+        createdAt: new Date(Date.now() - 1800_000),
       },
     ],
   });

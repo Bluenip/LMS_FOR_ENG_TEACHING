@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { AppError } from "@/lib/errors";
 
-export type SecretPurpose = "totp" | "export";
+export type SecretPurpose = "totp" | "export" | "push";
 
 function resolveKeySource(): { tag: "totp" | "auth"; rawSecret: string } {
   const totpKey = process.env.TOTP_ENCRYPTION_KEY?.trim() ?? "";

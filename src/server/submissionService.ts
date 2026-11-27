@@ -25,6 +25,7 @@ import {
 import { STUDENT_FIELD_SELECT } from "./worksheetService";
 import { createNotificationsBulk } from "./notificationService";
 import { invalidateLeaderboardCache } from "./leaderboardService";
+import { recordSubmissionGamification } from "./gamificationService";
 import { verifySebHeaderIfNeeded } from "./assignmentService";
 import { pickExamVariantForNewSubmission } from "./examVariantService";
 import { publishAssignmentLive } from "@/lib/proctor-bus";
@@ -1111,6 +1112,14 @@ export async function finalizeSubmissionInternal(
   }
 
   invalidateLeaderboardCache(submission.assignment.classId);
+
+  await recordSubmissionGamification(submission.studentId, {
+    scoreRatio:
+      !graded.hasManualFields && graded.maxScore > 0
+        ? (totalScore ?? 0) / graded.maxScore
+        : null,
+    submittedAt: effectiveSubmittedAt,
+  }).catch(() => undefined);
 
   publishAssignmentLive({
     kind: "SUBMISSION_SUBMITTED",

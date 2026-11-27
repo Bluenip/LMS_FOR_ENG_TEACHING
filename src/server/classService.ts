@@ -130,6 +130,7 @@ export async function updateClass(
     name?: string;
     description?: string | null;
     requireApproval?: boolean;
+    enableGamification?: boolean;
     archived?: boolean;
   },
   actorId?: string
@@ -148,6 +149,9 @@ export async function updateClass(
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.description !== undefined ? { description: input.description } : {}),
       ...(input.requireApproval !== undefined ? { requireApproval: input.requireApproval } : {}),
+      ...(input.enableGamification !== undefined
+        ? { enableGamification: input.enableGamification }
+        : {}),
       ...(input.archived !== undefined ? { archived: input.archived } : {}),
     },
   });

@@ -12,6 +12,7 @@ import {
   CheckCheck,
   LogOut,
   Menu,
+  MessageSquare,
   X,
 } from "lucide-react";
 import type { Role } from "@prisma/client";
@@ -114,6 +115,16 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
   const unreadCount = notifData?.unreadCount ?? 0;
   const items = notifData?.items ?? [];
 
+  const canMessageParents =
+    user.role === "TEACHER" || user.role === "PARENT" || user.role === "ADMIN";
+  const { data: msgUnreadData } = useQuery<{ totalUnread?: number }>({
+    queryKey: ["messages-unread"],
+    enabled: canMessageParents,
+    queryFn: () => apiFetchJson<{ totalUnread?: number }>("/api/messages/threads"),
+    refetchInterval: 30_000,
+  });
+  const totalUnreadMessages = msgUnreadData?.totalUnread ?? 0;
+
   const isActive = (link: NavLinkItem) => {
     if (link.activePrefixes?.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
       return true;
@@ -174,6 +185,24 @@ export function AppNavbar({ appName, user, links, topBanner }: AppNavbarProps) {
         {/* Right actions */}
         <div className="flex shrink-0 items-center gap-1 sm:gap-3">
           <ThemeLangToggle className="hidden sm:flex" />
+          {canMessageParents && (
+            <Link
+              href="/messages"
+              data-testid="navbar-messages-link"
+              aria-label={tr("Tin nhắn", "Messages")}
+              className="relative flex h-9 w-9 items-center justify-center rounded-xl text-[#464555] transition hover:bg-[#EFF4FF] hover:text-[#3525CD]"
+            >
+              <MessageSquare className="h-5 w-5" />
+              {totalUnreadMessages > 0 && (
+                <span
+                  data-testid="navbar-messages-badge"
+                  className="absolute right-1 top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#4F46E5] px-1 text-[10px] font-bold text-white"
+                >
+                  {totalUnreadMessages > 9 ? "9+" : totalUnreadMessages}
+                </span>
+              )}
+            </Link>
+          )}
           {/* Notification Bell */}
           <div className="relative">
             <button

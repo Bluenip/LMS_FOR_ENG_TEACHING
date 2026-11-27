@@ -198,6 +198,26 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
     "Selected lesson or assignment does not belong to this class.",
   "Danh sách điểm danh không được trống.": "Attendance records cannot be empty.",
 
+  // Flashcards, Parent Messaging & Push Notifications (Phase 24)
+  "Mặt trước thẻ không được để trống": "Flashcard front text cannot be empty.",
+  "Mặt sau thẻ không được để trống": "Flashcard back text cannot be empty.",
+  "Tên bộ thẻ tối thiểu 2 ký tự": "Deck title must be at least 2 characters.",
+  "Bộ thẻ cần ít nhất 1 thẻ": "A flashcard deck must contain at least 1 card.",
+  "Không tìm thấy bộ thẻ.": "Flashcard deck not found.",
+  "Không tìm thấy thẻ trong bộ thẻ này.": "Flashcard not found in this deck.",
+  "Bạn không có quyền truy cập bộ thẻ này.": "You do not have access to this flashcard deck.",
+  "Không trích xuất được thẻ nào từ phiếu bài tập này.":
+    "No vocabulary or text questions could be extracted into flashcards from this worksheet.",
+  "Chỉ giáo viên mới tạo được bộ thẻ gắn cho cả lớp.":
+    "Only teachers can assign a flashcard deck to a class.",
+  "Nội dung tin nhắn không được để trống": "Message content cannot be empty.",
+  "Không tìm thấy cuộc hội thoại.": "Conversation thread not found.",
+  "Bạn không có quyền tham gia cuộc hội thoại này.":
+    "You do not have permission to access this conversation.",
+  "Không tìm thấy phụ huynh đã liên kết với học sinh này.":
+    "No verified parent link found for this student.",
+  "Máy chủ chưa cấu hình VAPID Web Push.": "Web Push VAPID keys are not configured on the server.",
+
   // Parent & admin
   "Chỉ học sinh xem được danh sách mã liên kết của mình.":
     "Only students can view their own parent invite codes.",
@@ -568,6 +588,14 @@ const NOTIFICATION_PATTERNS: Array<[RegExp, (...args: string[]) => string]> = [
   [
     /^Điểm danh: (.+) vắng có phép$/,
     (_m, name) => `Attendance: ${name} marked excused`,
+  ],
+  [
+    /^Tin nhắn mới từ (.+)$/,
+    (_m, name) => `New message from ${name}`,
+  ],
+  [
+    /^Báo cáo tuần \((.+)\): (.+)$/,
+    (_m, week, name) => `Weekly report (${week}): ${name}`,
   ],
 ];
 

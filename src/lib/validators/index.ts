@@ -130,6 +130,7 @@ export const updateClassSchema = z.object({
   name: z.string().trim().min(2).max(120).optional(),
   description: z.string().trim().max(1000).optional().nullable(),
   requireApproval: z.boolean().optional(),
+  enableGamification: z.boolean().optional(),
   archived: z.boolean().optional(),
 });
 
@@ -827,4 +828,56 @@ export const saveAttendanceSchema = z.object({
     )
     .min(1, "Danh sách điểm danh không được trống.")
     .max(500),
+});
+
+// ===== Phase 24: Flashcards SRS, Parent Messaging & Multi-channel Notifications =====
+export const createFlashcardInputSchema = z.object({
+  front: z.string().trim().min(1, "Mặt trước thẻ không được để trống").max(500),
+  back: z.string().trim().min(1, "Mặt sau thẻ không được để trống").max(1000),
+  phonetic: z.string().trim().max(120).optional().nullable(),
+  example: z.string().trim().max(600).optional().nullable(),
+});
+
+export const createFlashcardDeckSchema = z.object({
+  title: z.string().trim().min(2, "Tên bộ thẻ tối thiểu 2 ký tự").max(200),
+  description: z.string().trim().max(1000).optional().nullable(),
+  classId: z.string().trim().min(1).optional().nullable(),
+  cards: z.array(createFlashcardInputSchema).min(1, "Bộ thẻ cần ít nhất 1 thẻ").max(300),
+});
+
+export const extractFlashcardsSchema = z.object({
+  worksheetId: z.string().trim().min(1),
+  classId: z.string().trim().min(1).optional().nullable(),
+  title: z.string().trim().min(2).max(200).optional(),
+});
+
+export const submitFlashcardReviewSchema = z.object({
+  flashcardId: z.string().trim().min(1),
+  quality: z.union([z.literal(0), z.literal(3), z.literal(4), z.literal(5)]),
+});
+
+export const openParentThreadSchema = z.object({
+  classId: z.string().trim().min(1),
+  studentId: z.string().trim().min(1),
+  parentId: z.string().trim().min(1).optional(),
+});
+
+export const sendParentMessageSchema = z.object({
+  content: z.string().trim().min(1, "Nội dung tin nhắn không được để trống").max(2000),
+});
+
+export const updateNotificationPreferenceSchema = z.object({
+  emailEnabled: z.boolean().optional(),
+  emailAssignmentNew: z.boolean().optional(),
+  emailDueReminder: z.boolean().optional(),
+  emailWeeklyReport: z.boolean().optional(),
+  pushEnabled: z.boolean().optional(),
+});
+
+export const pushSubscribeSchema = z.object({
+  endpoint: z.string().trim().url().max(1000),
+  keys: z.object({
+    p256dh: z.string().trim().min(10).max(500),
+    auth: z.string().trim().min(6).max(300),
+  }),
 });
