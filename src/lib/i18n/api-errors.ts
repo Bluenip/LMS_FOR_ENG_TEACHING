@@ -384,6 +384,18 @@ const EXACT_EN_MESSAGES: Record<string, string> = {
   "Vui lòng nhập tên mẫu": "Please enter a preset name",
   "Vui lòng nhập câu hỏi": "Please enter the question",
 
+  // Phase 28: OMR bubble sheets
+  "Không tìm thấy bài chấm phiếu tô.": "Bubble-sheet exam not found.",
+  "Ảnh phiếu tối đa 8MB.": "The sheet photo must be 8MB or smaller.",
+  "Chỉ nhận ảnh phiếu JPG hoặc PNG.": "Only JPG or PNG sheet photos are accepted.",
+  "Không tìm thấy phiếu đã quét.": "Scanned sheet not found.",
+  "Chưa có phiếu nào đã duyệt để đẩy điểm.": "No reviewed sheets to send to the gradebook yet.",
+  "Thiếu ảnh phiếu hoặc dữ liệu ô tô.": "Missing the sheet photo or bubble data.",
+  "Mã đề gồm 3 chữ số.": "The exam code has 3 digits.",
+  "Tối đa 30 mã đề.": "At most 30 exam codes.",
+  "Đáp án trả lời ngắn chỉ gồm số, dấu - và dấu phẩy (tối đa 4 ký tự).": "Short answers may only contain digits, '-' and ',' (max 4 characters).",
+  "Vui lòng nhập tiêu đề": "Please enter a title",
+
   // Submission & proctoring
   "Không tìm thấy bài làm.": "Submission not found.",
   "Không tìm thấy bài làm trong ca thi này.": "Submission not found in this exam session.",

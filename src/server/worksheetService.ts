@@ -8,6 +8,7 @@ import { detectImageMeta, normalizeImagePagePt } from "@/lib/image-meta";
 import { regradeWorksheetSubmissions } from "./regradeService";
 import { enqueueDriveTrashForKeys, getStorageLocationsForKeys } from "./driveService";
 import { logAudit } from "@/server/auditService";
+import { authorizeOmrFile } from "./omrService";
 
 async function countWorksheetSubmissions(worksheetId: string): Promise<number> {
   return prisma.submission.count({
@@ -643,6 +644,10 @@ export async function authorizeFileDownload(
   if (role === "ADMIN") return true;
   // profile pictures are visible to every signed-in user (class rosters, navbar, comments)
   if (/^avatars\/[A-Za-z0-9_-]+\/[0-9a-f-]+\.(jpg|png|webp)$/.test(fileKey)) return true;
+  // Phase 28: scanned paper answer sheets (class teachers, owning student, verified parents)
+  if (/^omr\/[A-Za-z0-9_-]+\/[0-9a-f-]+\.(jpg|png)$/.test(fileKey)) {
+    return authorizeOmrFile({ id: userId, role }, fileKey);
+  }
 
   // Check if worksheet PDF
   const worksheet = await prisma.worksheet.findFirst({

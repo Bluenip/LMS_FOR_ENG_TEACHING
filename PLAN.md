@@ -1125,3 +1125,20 @@ _(Agent ghi vào đây sau mỗi Phase: đã làm gì, còn thiếu gì, quyết
   - Chế độ GV điều khiển: kết quả Đúng/Sai chỉ hiện khi đóng câu (tránh HS báo đáp án cho nhau khi câu còn mở); chế độ HS tự làm thì phản hồi ngay.
   - Màn GV tự đóng câu khi hết giờ hoặc khi mọi HS đã trả lời.
 - **Kết quả kiểm tra (kiểm tra nhẹ theo phase, bộ đầy đủ chạy 1 lần sau Phase 32):** `pnpm db:seed` pass (x2); `pnpm lint` 0 lỗi / 0 cảnh báo; `pnpm typecheck` 0 lỗi; `pnpm test` 43/43 files (227/227 tests) pass; E2E Phase 27 2/2 pass. Chưa chạy: toàn bộ `pnpm test:e2e`, `pnpm build:check`. Nhánh `phase-27-32`.
+
+### Phase 28 — Quét & Chấm Phiếu Tô Trắc Nghiệm Giấy bằng Camera (Đã hoàn tất, chờ merge cùng Phase 29–32)
+- **Database & Migration:** `20261127045513_phase28_omr_paper_scanner` (chỉ thêm): enum `OmrSheetTemplate`, bảng `OmrExamSheet`, `OmrScanResult`.
+- **Đã làm:**
+  - **Pure libs (`src/lib/omr/*`, chạy được cả trình duyệt lẫn Node):** `templates.ts` (4 mẫu MC_20/40/50 và THPT_2025 = 12 TN + 4 Đ/S × 4 ý + 6 trả lời ngắn × 4 ký tự, vùng SBD 6 số + Mã đề 3 số, toạ độ trong khung 1000×1414 có tâm 4 ô vuông định vị ở 4 góc), `perspective-warp.ts` (`findFiducials` bằng thành phần liên thông, `solveHomography8pt`, nắn phẳng song tuyến), `bubble-reader.ts` (ngưỡng thích nghi theo từng nhóm ô, OK / mờ / tô 2 ô / trống), `grader.ts` (đáp án theo mã đề, Đ/S chấm luỹ tiến THPT 2025 qua `gradeField`, trả lời ngắn so số "1,5" = "1.50"), `pdf-sheet-generator.ts` (PDF A4 Noto Sans, tuỳ chọn in sẵn tên + tô sẵn SBD từng HS), `synthetic.ts` + `png.ts` (ảnh phiếu tổng hợp cho seed/test), `sbd.ts`.
+  - **`omrService.ts`:** tạo bài chấm từ phiếu bài tập / bài đã giao (đọc đáp án theo từng `ExamVariant` Phase 22, kể cả đảo câu/đảo phương án) hoặc nhập tay; xuất PDF; lưu phiếu quét (magic bytes JPG/PNG ≤ 8MB, key `omr/{sheetId}/{uuid}`, **chấm lại trên server**, tự ghép HS theo SBD); sửa ô / gán HS; đẩy điểm vào `OfflineGradeColumn` (tạo 1 lần, các lần sau cập nhật) + thông báo HS & phụ huynh đã xác minh (chỉ lần xác nhận đầu); `authorizeFileDownload` cho `omr/*`.
+  - **API:** `/api/omr/sheets` (GET/POST), `/[id]` (GET/PATCH/DELETE), `/[id]/pdf`, `/[id]/scans` (GET/POST multipart), `/[id]/sync-gradebook`, `/api/omr/scans/[scanId]` (GET/PATCH/DELETE), `/api/omr/my-scans`.
+  - **UI:** `/teacher/classes/[id]/omr` (danh sách + tạo), `/teacher/omr/[sheetId]` (đáp án theo mã đề, tải PDF, danh sách phiếu + sửa, tỉ lệ đúng từng câu, SBD của lớp, nút **Đẩy điểm vào Sổ điểm lớp**), `/teacher/omr/[sheetId]/scan` (camera sau tự bắt khi thấy 4 góc + chọn ảnh, vòng xanh/đỏ/vàng đè lên ảnh đã nắn, chạm 1 lần để sửa); nút **Chấm phiếu giấy** trong trang lớp; HS xem lại phiếu ở tab Bài tập, phụ huynh bấm **Xem phiếu tô** ở mục điểm kiểm tra giấy.
+  - **Seed & Kiểm thử:** 1 bài MC_20 cho 12A1 + 2 phiếu quét (PNG tổng hợp qua `zlib`); `tests/unit/phase28-omr.test.ts`, `tests/integration/phase28-omr.test.ts`, `tests/e2e/phase28-omr.spec.ts`.
+- **Quyết định khác plan:**
+  - Không thêm cột SBD: số báo danh 6 số được suy ra cố định từ `classId + studentId` (`studentSbd`), in trên phiếu in sẵn và hiện ở trang bài chấm; nếu 2 HS trùng SBD thì không tự ghép.
+  - Ảnh lưu là ảnh đã nắn phẳng (do trình duyệt xử lý), nên vòng tròn chồng lên đúng toạ độ mẫu. Server nhận kết quả đọc từng nhóm ô, tự dựng lại đáp án và tự chấm, không dùng điểm do client gửi.
+  - Đo độ tô theo độ đậm liên tục thay vì ngưỡng nhị phân, để nét chì nhạt rơi vào vùng "mờ cần duyệt" thay vì bị coi là trống.
+  - Phiếu MC: 10 điểm chia đều cho số câu thật sự có đáp án (không phải tổng số ô trên mẫu).
+  - Đã kiểm thêm thủ công: phiếu PDF thật được raster hoá (110 dpi), xoay 7° trên nền tối → đọc đúng SBD, không ô nào cần duyệt.
+  - Sửa luôn chỗ chờ không chặt trong E2E Phase 27 (chờ đúng thông báo thành công thay vì chữ trùng nhãn nút).
+- **Kết quả kiểm tra (bộ nhẹ):** `pnpm db:seed` pass (x2); `pnpm lint` 0 lỗi / 0 cảnh báo; `pnpm typecheck` 0 lỗi; `pnpm test` 45/45 files (236/236 tests) pass; E2E Phase 28 1/1 và Phase 27 2/2 pass. Chưa chạy: toàn bộ `pnpm test:e2e`, `pnpm build:check`. Nhánh `phase-27-32`.

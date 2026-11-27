@@ -46,6 +46,7 @@ import {
   UserCheck,
   UserMinus,
   Users,
+  ScanLine,
   Star,
   Zap,
 } from "lucide-react";
@@ -77,6 +78,7 @@ import { ClassGradebookTab } from "@/components/classes/ClassGradebookTab";
 import { ClassScheduleTab } from "@/components/classes/ClassScheduleTab";
 import { ClassBehaviorTab } from "@/components/classes/ClassBehaviorTab";
 import { ExitTicketDialog } from "@/components/live-quiz/ExitTicketDialog";
+import { MyOmrScansCard } from "@/components/omr/MyOmrScansCard";
 import { StudentProgressDrawer } from "@/components/classes/StudentProgressDrawer";
 import {
   ClassTeachersSection,
@@ -739,6 +741,15 @@ export function ClassDetailView({
             )}
 
             {isTeacher && (
+              <Button variant="secondary" asChild>
+                <Link href={`/teacher/classes/${cls.id}/omr`} data-testid="class-omr-link">
+                  <ScanLine className="h-4 w-4 text-[#4F46E5]" />
+                  {tr("Chấm phiếu giấy", "Paper sheets")}
+                </Link>
+              </Button>
+            )}
+
+            {isTeacher && (
               <Button
                 type="button"
                 variant="secondary"
@@ -1004,6 +1015,7 @@ export function ClassDetailView({
 
         {/* TAB 2: ASSIGNMENTS */}
         <TabsContent value="assignments" className="space-y-3">
+          {!isTeacher && <MyOmrScansCard classId={cls.id} />}
           {isTeacher && canEditClass && (
             <div className="stitch-card flex flex-wrap items-center justify-between gap-3 p-4">
               <div>

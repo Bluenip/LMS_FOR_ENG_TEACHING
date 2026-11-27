@@ -74,7 +74,7 @@ test.describe.serial("Phase 27: Live Quiz, Exit Ticket & behavior points", () =>
 
     await tPage.getByTestId("live-export-open").click();
     await tPage.getByTestId("live-export-confirm").click();
-    await expect(tPage.getByText(/Sổ điểm|gradebook/).first()).toBeVisible();
+    await expect(tPage.getByText(/Đã chuyển điểm của 1 học sinh|Exported 1 students/)).toBeVisible();
 
     await sCtx.close();
     await tCtx.close();

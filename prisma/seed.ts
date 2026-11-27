@@ -5,6 +5,12 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { prisma } from "../src/lib/db";
 import { getStorageProvider } from "../src/lib/storage";
 import { parsePdfMetadata } from "../src/lib/pdf/server-pdf";
+import { readBubbles } from "../src/lib/omr/bubble-reader";
+import { gradeOmrAnswers } from "../src/lib/omr/grader";
+import { warpToCanonical } from "../src/lib/omr/perspective-warp";
+import { encodeGrayPng } from "../src/lib/omr/png";
+import { studentSbd } from "../src/lib/omr/sbd";
+import { idMarks, marksFromValues, renderSyntheticSheet } from "../src/lib/omr/synthetic";
 
 async function generateMixedOrientationWorksheetPdf(): Promise<Buffer> {
   const doc = await PDFDocument.create();
@@ -279,6 +285,8 @@ async function main() {
   await prisma.audioPlay.deleteMany();
   await prisma.passwordResetToken.deleteMany();
   await prisma.loginSessionLog.deleteMany();
+  await prisma.omrScanResult.deleteMany();
+  await prisma.omrExamSheet.deleteMany();
   await prisma.liveQuizAnswer.deleteMany();
   await prisma.liveQuizParticipant.deleteMany();
   await prisma.liveQuizSession.deleteMany();
@@ -2707,6 +2715,55 @@ async function main() {
         joinTokenHash: `seed-${stuIdx}-${liveSession.id}`,
         totalScore,
         correctCount,
+      },
+    });
+  }
+
+  // Phase 28 seed: one MC_20 bubble-sheet exam for 12A1 with 2 scanned sheets (synthetic PNGs)
+  const omrKeyString = "ABCDABCDABCDABCDABCD";
+  const omrKey = { default: { mc: Object.fromEntries(omrKeyString.split("").map((c, i) => [String(i + 1), c])) } };
+  const omrPoints = { mcPoints: 0.5, tfPoints: 0, saPoints: 0 };
+  const omrSheet = await prisma.omrExamSheet.create({
+    data: {
+      ownerId: teacher1.id,
+      classId: class1.id,
+      title: "Kiểm tra 15 phút trên giấy (OMR mẫu)",
+      template: "MC_20",
+      answerKeyByVariant: omrKey,
+      pointsConfig: omrPoints,
+    },
+  });
+  const omrStorage = getStorageProvider();
+  const omrSamples: Array<{ stuIdx: number; answers: string; faintQ?: number; confirmed: boolean }> = [
+    { stuIdx: 0, answers: "ABCDABCDABCDABCDABCA", confirmed: true },
+    { stuIdx: 1, answers: "ABCDDBCDABCDAACDABCD", faintQ: 7, confirmed: false },
+  ];
+  for (const sample of omrSamples) {
+    const stu = students[sample.stuIdx]!;
+    const values: Record<string, string> = { ...idMarks(studentSbd(class1.id, stu.id)) };
+    sample.answers.split("").forEach((a, i) => (values[`mc:${i + 1}`] = a));
+    const marks = marksFromValues(values);
+    if (sample.faintQ) marks[`mc:${sample.faintQ}`] = { value: sample.answers[sample.faintQ - 1]!, ink: 185 };
+    const flat = warpToCanonical(renderSyntheticSheet({ template: "MC_20", marks })).gray;
+    const read = readBubbles(flat, "MC_20");
+    const grade = gradeOmrAnswers("MC_20", read.answers, omrKey, omrPoints);
+    const key = `omr/${omrSheet.id}/${crypto.randomUUID()}.png`;
+    await omrStorage.put(key, encodeGrayPng(flat), "image/png");
+    await prisma.omrScanResult.create({
+      data: {
+        sheetId: omrSheet.id,
+        studentId: stu.id,
+        detectedSbd: read.answers.sbd,
+        variantCode: read.answers.variantCode,
+        scanImageKey: key,
+        rawBubbles: read.readings as unknown as object,
+        resolvedAnswers: read.answers as unknown as object,
+        score: grade.score,
+        maxScore: grade.maxScore,
+        confidence: read.confidence,
+        needsReview: read.needsReview,
+        confirmedAt: sample.confirmed ? new Date() : null,
+        confirmedById: sample.confirmed ? teacher1.id : null,
       },
     });
   }

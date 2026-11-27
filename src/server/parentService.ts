@@ -608,6 +608,22 @@ export async function getChildOverviewForParent(studentId: string, selectedClass
     },
   });
 
+  // Phase 28: confirmed OMR scans linked to these paper-test columns (child's own scans only)
+  const omrScans = await prisma.omrScanResult.findMany({
+    where: {
+      studentId,
+      confirmedAt: { not: null },
+      sheet: { offlineColumnId: { in: offlineColumns.map((c) => c.id) } },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, sheet: { select: { offlineColumnId: true } } },
+  });
+  const omrScanByColumn = new Map<string, string>();
+  for (const s of omrScans) {
+    const col = s.sheet.offlineColumnId;
+    if (col && !omrScanByColumn.has(col)) omrScanByColumn.set(col, s.id);
+  }
+
   const offlineGrades = offlineColumns.map((col) => {
     const childEntry = col.entries.find((e) => e.studentId === studentId);
     const scale10Values = col.entries
@@ -633,6 +649,7 @@ export async function getChildOverviewForParent(studentId: string, selectedClass
       weight: col.weight,
       note: childEntry?.note ?? col.note ?? null,
       classAvg10,
+      omrScanId: omrScanByColumn.get(col.id) ?? null,
     };
   });
 

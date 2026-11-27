@@ -1014,3 +1014,43 @@ export const awardBehaviorPointsSchema = z.object({
   sessionId: z.string().trim().min(1).optional().nullable(),
   presetId: z.string().trim().min(1).optional().nullable(),
 });
+
+// ===== Phase 28: OMR paper bubble sheets =====
+const omrVariantKeySchema = z.object({
+  mc: z.record(z.string().regex(/^\d{1,2}$/), z.enum(["A", "B", "C", "D"])).optional(),
+  tf: z
+    .record(z.string().regex(/^\d$/), z.record(z.enum(["a", "b", "c", "d"]), z.boolean()))
+    .optional(),
+  sa: z.record(z.string().regex(/^\d$/), z.string().regex(/^[-,0-9]{1,4}$/, "Đáp án trả lời ngắn chỉ gồm số, dấu - và dấu phẩy (tối đa 4 ký tự).")).optional(),
+});
+
+export const omrAnswerKeyByVariantSchema = z
+  .record(z.string().regex(/^(default|\d{3})$/, "Mã đề gồm 3 chữ số."), omrVariantKeySchema)
+  .refine((v) => Object.keys(v).length <= 30, "Tối đa 30 mã đề.");
+
+const omrPointsSchema = z.object({
+  mcPoints: z.number().min(0).max(100).optional(),
+  tfPoints: z.number().min(0).max(100).optional(),
+  saPoints: z.number().min(0).max(100).optional(),
+});
+
+export const createOmrSheetSchema = z.object({
+  classId: z.string().trim().min(1),
+  title: z.string().trim().min(1, "Vui lòng nhập tiêu đề").max(200),
+  template: z.enum(["MC_20", "MC_40", "MC_50", "THPT_2025"]),
+  worksheetId: z.string().trim().min(1).optional().nullable(),
+  assignmentId: z.string().trim().min(1).optional().nullable(),
+  answerKeyByVariant: omrAnswerKeyByVariantSchema.optional().nullable(),
+  pointsConfig: omrPointsSchema.optional().nullable(),
+});
+
+export const updateOmrSheetSchema = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+  answerKeyByVariant: omrAnswerKeyByVariantSchema.optional(),
+  pointsConfig: omrPointsSchema.optional(),
+});
+
+export const updateOmrScanSchema = z.object({
+  edits: z.record(z.string().max(20), z.string().max(2).nullable()).optional(),
+  studentId: z.string().trim().min(1).nullable().optional(),
+});

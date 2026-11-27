@@ -219,6 +219,13 @@ enum LiveQuizStatus {
   FINISHED
 }
 
+enum OmrSheetTemplate {
+  MC_20
+  MC_40
+  MC_50
+  THPT_2025
+}
+
 model User {
   id                  String    @id @default(cuid())
   email               String    @unique
@@ -305,6 +312,9 @@ model User {
   liveQuizParticipations     LiveQuizParticipant[]    @relation("LiveQuizParticipantUser")
   behaviorPointsReceived     StudentBehaviorPoint[]   @relation("BehaviorPointStudent")
   behaviorPointsAwarded      StudentBehaviorPoint[]   @relation("BehaviorPointAwardedBy")
+  omrSheetsOwned             OmrExamSheet[]           @relation("OmrSheetOwner")
+  omrScansAsStudent          OmrScanResult[]          @relation("OmrScanStudent")
+  omrScansConfirmed          OmrScanResult[]          @relation("OmrScanConfirmedBy")
 
   @@index([deletedAt])
 }
@@ -368,6 +378,7 @@ model Class {
   liveQuizSessions    LiveQuizSession[]
   behaviorPresets     ClassBehaviorPreset[]
   behaviorPoints      StudentBehaviorPoint[]
+  omrSheets           OmrExamSheet[]
 
   @@index([teacherId])
 }
@@ -1695,4 +1706,53 @@ model StudentBehaviorPoint {
 
   @@index([classId, studentId])
   @@index([sessionId])
+}
+
+/// Phase 28: Paper bubble-sheet exam graded by phone camera (OMR).
+model OmrExamSheet {
+  id                 String           @id @default(cuid())
+  ownerId            String
+  classId            String
+  assignmentId       String?
+  title              String
+  template           OmrSheetTemplate
+  /// { [variantCode | "default"]: { mc: { "1": "A" }, tf: { "1": { a: true } }, sa: { "1": "1,5" } } }
+  answerKeyByVariant Json
+  /// { mcPoints, tfPoints, saPoints } (points per question; TF uses THPT 2025 progressive scoring)
+  pointsConfig       Json
+  offlineColumnId    String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  owner User            @relation("OmrSheetOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  class Class           @relation(fields: [classId], references: [id], onDelete: Cascade)
+  scans OmrScanResult[]
+
+  @@index([classId, createdAt])
+}
+
+/// Phase 28: One scanned answer sheet (image stored at omr/{sheetId}/{uuid}.jpg). Score is always computed on the server.
+model OmrScanResult {
+  id              String    @id @default(cuid())
+  sheetId         String
+  studentId       String?
+  detectedSbd     String?
+  variantCode     String?
+  scanImageKey    String
+  rawBubbles      Json
+  resolvedAnswers Json
+  score           Float
+  maxScore        Float
+  confidence      Float
+  needsReview     Boolean   @default(false)
+  confirmedById   String?
+  confirmedAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  sheet       OmrExamSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  student     User?        @relation("OmrScanStudent", fields: [studentId], references: [id], onDelete: SetNull)
+  confirmedBy User?        @relation("OmrScanConfirmedBy", fields: [confirmedById], references: [id], onDelete: SetNull)
+
+  @@index([sheetId, createdAt])
+  @@index([studentId])
 }

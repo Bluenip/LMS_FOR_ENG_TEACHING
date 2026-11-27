@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import type { SkillTag } from "@prisma/client";
 import { cn, formatDateTime, getInitials } from "@/lib/utils";
+import { OmrScanViewerDialog } from "@/components/omr/OmrScanViewerDialog";
 import { useI18n } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -104,6 +105,7 @@ interface ParentOverviewDTO {
     weight: number;
     note: string | null;
     classAvg10: number | null;
+    omrScanId?: string | null;
   }>;
   attendance?: {
     presentCount: number;
@@ -273,6 +275,7 @@ function ParentPortalContent() {
   const initialChildId = searchParams.get("childId") ?? "";
 
   const [selectedChildId, setSelectedChildId] = useState(initialChildId);
+  const [omrScanId, setOmrScanId] = useState<string | null>(searchParams.get("omrScan"));
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [inviteCode, setInviteCode] = useState("");
   const [relation, setRelation] = useState(tr("Phụ huynh", "Parent"));
@@ -767,7 +770,19 @@ function ParentPortalContent() {
                           {g.classAvg10 !== null ? `${g.classAvg10} / 10` : "—"}
                         </td>
                         <td className="px-6 py-3.5 text-center tabular-nums">x{g.weight}</td>
-                        <td className="px-6 py-3.5 text-xs text-slate-500">{g.note ?? "—"}</td>
+                        <td className="px-6 py-3.5 text-xs text-slate-500">
+                          {g.note ?? "—"}
+                          {g.omrScanId && (
+                            <button
+                              type="button"
+                              onClick={() => setOmrScanId(g.omrScanId ?? null)}
+                              className="ml-2 inline-flex min-h-8 items-center rounded-lg border border-indigo-200 px-2 text-xs font-semibold text-[#3525CD] hover:bg-indigo-50 dark:border-indigo-900 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                              data-testid={`parent-omr-view-${g.columnId}`}
+                            >
+                              {tr("Xem phiếu tô", "View sheet")}
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -775,6 +790,8 @@ function ParentPortalContent() {
               </div>
             )}
           </div>
+
+          <OmrScanViewerDialog scanId={omrScanId} onOpenChange={(o) => !o && setOmrScanId(null)} />
 
           {/* Behavior / star points (Phase 27) */}
           {overview.behavior && (
